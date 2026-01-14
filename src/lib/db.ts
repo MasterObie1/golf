@@ -6,9 +6,16 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
+  // Use Turso in production, local SQLite in development
+  const isProduction = process.env.NODE_ENV === "production";
+
   const adapter = new PrismaLibSql({
-    url: process.env.DATABASE_URL || "file:./dev.db",
+    url: isProduction
+      ? process.env.TURSO_DATABASE_URL!
+      : (process.env.DATABASE_URL || "file:./dev.db"),
+    authToken: isProduction ? process.env.TURSO_AUTH_TOKEN : undefined,
   });
+
   return new PrismaClient({ adapter });
 }
 
