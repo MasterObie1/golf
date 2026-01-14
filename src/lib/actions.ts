@@ -4,7 +4,9 @@ import { prisma } from "./db";
 import { calculateHandicap, calculateNetScore, suggestPoints } from "./handicap";
 
 export async function getTeams() {
+  // Only return approved teams for matchup entry
   return prisma.team.findMany({
+    where: { status: "approved" },
     orderBy: { name: "asc" },
   });
 }
@@ -251,8 +253,10 @@ export async function submitMatchup(
 }
 
 export async function getLeaderboard() {
-  // Get all teams
-  const teams = await prisma.team.findMany();
+  // Get only approved teams
+  const teams = await prisma.team.findMany({
+    where: { status: "approved" },
+  });
 
   // Get all matchups for head-to-head and net differential calculations
   const matchups = await prisma.matchup.findMany();
