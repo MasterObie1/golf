@@ -44,3 +44,6 @@ next-env.d.ts
 
 # database
 dev.db
+
+# Seed scripts (local only)
+scripts/
