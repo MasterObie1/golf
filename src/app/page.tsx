@@ -1,65 +1,67 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+    <div className="min-h-screen relative">
+      {/* Hero Background Image */}
+      <div className="absolute inset-0 z-0">
         <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
+          src="https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=1920&q=80"
+          alt="Golf course at sunset"
+          fill
+          className="object-cover"
           priority
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+        <div className="absolute inset-0 bg-gradient-to-b from-[var(--masters-green)]/80 via-[var(--masters-green)]/60 to-[var(--masters-green)]/90" />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center py-12 px-4">
+        <div className="text-center">
+          {/* Logo Badge */}
+          <div className="mb-8">
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-[var(--masters-yellow)] shadow-xl border-4 border-white">
+              <svg className="w-12 h-12 text-[var(--masters-green-dark)]" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+              </svg>
+            </div>
+          </div>
+
+          <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 font-[family-name:var(--font-playfair)] drop-shadow-lg">
+            Golf League Tracker
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-xl text-white/90 mb-12 max-w-lg mx-auto drop-shadow">
+            Track your golf league standings, handicaps, and match results.
           </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/leaderboard"
+              className="px-8 py-4 bg-[var(--masters-yellow)] text-[var(--masters-green-dark)] text-lg font-semibold rounded-lg hover:bg-[var(--masters-yellow-light)] transition-colors shadow-lg"
+            >
+              View Leaderboard
+            </Link>
+            <Link
+              href="/history"
+              className="px-8 py-4 bg-white/95 text-[var(--masters-green)] text-lg font-semibold rounded-lg hover:bg-white transition-colors shadow-lg"
+            >
+              Match History
+            </Link>
+            <Link
+              href="/admin"
+              className="px-8 py-4 bg-[var(--masters-green-dark)] text-white text-lg font-semibold rounded-lg hover:bg-[var(--masters-green)] transition-colors shadow-lg border border-white/20"
+            >
+              Admin
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Decorative footer */}
+        <div className="absolute bottom-8 text-center">
+          <p className="text-sm text-white/80 font-medium tracking-wider uppercase">A tradition unlike any other</p>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

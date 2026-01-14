@@ -1,26 +1,84 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f5f0;
+  --foreground: #1a1a1a;
+
+  /* Masters Tournament Theme */
+  --masters-green: #006747;
+  --masters-green-dark: #004d35;
+  --masters-green-light: #008c5f;
+  --masters-yellow: #FFCC00;
+  --masters-yellow-light: #FFD633;
+  --masters-cream: #f5f5f0;
+  --masters-gold: #C5A572;
+  --masters-burgundy: #722F37;
+  --masters-burgundy-light: #8B3A42;
+  --masters-burgundy-dark: #5C252C;
+
+  /* Semantic Colors */
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a5043;
+  --text-muted: #6b7260;
+  --text-light: #8a9180;
+
+  --border-color: #d4d6cf;
+  --border-light: #e8e9e4;
+
+  /* Success States (Masters Green) */
+  --success-bg: #e6f2ed;
+  --success-text: #004d35;
+  --success-border: #99c7b3;
+
+  /* Error States (Burgundy) */
+  --error-bg: #f5e6e8;
+  --error-text: #5C252C;
+  --error-border: #d4a5aa;
+
+  /* Warning States (Gold) */
+  --warning-bg: #fef9e6;
+  --warning-text: #8B6914;
+  --warning-border: #e6d38a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-masters-green: var(--masters-green);
+  --color-masters-green-dark: var(--masters-green-dark);
+  --color-masters-green-light: var(--masters-green-light);
+  --color-masters-yellow: var(--masters-yellow);
+  --color-masters-yellow-light: var(--masters-yellow-light);
+  --color-masters-cream: var(--masters-cream);
+  --color-masters-gold: var(--masters-gold);
+  --color-masters-burgundy: var(--masters-burgundy);
+  --color-masters-burgundy-light: var(--masters-burgundy-light);
+  --color-masters-burgundy-dark: var(--masters-burgundy-dark);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-light: var(--text-light);
+  --color-border: var(--border-color);
+  --color-border-light: var(--border-light);
+  --color-success-bg: var(--success-bg);
+  --color-success-text: var(--success-text);
+  --color-success-border: var(--success-border);
+  --color-error-bg: var(--error-bg);
+  --color-error-text: var(--error-text);
+  --color-error-border: var(--error-border);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-text: var(--warning-text);
+  --color-warning-border: var(--warning-border);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-playfair);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-playfair), Georgia, serif;
 }

@@ -1,0 +1,80 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Team {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+
+  // Captain/Contact information
+  captainName String?
+  email       String?
+  phone       String?
+
+  // Registration status
+  status      String    @default("pending") // "pending", "approved", "rejected"
+
+  // League stats
+  totalPoints Float     @default(0)
+  wins        Int       @default(0)
+  losses      Int       @default(0)
+  ties        Int       @default(0)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  matchupsAsTeamA Matchup[] @relation("TeamA")
+  matchupsAsTeamB Matchup[] @relation("TeamB")
+}
+
+model LeagueSettings {
+  id                   Int       @id @default(autoincrement())
+  maxTeams             Int       @default(16)
+  registrationOpen     Boolean   @default(true)
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+model Matchup {
+  id              Int      @id @default(autoincrement())
+  weekNumber      Int
+  playedAt        DateTime @default(now())
+
+  // Team A data
+  teamAId         Int
+  teamA           Team     @relation("TeamA", fields: [teamAId], references: [id])
+  teamAGross      Int      // Gross score entered by admin
+  teamAHandicap   Float    // Handicap at time of match
+  teamANet        Float    // Calculated: Gross - Handicap
+  teamAPoints     Float    // Points awarded (can be overridden)
+  teamAIsSub      Boolean  @default(false) // True if substitute played (excludes from handicap calc)
+
+  // Team B data
+  teamBId         Int
+  teamB           Team     @relation("TeamB", fields: [teamBId], references: [id])
+  teamBGross      Int
+  teamBHandicap   Float
+  teamBNet        Float
+  teamBPoints     Float
+  teamBIsSub      Boolean  @default(false) // True if substitute played (excludes from handicap calc)
+
+  // Forfeit data
+  isForfeit       Boolean  @default(false) // True if this was a forfeit match
+  forfeitTeamId   Int?     // ID of the team that forfeited (null if not a forfeit)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Constraint: unique matchup per week per team pair
+  @@unique([weekNumber, teamAId, teamBId])
+}
