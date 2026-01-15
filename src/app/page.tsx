@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { GolfNews } from "@/components/GolfNews";
 
 export default function Home() {
   return (
@@ -54,6 +55,11 @@ export default function Home() {
             >
               Admin
             </Link>
+          </div>
+
+          {/* Golf News Section */}
+          <div className="mt-12">
+            <GolfNews />
           </div>
         </div>
 
