@@ -1,7 +1,9 @@
 "use server";
 
+import { z } from "zod";
 import { prisma } from "./db";
 import { calculateHandicap, calculateNetScore, suggestPoints } from "./handicap";
+import { requireAdmin } from "./auth";
 
 export async function getTeams() {
   // Only return approved teams for matchup entry
@@ -12,6 +14,8 @@ export async function getTeams() {
 }
 
 export async function createTeam(name: string) {
+  await requireAdmin();
+
   // Check if team already exists
   const existing = await prisma.team.findUnique({
     where: { name },
@@ -189,6 +193,8 @@ export async function submitMatchup(
   teamBPoints: number,
   teamBIsSub: boolean
 ) {
+  await requireAdmin();
+
   // Create the matchup
   const matchup = await prisma.matchup.create({
     data: {
@@ -357,6 +363,8 @@ export async function getMatchupHistory() {
 }
 
 export async function deleteMatchup(matchupId: number) {
+  await requireAdmin();
+
   // Get the matchup to reverse the stats
   const matchup = await prisma.matchup.findUniqueOrThrow({
     where: { id: matchupId },
@@ -414,6 +422,8 @@ export async function submitForfeit(
   winningTeamId: number,
   forfeitingTeamId: number
 ) {
+  await requireAdmin();
+
   // Check if either team already played this week
   const existingMatchups = await prisma.matchup.findMany({
     where: {
@@ -492,6 +502,8 @@ export async function getLeagueSettings() {
 }
 
 export async function updateLeagueSettings(maxTeams: number, registrationOpen: boolean) {
+  await requireAdmin();
+
   const settings = await getLeagueSettings();
   return prisma.leagueSettings.update({
     where: { id: settings.id },
@@ -499,12 +511,40 @@ export async function updateLeagueSettings(maxTeams: number, registrationOpen: b
   });
 }
 
+// Validation schema for team registration
+const registerTeamSchema = z.object({
+  name: z
+    .string()
+    .min(2, "Team name must be at least 2 characters")
+    .max(50, "Team name must be at most 50 characters")
+    .trim()
+    .refine((val) => val.length > 0, "Team name cannot be empty"),
+  captainName: z
+    .string()
+    .min(2, "Captain name must be at least 2 characters")
+    .max(100, "Captain name must be at most 100 characters")
+    .trim()
+    .refine((val) => val.length > 0, "Captain name cannot be empty"),
+  email: z
+    .string()
+    .email("Invalid email address")
+    .max(255, "Email must be at most 255 characters"),
+  phone: z
+    .string()
+    .min(10, "Phone number must be at least 10 characters")
+    .max(20, "Phone number must be at most 20 characters")
+    .regex(/^[\d\s()+-]+$/, "Phone number can only contain digits, spaces, parentheses, plus, and hyphen"),
+});
+
 export async function registerTeam(
   name: string,
   captainName: string,
   email: string,
   phone: string
 ) {
+  // Validate input
+  const validated = registerTeamSchema.parse({ name, captainName, email, phone });
+
   // Check if registration is open
   const settings = await getLeagueSettings();
   if (!settings.registrationOpen) {
@@ -522,25 +562,27 @@ export async function registerTeam(
 
   // Check if team name already exists
   const existing = await prisma.team.findUnique({
-    where: { name },
+    where: { name: validated.name },
   });
   if (existing) {
-    throw new Error(`Team "${name}" already exists`);
+    throw new Error(`Team "${validated.name}" already exists`);
   }
 
   // Create team with pending status
   return prisma.team.create({
     data: {
-      name,
-      captainName,
-      email,
-      phone,
+      name: validated.name,
+      captainName: validated.captainName,
+      email: validated.email,
+      phone: validated.phone,
       status: "pending",
     },
   });
 }
 
 export async function getPendingTeams() {
+  await requireAdmin();
+
   return prisma.team.findMany({
     where: { status: "pending" },
     orderBy: { createdAt: "asc" },
@@ -555,12 +597,16 @@ export async function getApprovedTeams() {
 }
 
 export async function getAllTeamsWithStatus() {
+  await requireAdmin();
+
   return prisma.team.findMany({
     orderBy: [{ status: "asc" }, { name: "asc" }],
   });
 }
 
 export async function approveTeam(teamId: number) {
+  await requireAdmin();
+
   const settings = await getLeagueSettings();
   const approvedCount = await prisma.team.count({
     where: { status: "approved" },
@@ -577,6 +623,8 @@ export async function approveTeam(teamId: number) {
 }
 
 export async function rejectTeam(teamId: number) {
+  await requireAdmin();
+
   return prisma.team.update({
     where: { id: teamId },
     data: { status: "rejected" },
@@ -584,6 +632,8 @@ export async function rejectTeam(teamId: number) {
 }
 
 export async function deleteTeam(teamId: number) {
+  await requireAdmin();
+
   // Check if team has any matchups
   const matchupCount = await prisma.matchup.count({
     where: {

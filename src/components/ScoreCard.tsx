@@ -35,25 +35,34 @@ export function ScoreCard({ weekNumber, matchups }: ScoreCardProps) {
         {matchups.map((matchup) => (
           <div key={matchup.id} className="p-4">
             {matchup.isForfeit ? (
-              /* Forfeit Display */
-              <div className="bg-[var(--error-bg)] border border-[var(--error-border)] rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="px-2 py-1 text-xs font-bold bg-[var(--masters-burgundy)] text-white rounded uppercase">
-                      Forfeit
-                    </span>
-                    <div className="mt-2 space-y-1">
-                      <p className="font-medium text-[var(--text-primary)]">
-                        <span className="text-[var(--masters-green)]">{matchup.teamA.name}</span>
-                        {" wins by forfeit (20 pts)"}
-                      </p>
-                      <p className="text-sm text-[var(--masters-burgundy)]">
-                        {matchup.teamB.name} forfeited (0 pts)
-                      </p>
+              /* Forfeit Display - validates forfeitTeamId to determine winner/forfeiter */
+              (() => {
+                // Determine winner and forfeiter based on forfeitTeamId
+                const forfeitedTeamA = matchup.forfeitTeamId === matchup.teamAId;
+                const winner = forfeitedTeamA ? matchup.teamB : matchup.teamA;
+                const forfeiter = forfeitedTeamA ? matchup.teamA : matchup.teamB;
+
+                return (
+                  <div className="bg-[var(--error-bg)] border border-[var(--error-border)] rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="px-2 py-1 text-xs font-bold bg-[var(--masters-burgundy)] text-white rounded uppercase">
+                          Forfeit
+                        </span>
+                        <div className="mt-2 space-y-1">
+                          <p className="font-medium text-[var(--text-primary)]">
+                            <span className="text-[var(--masters-green)]">{winner.name}</span>
+                            {" wins by forfeit (20 pts)"}
+                          </p>
+                          <p className="text-sm text-[var(--masters-burgundy)]">
+                            {forfeiter.name} forfeited (0 pts)
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()
             ) : (
               /* Regular Matchup Display */
               <>
