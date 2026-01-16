@@ -5,26 +5,36 @@ import { GolfNews } from "@/components/GolfNews";
 export const dynamic = "force-dynamic";
 
 async function getStats() {
-  const [leagueCount, teamCount, matchupCount] = await Promise.all([
-    prisma.league.count({ where: { status: "active" } }),
-    prisma.team.count({ where: { status: "approved" } }),
-    prisma.matchup.count(),
-  ]);
-  return { leagueCount, teamCount, matchupCount };
+  try {
+    const [leagueCount, teamCount, matchupCount] = await Promise.all([
+      prisma.league.count({ where: { status: "active" } }),
+      prisma.team.count({ where: { status: "approved" } }),
+      prisma.matchup.count(),
+    ]);
+    return { leagueCount, teamCount, matchupCount };
+  } catch (error) {
+    console.error("Error fetching stats:", error);
+    return { leagueCount: 0, teamCount: 0, matchupCount: 0 };
+  }
 }
 
 async function getFeaturedLeagues() {
-  const leagues = await prisma.league.findMany({
-    where: { status: "active" },
-    include: {
-      _count: {
-        select: { teams: true, matchups: true },
+  try {
+    const leagues = await prisma.league.findMany({
+      where: { status: "active" },
+      include: {
+        _count: {
+          select: { teams: true, matchups: true },
+        },
       },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-  });
-  return leagues;
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+    return leagues;
+  } catch (error) {
+    console.error("Error fetching featured leagues:", error);
+    return [];
+  }
 }
 
 // Golf Flag SVG Component
