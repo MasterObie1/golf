@@ -1,42 +1,195 @@
 "use server";
 
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { prisma } from "./db";
-import { calculateHandicap, calculateNetScore, suggestPoints } from "./handicap";
-import { requireAdmin } from "./auth";
+import { calculateHandicap, calculateNetScore, suggestPoints, type HandicapSettings } from "./handicap";
+import { requireAdmin, requireLeagueAdmin, getAdminSession } from "./auth";
 
-export async function getTeams() {
-  // Only return approved teams for matchup entry
-  return prisma.team.findMany({
-    where: { status: "approved" },
+// ==========================================
+// LEAGUE MANAGEMENT
+// ==========================================
+
+/**
+ * Generate a URL-friendly slug from a league name
+ */
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/**
+ * Create a new league with admin credentials
+ */
+export async function createLeague(
+  name: string,
+  adminPassword: string = "pass@word1"
+) {
+  // Validate name
+  if (!name || name.trim().length < 3) {
+    throw new Error("League name must be at least 3 characters");
+  }
+
+  const trimmedName = name.trim();
+  const slug = generateSlug(trimmedName);
+
+  // Check if slug already exists
+  const existing = await prisma.league.findUnique({
+    where: { slug },
+  });
+  if (existing) {
+    throw new Error(`A league with a similar name already exists`);
+  }
+
+  // Generate admin username: admin@LeagueName (no spaces)
+  const adminUsername = `admin@${trimmedName.replace(/\s+/g, "")}`;
+
+  // Hash the password
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
+
+  // Create the league
+  return prisma.league.create({
+    data: {
+      name: trimmedName,
+      slug,
+      adminUsername,
+      adminPassword: hashedPassword,
+    },
+  });
+}
+
+/**
+ * Search for leagues by name
+ */
+export async function searchLeagues(query: string) {
+  if (!query || query.trim().length < 2) {
+    return [];
+  }
+
+  return prisma.league.findMany({
+    where: {
+      name: {
+        contains: query.trim(),
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      courseName: true,
+      courseLocation: true,
+      playDay: true,
+    },
+    take: 20,
+  });
+}
+
+/**
+ * Get all leagues (for browse page)
+ */
+export async function getAllLeagues() {
+  return prisma.league.findMany({
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      courseName: true,
+      courseLocation: true,
+      playDay: true,
+      _count: {
+        select: { teams: true },
+      },
+    },
     orderBy: { name: "asc" },
   });
 }
 
-export async function createTeam(name: string) {
-  await requireAdmin();
-
-  // Check if team already exists
-  const existing = await prisma.team.findUnique({
-    where: { name },
-  });
-  if (existing) {
-    throw new Error(`Team "${name}" already exists`);
-  }
-  return prisma.team.create({
-    data: { name },
+/**
+ * Get a league by slug
+ */
+export async function getLeagueBySlug(slug: string) {
+  return prisma.league.findUnique({
+    where: { slug },
   });
 }
 
-export async function getTeamPreviousScores(teamId: number): Promise<number[]> {
+/**
+ * Get league public info (for league home page)
+ */
+export async function getLeaguePublicInfo(slug: string) {
+  const league = await prisma.league.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      registrationOpen: true,
+      maxTeams: true,
+      startDate: true,
+      endDate: true,
+      numberOfWeeks: true,
+      courseName: true,
+      courseLocation: true,
+      playDay: true,
+      playTime: true,
+      entryFee: true,
+      prizeInfo: true,
+      description: true,
+      contactEmail: true,
+      contactPhone: true,
+      _count: {
+        select: { teams: { where: { status: "approved" } } },
+      },
+    },
+  });
+
+  if (!league) {
+    throw new Error("League not found");
+  }
+
+  return league;
+}
+
+// ==========================================
+// TEAM MANAGEMENT (League-scoped)
+// ==========================================
+
+export async function getTeams(leagueId: number) {
+  return prisma.team.findMany({
+    where: { leagueId, status: "approved" },
+    orderBy: { name: "asc" },
+  });
+}
+
+export async function createTeam(leagueId: number, name: string) {
+  const session = await requireAdmin();
+  if (session.leagueId !== leagueId) {
+    throw new Error("Unauthorized: Cannot create team in another league");
+  }
+
+  const existing = await prisma.team.findUnique({
+    where: { leagueId_name: { leagueId, name } },
+  });
+  if (existing) {
+    throw new Error(`Team "${name}" already exists in this league`);
+  }
+
+  return prisma.team.create({
+    data: { name, leagueId },
+  });
+}
+
+export async function getTeamPreviousScores(leagueId: number, teamId: number): Promise<number[]> {
   const matchups = await prisma.matchup.findMany({
     where: {
+      leagueId,
       OR: [{ teamAId: teamId }, { teamBId: teamId }],
     },
     orderBy: { weekNumber: "asc" },
   });
 
-  // Exclude games where a substitute played (sub scores don't affect handicap)
   return matchups
     .filter((m) => {
       if (m.teamAId === teamId) return !m.teamAIsSub;
@@ -45,17 +198,43 @@ export async function getTeamPreviousScores(teamId: number): Promise<number[]> {
     .map((m) => (m.teamAId === teamId ? m.teamAGross : m.teamBGross));
 }
 
-export async function getCurrentWeekNumber(): Promise<number> {
+export async function getCurrentWeekNumber(leagueId: number): Promise<number> {
   const lastMatchup = await prisma.matchup.findFirst({
+    where: { leagueId },
     orderBy: { weekNumber: "desc" },
   });
   return lastMatchup ? lastMatchup.weekNumber + 1 : 1;
 }
 
-export async function getTeamHandicap(teamId: number): Promise<number> {
-  const scores = await getTeamPreviousScores(teamId);
-  return calculateHandicap(scores);
+// ==========================================
+// HANDICAP SETTINGS (League-scoped)
+// ==========================================
+
+export async function getHandicapSettings(leagueId: number): Promise<HandicapSettings> {
+  const league = await prisma.league.findUniqueOrThrow({
+    where: { id: leagueId },
+  });
+
+  return {
+    baseScore: league.handicapBaseScore,
+    multiplier: league.handicapMultiplier,
+    rounding: league.handicapRounding as "floor" | "round" | "ceil",
+    defaultHandicap: league.handicapDefault,
+    maxHandicap: league.handicapMax,
+  };
 }
+
+export async function getTeamHandicap(leagueId: number, teamId: number): Promise<number> {
+  const [scores, handicapSettings] = await Promise.all([
+    getTeamPreviousScores(leagueId, teamId),
+    getHandicapSettings(leagueId),
+  ]);
+  return calculateHandicap(scores, handicapSettings);
+}
+
+// ==========================================
+// MATCHUP MANAGEMENT (League-scoped)
+// ==========================================
 
 export interface MatchupPreview {
   weekNumber: number;
@@ -77,6 +256,7 @@ export interface MatchupPreview {
 }
 
 export async function previewMatchup(
+  leagueId: number,
   weekNumber: number,
   teamAId: number,
   teamAGross: number,
@@ -90,6 +270,7 @@ export async function previewMatchup(
   // Check if either team already played this week
   const existingMatchups = await prisma.matchup.findMany({
     where: {
+      leagueId,
       weekNumber,
       OR: [
         { teamAId: teamAId },
@@ -122,35 +303,33 @@ export async function previewMatchup(
     }
   }
 
-  const [teamA, teamB] = await Promise.all([
+  const [teamA, teamB, handicapSettings] = await Promise.all([
     prisma.team.findUniqueOrThrow({ where: { id: teamAId } }),
     prisma.team.findUniqueOrThrow({ where: { id: teamBId } }),
+    getHandicapSettings(leagueId),
   ]);
 
   const isWeekOne = weekNumber === 1;
 
-  // Week 1: use manual handicaps
-  // Week 2+: calculate from history, BUT if a sub is playing, use manual handicap for that team
   let teamAHandicap: number;
   let teamBHandicap: number;
 
   if (isWeekOne) {
-    teamAHandicap = teamAHandicapManual ?? 0;
-    teamBHandicap = teamBHandicapManual ?? 0;
+    teamAHandicap = teamAHandicapManual ?? handicapSettings.defaultHandicap;
+    teamBHandicap = teamBHandicapManual ?? handicapSettings.defaultHandicap;
   } else {
-    // For subs, use manual handicap; for regular players, calculate from history
     if (teamAIsSub && teamAHandicapManual !== null) {
       teamAHandicap = teamAHandicapManual;
     } else {
-      const teamAScores = await getTeamPreviousScores(teamAId);
-      teamAHandicap = calculateHandicap(teamAScores);
+      const teamAScores = await getTeamPreviousScores(leagueId, teamAId);
+      teamAHandicap = calculateHandicap(teamAScores, handicapSettings);
     }
 
     if (teamBIsSub && teamBHandicapManual !== null) {
       teamBHandicap = teamBHandicapManual;
     } else {
-      const teamBScores = await getTeamPreviousScores(teamBId);
-      teamBHandicap = calculateHandicap(teamBScores);
+      const teamBScores = await getTeamPreviousScores(leagueId, teamBId);
+      teamBHandicap = calculateHandicap(teamBScores, handicapSettings);
     }
   }
 
@@ -179,6 +358,7 @@ export async function previewMatchup(
 }
 
 export async function submitMatchup(
+  leagueSlug: string,
   weekNumber: number,
   teamAId: number,
   teamAGross: number,
@@ -193,11 +373,11 @@ export async function submitMatchup(
   teamBPoints: number,
   teamBIsSub: boolean
 ) {
-  await requireAdmin();
+  const session = await requireLeagueAdmin(leagueSlug);
 
-  // Create the matchup
   const matchup = await prisma.matchup.create({
     data: {
+      leagueId: session.leagueId,
       weekNumber,
       teamAId,
       teamAGross,
@@ -214,13 +394,9 @@ export async function submitMatchup(
     },
   });
 
-  // Determine win/loss/tie for each team
-  let teamAWin = 0,
-    teamALoss = 0,
-    teamATie = 0;
-  let teamBWin = 0,
-    teamBLoss = 0,
-    teamBTie = 0;
+  // Update team stats
+  let teamAWin = 0, teamALoss = 0, teamATie = 0;
+  let teamBWin = 0, teamBLoss = 0, teamBTie = 0;
 
   if (teamAPoints > teamBPoints) {
     teamAWin = 1;
@@ -233,7 +409,6 @@ export async function submitMatchup(
     teamBTie = 1;
   }
 
-  // Update team stats
   await Promise.all([
     prisma.team.update({
       where: { id: teamAId },
@@ -258,19 +433,18 @@ export async function submitMatchup(
   return matchup;
 }
 
-export async function getLeaderboard() {
-  // Get only approved teams
+export async function getLeaderboard(leagueId: number) {
   const teams = await prisma.team.findMany({
-    where: { status: "approved" },
+    where: { leagueId, status: "approved" },
   });
 
-  // Get all matchups for head-to-head and net differential calculations
-  const matchups = await prisma.matchup.findMany();
+  const matchups = await prisma.matchup.findMany({
+    where: { leagueId },
+  });
 
-  // Calculate average handicap for all teams (average of official handicaps, excluding subs, floored)
+  // Calculate average handicap
   const handicaps: Record<number, number> = {};
   for (const team of teams) {
-    // Get all handicaps from matchups where this team played (not as a sub)
     const teamHandicaps: number[] = [];
     for (const m of matchups) {
       if (m.teamAId === team.id && !m.teamAIsSub) {
@@ -284,76 +458,57 @@ export async function getLeaderboard() {
       handicaps[team.id] = 0;
     } else {
       const avgHandicap = teamHandicaps.reduce((sum, h) => sum + h, 0) / teamHandicaps.length;
-      handicaps[team.id] = Math.floor(avgHandicap); // Always round down
+      handicaps[team.id] = Math.floor(avgHandicap);
     }
   }
 
-  // Calculate net score differential for each team
+  // Calculate net differential
   const netDifferential: Record<number, number> = {};
   for (const team of teams) {
     netDifferential[team.id] = 0;
   }
 
   for (const m of matchups) {
-    // Net differential: how much better your net score was vs opponent
-    // Lower net is better in golf, so positive differential = you beat them
     netDifferential[m.teamAId] += m.teamBNet - m.teamANet;
     netDifferential[m.teamBId] += m.teamANet - m.teamBNet;
   }
 
-  // Build head-to-head record: headToHead[teamA][teamB] = points teamA scored vs teamB
+  // Build head-to-head record
   const headToHead: Record<number, Record<number, number>> = {};
   for (const team of teams) {
     headToHead[team.id] = {};
   }
 
   for (const m of matchups) {
-    headToHead[m.teamAId][m.teamBId] =
-      (headToHead[m.teamAId][m.teamBId] || 0) + m.teamAPoints;
-    headToHead[m.teamBId][m.teamAId] =
-      (headToHead[m.teamBId][m.teamAId] || 0) + m.teamBPoints;
+    headToHead[m.teamAId][m.teamBId] = (headToHead[m.teamAId][m.teamBId] || 0) + m.teamAPoints;
+    headToHead[m.teamBId][m.teamAId] = (headToHead[m.teamBId][m.teamAId] || 0) + m.teamBPoints;
   }
 
-  // Sort teams with comprehensive tie-breakers:
-  // 1. Total Points (desc)
-  // 2. Wins (desc)
-  // 3. Head-to-Head (if they've played each other)
-  // 4. Net Score Differential (desc - higher is better)
+  // Sort teams
   const sortedTeams = [...teams].sort((a, b) => {
-    // 1. Total Points
-    if (a.totalPoints !== b.totalPoints) {
-      return b.totalPoints - a.totalPoints;
-    }
+    if (a.totalPoints !== b.totalPoints) return b.totalPoints - a.totalPoints;
+    if (a.wins !== b.wins) return b.wins - a.wins;
 
-    // 2. Wins
-    if (a.wins !== b.wins) {
-      return b.wins - a.wins;
-    }
-
-    // 3. Head-to-Head (only if they've played each other)
     const aVsB = headToHead[a.id]?.[b.id] || 0;
     const bVsA = headToHead[b.id]?.[a.id] || 0;
     if (aVsB !== 0 || bVsA !== 0) {
-      if (aVsB !== bVsA) {
-        return bVsA - aVsB; // More points in H2H wins
-      }
+      if (aVsB !== bVsA) return bVsA - aVsB;
     }
 
-    // 4. Net Score Differential (higher is better - means you beat opponents by more)
     const aDiff = netDifferential[a.id] || 0;
     const bDiff = netDifferential[b.id] || 0;
     return bDiff - aDiff;
   });
 
-  // Return sorted teams with handicaps
   return sortedTeams.map((team) => ({
     ...team,
     handicap: handicaps[team.id],
   }));
 }
 
-export async function getMatchupHistory() {
+export async function getMatchupHistory(leagueId: number) {
   return prisma.matchup.findMany({
+    where: { leagueId },
     include: {
       teamA: true,
       teamB: true,
@@ -362,21 +517,344 @@ export async function getMatchupHistory() {
   });
 }
 
-export async function deleteMatchup(matchupId: number) {
-  await requireAdmin();
+export async function getTeamMatchupHistory(leagueId: number, teamId: number) {
+  return prisma.matchup.findMany({
+    where: {
+      leagueId,
+      OR: [{ teamAId: teamId }, { teamBId: teamId }],
+    },
+    include: {
+      teamA: true,
+      teamB: true,
+    },
+    orderBy: [{ weekNumber: "desc" }, { playedAt: "desc" }],
+  });
+}
 
-  // Get the matchup to reverse the stats
+export async function getTeamById(teamId: number) {
+  return prisma.team.findUnique({
+    where: { id: teamId },
+    include: { league: true },
+  });
+}
+
+// Helper function to calculate standings at a specific week
+function calculateStandingsAtWeek(
+  teams: { id: number; name: string }[],
+  matchups: {
+    weekNumber: number;
+    teamAId: number;
+    teamBId: number;
+    teamAPoints: number;
+    teamBPoints: number;
+    teamANet: number;
+    teamBNet: number;
+    teamAHandicap: number;
+    teamBHandicap: number;
+    teamAIsSub: boolean;
+    teamBIsSub: boolean;
+  }[],
+  upToWeek: number
+) {
+  const filteredMatchups = matchups.filter((m) => m.weekNumber <= upToWeek);
+
+  // Calculate stats from matchups
+  const stats: Record<number, { points: number; wins: number; losses: number; ties: number }> = {};
+  const handicaps: Record<number, number[]> = {};
+  const netDifferential: Record<number, number> = {};
+  const headToHead: Record<number, Record<number, number>> = {};
+
+  for (const team of teams) {
+    stats[team.id] = { points: 0, wins: 0, losses: 0, ties: 0 };
+    handicaps[team.id] = [];
+    netDifferential[team.id] = 0;
+    headToHead[team.id] = {};
+  }
+
+  for (const m of filteredMatchups) {
+    // Points
+    if (stats[m.teamAId]) stats[m.teamAId].points += m.teamAPoints;
+    if (stats[m.teamBId]) stats[m.teamBId].points += m.teamBPoints;
+
+    // Wins/Losses/Ties
+    if (m.teamAPoints > m.teamBPoints) {
+      if (stats[m.teamAId]) stats[m.teamAId].wins += 1;
+      if (stats[m.teamBId]) stats[m.teamBId].losses += 1;
+    } else if (m.teamBPoints > m.teamAPoints) {
+      if (stats[m.teamBId]) stats[m.teamBId].wins += 1;
+      if (stats[m.teamAId]) stats[m.teamAId].losses += 1;
+    } else {
+      if (stats[m.teamAId]) stats[m.teamAId].ties += 1;
+      if (stats[m.teamBId]) stats[m.teamBId].ties += 1;
+    }
+
+    // Handicaps (non-sub only)
+    if (!m.teamAIsSub && handicaps[m.teamAId]) {
+      handicaps[m.teamAId].push(m.teamAHandicap);
+    }
+    if (!m.teamBIsSub && handicaps[m.teamBId]) {
+      handicaps[m.teamBId].push(m.teamBHandicap);
+    }
+
+    // Net differential
+    if (netDifferential[m.teamAId] !== undefined) {
+      netDifferential[m.teamAId] += m.teamBNet - m.teamANet;
+    }
+    if (netDifferential[m.teamBId] !== undefined) {
+      netDifferential[m.teamBId] += m.teamANet - m.teamBNet;
+    }
+
+    // Head-to-head
+    if (headToHead[m.teamAId]) {
+      headToHead[m.teamAId][m.teamBId] = (headToHead[m.teamAId][m.teamBId] || 0) + m.teamAPoints;
+    }
+    if (headToHead[m.teamBId]) {
+      headToHead[m.teamBId][m.teamAId] = (headToHead[m.teamBId][m.teamAId] || 0) + m.teamBPoints;
+    }
+  }
+
+  // Calculate average handicap for each team
+  const avgHandicaps: Record<number, number> = {};
+  for (const team of teams) {
+    const hcps = handicaps[team.id];
+    if (hcps.length === 0) {
+      avgHandicaps[team.id] = 0;
+    } else {
+      avgHandicaps[team.id] = Math.floor(hcps.reduce((sum, h) => sum + h, 0) / hcps.length);
+    }
+  }
+
+  // Sort teams using same logic as getLeaderboard
+  const sortedTeams = [...teams].sort((a, b) => {
+    const aStats = stats[a.id] || { points: 0, wins: 0 };
+    const bStats = stats[b.id] || { points: 0, wins: 0 };
+
+    if (aStats.points !== bStats.points) return bStats.points - aStats.points;
+    if (aStats.wins !== bStats.wins) return bStats.wins - aStats.wins;
+
+    const aVsB = headToHead[a.id]?.[b.id] || 0;
+    const bVsA = headToHead[b.id]?.[a.id] || 0;
+    if (aVsB !== 0 || bVsA !== 0) {
+      if (aVsB !== bVsA) return bVsA - aVsB;
+    }
+
+    const aDiff = netDifferential[a.id] || 0;
+    const bDiff = netDifferential[b.id] || 0;
+    return bDiff - aDiff;
+  });
+
+  // Return rankings with handicaps
+  return sortedTeams.map((team, index) => ({
+    teamId: team.id,
+    teamName: team.name,
+    rank: index + 1,
+    handicap: avgHandicaps[team.id],
+    ...stats[team.id],
+  }));
+}
+
+export interface LeaderboardWithMovement {
+  id: number;
+  name: string;
+  totalPoints: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  handicap: number;
+  rankChange: number | null; // positive = moved up, negative = moved down, null = new/no previous
+  handicapChange: number | null; // positive = handicap went up, negative = went down
+  previousRank: number | null;
+  previousHandicap: number | null;
+}
+
+export async function getLeaderboardWithMovement(leagueId: number): Promise<LeaderboardWithMovement[]> {
+  const teams = await prisma.team.findMany({
+    where: { leagueId, status: "approved" },
+  });
+
+  const matchups = await prisma.matchup.findMany({
+    where: { leagueId },
+  });
+
+  if (matchups.length === 0) {
+    // No matchups yet, return teams with no movement data
+    return teams.map((team) => ({
+      id: team.id,
+      name: team.name,
+      totalPoints: team.totalPoints,
+      wins: team.wins,
+      losses: team.losses,
+      ties: team.ties,
+      handicap: 0,
+      rankChange: null,
+      handicapChange: null,
+      previousRank: null,
+      previousHandicap: null,
+    }));
+  }
+
+  // Find current and previous week numbers
+  const weekNumbers = [...new Set(matchups.map((m) => m.weekNumber))].sort((a, b) => b - a);
+  const currentWeek = weekNumbers[0];
+  const previousWeek = weekNumbers.length > 1 ? weekNumbers[1] : null;
+
+  // Get current standings
+  const currentStandings = calculateStandingsAtWeek(
+    teams.map((t) => ({ id: t.id, name: t.name })),
+    matchups,
+    currentWeek
+  );
+
+  // Get previous standings if there was a previous week
+  let previousStandings: ReturnType<typeof calculateStandingsAtWeek> | null = null;
+  if (previousWeek !== null) {
+    previousStandings = calculateStandingsAtWeek(
+      teams.map((t) => ({ id: t.id, name: t.name })),
+      matchups,
+      previousWeek
+    );
+  }
+
+  // Build lookup for previous data
+  const previousData: Record<number, { rank: number; handicap: number }> = {};
+  if (previousStandings) {
+    for (const standing of previousStandings) {
+      previousData[standing.teamId] = {
+        rank: standing.rank,
+        handicap: standing.handicap,
+      };
+    }
+  }
+
+  // Combine current standings with movement data
+  return currentStandings.map((standing) => {
+    const prev = previousData[standing.teamId];
+    const team = teams.find((t) => t.id === standing.teamId)!;
+
+    // Check if team played in current week (to determine if they're "new" this week)
+    const playedCurrentWeek = matchups.some(
+      (m) => m.weekNumber === currentWeek && (m.teamAId === standing.teamId || m.teamBId === standing.teamId)
+    );
+    const playedPreviousWeek = previousWeek !== null && matchups.some(
+      (m) => m.weekNumber === previousWeek && (m.teamAId === standing.teamId || m.teamBId === standing.teamId)
+    );
+
+    let rankChange: number | null = null;
+    let handicapChange: number | null = null;
+
+    if (prev && playedPreviousWeek) {
+      // Had previous data, calculate changes
+      rankChange = prev.rank - standing.rank; // positive = moved up
+      handicapChange = standing.handicap - prev.handicap; // positive = handicap increased
+    }
+
+    return {
+      id: team.id,
+      name: team.name,
+      totalPoints: team.totalPoints,
+      wins: team.wins,
+      losses: team.losses,
+      ties: team.ties,
+      handicap: standing.handicap,
+      rankChange,
+      handicapChange,
+      previousRank: prev?.rank ?? null,
+      previousHandicap: prev?.handicap ?? null,
+    };
+  });
+}
+
+export interface HandicapHistoryEntry {
+  teamId: number;
+  teamName: string;
+  weeklyHandicaps: { week: number; handicap: number }[];
+  currentHandicap: number;
+}
+
+export async function getHandicapHistory(leagueId: number): Promise<HandicapHistoryEntry[]> {
+  const teams = await prisma.team.findMany({
+    where: { leagueId, status: "approved" },
+    orderBy: { name: "asc" },
+  });
+
+  const matchups = await prisma.matchup.findMany({
+    where: { leagueId },
+    orderBy: { weekNumber: "asc" },
+  });
+
+  if (matchups.length === 0) {
+    return teams.map((team) => ({
+      teamId: team.id,
+      teamName: team.name,
+      weeklyHandicaps: [],
+      currentHandicap: 0,
+    }));
+  }
+
+  const weekNumbers = [...new Set(matchups.map((m) => m.weekNumber))].sort((a, b) => a - b);
+
+  const result: HandicapHistoryEntry[] = [];
+
+  for (const team of teams) {
+    const weeklyHandicaps: { week: number; handicap: number }[] = [];
+    const allHandicaps: number[] = [];
+
+    for (const week of weekNumbers) {
+      // Get handicap for this team in this week
+      const weekMatchup = matchups.find(
+        (m) => m.weekNumber === week && (m.teamAId === team.id || m.teamBId === team.id)
+      );
+
+      if (weekMatchup) {
+        let handicap: number;
+        let isSub: boolean;
+
+        if (weekMatchup.teamAId === team.id) {
+          handicap = weekMatchup.teamAHandicap;
+          isSub = weekMatchup.teamAIsSub;
+        } else {
+          handicap = weekMatchup.teamBHandicap;
+          isSub = weekMatchup.teamBIsSub;
+        }
+
+        weeklyHandicaps.push({ week, handicap });
+
+        if (!isSub) {
+          allHandicaps.push(handicap);
+        }
+      }
+    }
+
+    const currentHandicap = allHandicaps.length > 0
+      ? Math.floor(allHandicaps.reduce((sum, h) => sum + h, 0) / allHandicaps.length)
+      : 0;
+
+    result.push({
+      teamId: team.id,
+      teamName: team.name,
+      weeklyHandicaps,
+      currentHandicap,
+    });
+  }
+
+  return result;
+}
+
+export async function deleteMatchup(leagueSlug: string, matchupId: number) {
+  const session = await requireLeagueAdmin(leagueSlug);
+
   const matchup = await prisma.matchup.findUniqueOrThrow({
     where: { id: matchupId },
   });
 
-  // Determine what win/loss/tie to reverse
-  let teamAWin = 0,
-    teamALoss = 0,
-    teamATie = 0;
-  let teamBWin = 0,
-    teamBLoss = 0,
-    teamBTie = 0;
+  // Verify matchup belongs to this league
+  if (matchup.leagueId !== session.leagueId) {
+    throw new Error("Unauthorized: Matchup does not belong to this league");
+  }
+
+  // Determine stats to reverse
+  let teamAWin = 0, teamALoss = 0, teamATie = 0;
+  let teamBWin = 0, teamBLoss = 0, teamBTie = 0;
 
   if (matchup.teamAPoints > matchup.teamBPoints) {
     teamAWin = 1;
@@ -389,7 +867,6 @@ export async function deleteMatchup(matchupId: number) {
     teamBTie = 1;
   }
 
-  // Reverse team stats and delete matchup in a transaction
   await prisma.$transaction([
     prisma.team.update({
       where: { id: matchup.teamAId },
@@ -418,15 +895,16 @@ export async function deleteMatchup(matchupId: number) {
 }
 
 export async function submitForfeit(
+  leagueSlug: string,
   weekNumber: number,
   winningTeamId: number,
   forfeitingTeamId: number
 ) {
-  await requireAdmin();
+  const session = await requireLeagueAdmin(leagueSlug);
 
-  // Check if either team already played this week
   const existingMatchups = await prisma.matchup.findMany({
     where: {
+      leagueId: session.leagueId,
       weekNumber,
       OR: [
         { teamAId: winningTeamId },
@@ -441,10 +919,9 @@ export async function submitForfeit(
     throw new Error(`One or both teams already played in Week ${weekNumber}`);
   }
 
-  // Create forfeit matchup: winning team gets 20 points, forfeiting team gets 0
-  // Use placeholder scores for gross/handicap/net since no match was actually played
   const matchup = await prisma.matchup.create({
     data: {
+      leagueId: session.leagueId,
       weekNumber,
       teamAId: winningTeamId,
       teamAGross: 0,
@@ -463,7 +940,6 @@ export async function submitForfeit(
     },
   });
 
-  // Update team stats: winning team gets win + 20 points, forfeiting team gets loss + 0 points
   await Promise.all([
     prisma.team.update({
       where: { id: winningTeamId },
@@ -484,93 +960,326 @@ export async function submitForfeit(
 }
 
 // ==========================================
-// TEAM REGISTRATION & SETTINGS
+// LEAGUE SETTINGS (Admin only)
 // ==========================================
 
-export async function getLeagueSettings() {
-  // Get or create default settings
-  let settings = await prisma.leagueSettings.findFirst();
-  if (!settings) {
-    settings = await prisma.leagueSettings.create({
-      data: {
-        maxTeams: 16,
-        registrationOpen: true,
-      },
-    });
-  }
-  return settings;
-}
+export async function updateLeagueSettings(
+  leagueSlug: string,
+  maxTeams: number,
+  registrationOpen: boolean
+) {
+  const session = await requireLeagueAdmin(leagueSlug);
 
-export async function updateLeagueSettings(maxTeams: number, registrationOpen: boolean) {
-  await requireAdmin();
-
-  const settings = await getLeagueSettings();
-  return prisma.leagueSettings.update({
-    where: { id: settings.id },
+  return prisma.league.update({
+    where: { id: session.leagueId },
     data: { maxTeams, registrationOpen },
   });
 }
 
-// Validation schema for team registration
+export async function updateHandicapSettings(
+  leagueSlug: string,
+  baseScore: number,
+  multiplier: number,
+  rounding: "floor" | "round" | "ceil",
+  defaultHandicap: number,
+  maxHandicap: number | null
+) {
+  const session = await requireLeagueAdmin(leagueSlug);
+
+  // Update the settings
+  await prisma.league.update({
+    where: { id: session.leagueId },
+    data: {
+      handicapBaseScore: baseScore,
+      handicapMultiplier: multiplier,
+      handicapRounding: rounding,
+      handicapDefault: defaultHandicap,
+      handicapMax: maxHandicap,
+    },
+  });
+
+  // Recalculate all matchups and team stats with new settings
+  await recalculateLeagueStats(session.leagueId);
+
+  return prisma.league.findUnique({ where: { id: session.leagueId } });
+}
+
+/**
+ * Recalculate all matchup handicaps, net scores, points, and team stats
+ * Used when handicap settings change
+ */
+export async function recalculateLeagueStats(leagueId: number) {
+  const handicapSettings = await getHandicapSettings(leagueId);
+
+  // Get all matchups ordered by week (chronological for proper handicap calculation)
+  const matchups = await prisma.matchup.findMany({
+    where: { leagueId },
+    orderBy: [{ weekNumber: "asc" }, { id: "asc" }],
+  });
+
+  // If no matchups, just ensure team stats are zeroed and return
+  if (matchups.length === 0) {
+    const teams = await prisma.team.findMany({ where: { leagueId } });
+    for (const team of teams) {
+      await prisma.team.update({
+        where: { id: team.id },
+        data: { totalPoints: 0, wins: 0, losses: 0, ties: 0 },
+      });
+    }
+    return;
+  }
+
+  // Track scores for each team to calculate rolling handicaps
+  const teamScores: Record<number, number[]> = {};
+
+  // Process each matchup in order
+  for (const matchup of matchups) {
+    // Skip forfeits - they have fixed points and no real scores
+    if (matchup.isForfeit) {
+      continue;
+    }
+
+    // Initialize team score arrays if needed
+    if (!teamScores[matchup.teamAId]) teamScores[matchup.teamAId] = [];
+    if (!teamScores[matchup.teamBId]) teamScores[matchup.teamBId] = [];
+
+    // Calculate handicaps
+    let teamAHandicap: number;
+    let teamBHandicap: number;
+
+    if (matchup.weekNumber === 1) {
+      // Week 1: Keep original manual handicaps
+      teamAHandicap = matchup.teamAHandicap;
+      teamBHandicap = matchup.teamBHandicap;
+    } else {
+      // For subs, keep original handicap; otherwise recalculate
+      if (matchup.teamAIsSub) {
+        teamAHandicap = matchup.teamAHandicap;
+      } else {
+        teamAHandicap = calculateHandicap(teamScores[matchup.teamAId], handicapSettings);
+      }
+
+      if (matchup.teamBIsSub) {
+        teamBHandicap = matchup.teamBHandicap;
+      } else {
+        teamBHandicap = calculateHandicap(teamScores[matchup.teamBId], handicapSettings);
+      }
+    }
+
+    // Calculate new net scores
+    const teamANet = calculateNetScore(matchup.teamAGross, teamAHandicap);
+    const teamBNet = calculateNetScore(matchup.teamBGross, teamBHandicap);
+
+    // Calculate new points based on net scores
+    const { teamAPoints, teamBPoints } = suggestPoints(teamANet, teamBNet);
+
+    // Update the matchup
+    await prisma.matchup.update({
+      where: { id: matchup.id },
+      data: {
+        teamAHandicap,
+        teamBHandicap,
+        teamANet,
+        teamBNet,
+        teamAPoints,
+        teamBPoints,
+      },
+    });
+
+    // Add scores to history for future handicap calculations (non-subs only)
+    if (!matchup.teamAIsSub) {
+      teamScores[matchup.teamAId].push(matchup.teamAGross);
+    }
+    if (!matchup.teamBIsSub) {
+      teamScores[matchup.teamBId].push(matchup.teamBGross);
+    }
+  }
+
+  // Recalculate team aggregate stats
+  const teams = await prisma.team.findMany({
+    where: { leagueId },
+  });
+
+  for (const team of teams) {
+    // Get all matchups for this team
+    const teamMatchups = await prisma.matchup.findMany({
+      where: {
+        leagueId,
+        OR: [{ teamAId: team.id }, { teamBId: team.id }],
+      },
+    });
+
+    let totalPoints = 0;
+    let wins = 0;
+    let losses = 0;
+    let ties = 0;
+
+    for (const m of teamMatchups) {
+      if (m.teamAId === team.id) {
+        totalPoints += m.teamAPoints;
+        if (m.teamAPoints > m.teamBPoints) wins++;
+        else if (m.teamAPoints < m.teamBPoints) losses++;
+        else ties++;
+      } else {
+        totalPoints += m.teamBPoints;
+        if (m.teamBPoints > m.teamAPoints) wins++;
+        else if (m.teamBPoints < m.teamAPoints) losses++;
+        else ties++;
+      }
+    }
+
+    await prisma.team.update({
+      where: { id: team.id },
+      data: { totalPoints, wins, losses, ties },
+    });
+  }
+}
+
+// ==========================================
+// ABOUT THE LEAGUE
+// ==========================================
+
+export interface LeagueAbout {
+  leagueName: string;
+  startDate: Date | null;
+  endDate: Date | null;
+  numberOfWeeks: number | null;
+  courseName: string | null;
+  courseLocation: string | null;
+  playDay: string | null;
+  playTime: string | null;
+  entryFee: number | null;
+  prizeInfo: string | null;
+  description: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  registrationOpen: boolean;
+  maxTeams: number;
+}
+
+export async function getLeagueAbout(leagueId: number): Promise<LeagueAbout> {
+  const league = await prisma.league.findUniqueOrThrow({
+    where: { id: leagueId },
+  });
+
+  return {
+    leagueName: league.name,
+    startDate: league.startDate,
+    endDate: league.endDate,
+    numberOfWeeks: league.numberOfWeeks,
+    courseName: league.courseName,
+    courseLocation: league.courseLocation,
+    playDay: league.playDay,
+    playTime: league.playTime,
+    entryFee: league.entryFee,
+    prizeInfo: league.prizeInfo,
+    description: league.description,
+    contactEmail: league.contactEmail,
+    contactPhone: league.contactPhone,
+    registrationOpen: league.registrationOpen,
+    maxTeams: league.maxTeams,
+  };
+}
+
+const updateLeagueAboutSchema = z.object({
+  leagueName: z.string().min(1).max(100),
+  startDate: z.date().nullable(),
+  endDate: z.date().nullable(),
+  numberOfWeeks: z.number().int().min(1).max(52).nullable(),
+  courseName: z.string().max(100).nullable(),
+  courseLocation: z.string().max(200).nullable(),
+  playDay: z.string().max(20).nullable(),
+  playTime: z.string().max(20).nullable(),
+  entryFee: z.number().min(0).nullable(),
+  prizeInfo: z.string().max(1000).nullable(),
+  description: z.string().max(2000).nullable(),
+  contactEmail: z.string().email().max(255).nullable().or(z.literal("")),
+  contactPhone: z.string().max(20).nullable(),
+});
+
+export type UpdateLeagueAboutInput = z.infer<typeof updateLeagueAboutSchema>;
+
+export async function updateLeagueAbout(leagueSlug: string, data: UpdateLeagueAboutInput) {
+  const session = await requireLeagueAdmin(leagueSlug);
+
+  const sanitizedData = {
+    ...data,
+    contactEmail: data.contactEmail === "" ? null : data.contactEmail,
+  };
+
+  const validated = updateLeagueAboutSchema.parse(sanitizedData);
+
+  return prisma.league.update({
+    where: { id: session.leagueId },
+    data: {
+      name: validated.leagueName,
+      startDate: validated.startDate,
+      endDate: validated.endDate,
+      numberOfWeeks: validated.numberOfWeeks,
+      courseName: validated.courseName,
+      courseLocation: validated.courseLocation,
+      playDay: validated.playDay,
+      playTime: validated.playTime,
+      entryFee: validated.entryFee,
+      prizeInfo: validated.prizeInfo,
+      description: validated.description,
+      contactEmail: validated.contactEmail,
+      contactPhone: validated.contactPhone,
+    },
+  });
+}
+
+// ==========================================
+// TEAM REGISTRATION
+// ==========================================
+
 const registerTeamSchema = z.object({
-  name: z
-    .string()
-    .min(2, "Team name must be at least 2 characters")
-    .max(50, "Team name must be at most 50 characters")
-    .trim()
-    .refine((val) => val.length > 0, "Team name cannot be empty"),
-  captainName: z
-    .string()
-    .min(2, "Captain name must be at least 2 characters")
-    .max(100, "Captain name must be at most 100 characters")
-    .trim()
-    .refine((val) => val.length > 0, "Captain name cannot be empty"),
-  email: z
-    .string()
-    .email("Invalid email address")
-    .max(255, "Email must be at most 255 characters"),
-  phone: z
-    .string()
-    .min(10, "Phone number must be at least 10 characters")
-    .max(20, "Phone number must be at most 20 characters")
-    .regex(/^[\d\s()+-]+$/, "Phone number can only contain digits, spaces, parentheses, plus, and hyphen"),
+  name: z.string().min(2).max(50).trim(),
+  captainName: z.string().min(2).max(100).trim(),
+  email: z.string().email().max(255),
+  phone: z.string().min(10).max(20).regex(/^[\d\s()+-]+$/),
 });
 
 export async function registerTeam(
+  leagueSlug: string,
   name: string,
   captainName: string,
   email: string,
   phone: string
 ) {
-  // Validate input
   const validated = registerTeamSchema.parse({ name, captainName, email, phone });
 
-  // Check if registration is open
-  const settings = await getLeagueSettings();
-  if (!settings.registrationOpen) {
+  const league = await prisma.league.findUnique({
+    where: { slug: leagueSlug },
+  });
+
+  if (!league) {
+    throw new Error("League not found");
+  }
+
+  if (!league.registrationOpen) {
     throw new Error("Registration is currently closed");
   }
 
-  // Check if max teams reached (count only approved teams)
   const approvedTeamsCount = await prisma.team.count({
-    where: { status: "approved" },
+    where: { leagueId: league.id, status: "approved" },
   });
 
-  if (approvedTeamsCount >= settings.maxTeams) {
-    throw new Error(`League is full (${settings.maxTeams} teams maximum)`);
+  if (approvedTeamsCount >= league.maxTeams) {
+    throw new Error(`League is full (${league.maxTeams} teams maximum)`);
   }
 
-  // Check if team name already exists
   const existing = await prisma.team.findUnique({
-    where: { name: validated.name },
+    where: { leagueId_name: { leagueId: league.id, name: validated.name } },
   });
+
   if (existing) {
-    throw new Error(`Team "${validated.name}" already exists`);
+    throw new Error(`Team "${validated.name}" already exists in this league`);
   }
 
-  // Create team with pending status
   return prisma.team.create({
     data: {
+      leagueId: league.id,
       name: validated.name,
       captainName: validated.captainName,
       email: validated.email,
@@ -580,40 +1289,52 @@ export async function registerTeam(
   });
 }
 
-export async function getPendingTeams() {
-  await requireAdmin();
+export async function getPendingTeams(leagueSlug: string) {
+  const session = await requireLeagueAdmin(leagueSlug);
 
   return prisma.team.findMany({
-    where: { status: "pending" },
+    where: { leagueId: session.leagueId, status: "pending" },
     orderBy: { createdAt: "asc" },
   });
 }
 
-export async function getApprovedTeams() {
+export async function getApprovedTeams(leagueId: number) {
   return prisma.team.findMany({
-    where: { status: "approved" },
+    where: { leagueId, status: "approved" },
     orderBy: { name: "asc" },
   });
 }
 
-export async function getAllTeamsWithStatus() {
-  await requireAdmin();
+export async function getAllTeamsWithStatus(leagueSlug: string) {
+  const session = await requireLeagueAdmin(leagueSlug);
 
   return prisma.team.findMany({
+    where: { leagueId: session.leagueId },
     orderBy: [{ status: "asc" }, { name: "asc" }],
   });
 }
 
-export async function approveTeam(teamId: number) {
-  await requireAdmin();
+export async function approveTeam(leagueSlug: string, teamId: number) {
+  const session = await requireLeagueAdmin(leagueSlug);
 
-  const settings = await getLeagueSettings();
-  const approvedCount = await prisma.team.count({
-    where: { status: "approved" },
+  const team = await prisma.team.findUniqueOrThrow({
+    where: { id: teamId },
   });
 
-  if (approvedCount >= settings.maxTeams) {
-    throw new Error(`Cannot approve: League is full (${settings.maxTeams} teams maximum)`);
+  if (team.leagueId !== session.leagueId) {
+    throw new Error("Unauthorized: Team does not belong to this league");
+  }
+
+  const league = await prisma.league.findUniqueOrThrow({
+    where: { id: session.leagueId },
+  });
+
+  const approvedCount = await prisma.team.count({
+    where: { leagueId: session.leagueId, status: "approved" },
+  });
+
+  if (approvedCount >= league.maxTeams) {
+    throw new Error(`Cannot approve: League is full (${league.maxTeams} teams maximum)`);
   }
 
   return prisma.team.update({
@@ -622,8 +1343,16 @@ export async function approveTeam(teamId: number) {
   });
 }
 
-export async function rejectTeam(teamId: number) {
-  await requireAdmin();
+export async function rejectTeam(leagueSlug: string, teamId: number) {
+  const session = await requireLeagueAdmin(leagueSlug);
+
+  const team = await prisma.team.findUniqueOrThrow({
+    where: { id: teamId },
+  });
+
+  if (team.leagueId !== session.leagueId) {
+    throw new Error("Unauthorized: Team does not belong to this league");
+  }
 
   return prisma.team.update({
     where: { id: teamId },
@@ -631,10 +1360,17 @@ export async function rejectTeam(teamId: number) {
   });
 }
 
-export async function deleteTeam(teamId: number) {
-  await requireAdmin();
+export async function deleteTeam(leagueSlug: string, teamId: number) {
+  const session = await requireLeagueAdmin(leagueSlug);
 
-  // Check if team has any matchups
+  const team = await prisma.team.findUniqueOrThrow({
+    where: { id: teamId },
+  });
+
+  if (team.leagueId !== session.leagueId) {
+    throw new Error("Unauthorized: Team does not belong to this league");
+  }
+
   const matchupCount = await prisma.matchup.count({
     where: {
       OR: [{ teamAId: teamId }, { teamBId: teamId }],

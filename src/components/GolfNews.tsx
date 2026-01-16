@@ -29,7 +29,7 @@ export function GolfNews() {
   if (loading) {
     return (
       <div className="bg-white/95 backdrop-blur rounded-lg shadow-lg p-6 w-full max-w-md">
-        <h2 className="text-lg font-bold text-[var(--masters-green-dark)] mb-4 flex items-center gap-2">
+        <h2 className="text-lg font-bold text-[var(--green-dark)] mb-4 flex items-center gap-2">
           <NewspaperIcon />
           Golf News
         </h2>
@@ -48,7 +48,7 @@ export function GolfNews() {
   if (error || news.length === 0) {
     return (
       <div className="bg-white/95 backdrop-blur rounded-lg shadow-lg p-6 w-full max-w-md">
-        <h2 className="text-lg font-bold text-[var(--masters-green-dark)] mb-4 flex items-center gap-2">
+        <h2 className="text-lg font-bold text-[var(--green-dark)] mb-4 flex items-center gap-2">
           <NewspaperIcon />
           Golf News
         </h2>
@@ -61,7 +61,7 @@ export function GolfNews() {
 
   return (
     <div className="bg-white/95 backdrop-blur rounded-lg shadow-lg p-6 w-full max-w-md">
-      <h2 className="text-lg font-bold text-[var(--masters-green-dark)] mb-4 flex items-center gap-2">
+      <h2 className="text-lg font-bold text-[var(--green-dark)] mb-4 flex items-center gap-2">
         <NewspaperIcon />
         Golf News
       </h2>
@@ -74,7 +74,7 @@ export function GolfNews() {
             rel="noopener noreferrer"
             className="block group"
           >
-            <h3 className="text-sm font-medium text-[var(--text-primary)] group-hover:text-[var(--masters-green)] transition-colors line-clamp-2">
+            <h3 className="text-sm font-medium text-[var(--text-primary)] group-hover:text-[var(--green-primary)] transition-colors line-clamp-2">
               {item.title}
             </h3>
             <p className="text-xs text-[var(--text-muted)] mt-1">
@@ -87,7 +87,7 @@ export function GolfNews() {
         href="https://www.espn.com/golf/"
         target="_blank"
         rel="noopener noreferrer"
-        className="block mt-4 pt-4 border-t border-[var(--border-light)] text-xs text-[var(--text-muted)] hover:text-[var(--masters-green)] transition-colors"
+        className="block mt-4 pt-4 border-t border-[var(--border-light)] text-xs text-[var(--text-muted)] hover:text-[var(--green-primary)] transition-colors"
       >
         More from ESPN Golf →
       </a>
@@ -98,7 +98,7 @@ export function GolfNews() {
 function NewspaperIcon() {
   return (
     <svg
-      className="w-5 h-5 text-[var(--masters-green)]"
+      className="w-5 h-5 text-[var(--green-primary)]"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"

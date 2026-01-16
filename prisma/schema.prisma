@@ -10,9 +10,70 @@ datasource db {
   provider = "sqlite"
 }
 
+model SuperAdmin {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String   // bcrypt hashed
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model League {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique  // "Thursday Night Golf League"
+  slug          String   @unique  // "thursday-night-golf-league"
+
+  // Admin credentials
+  adminUsername String   // "admin@ThursdayNightGolfLeague"
+  adminPassword String   // bcrypt hashed
+
+  // Settings
+  maxTeams             Int       @default(16)
+  registrationOpen     Boolean   @default(true)
+
+  // Handicap Formula: (avg - baseScore) * multiplier
+  handicapBaseScore    Float     @default(35)
+  handicapMultiplier   Float     @default(0.9)
+  handicapRounding     String    @default("floor") // "floor", "round", "ceil"
+  handicapDefault      Float     @default(0)       // Handicap when no scores available
+  handicapMax          Float?                      // Maximum handicap cap (null = no limit)
+
+  // About the League fields (all optional)
+  startDate            DateTime?
+  endDate              DateTime?
+  numberOfWeeks        Int?
+  courseName           String?
+  courseLocation       String?
+  playDay              String?   // Day of week (e.g., "Thursday")
+  playTime             String?   // Start time (e.g., "5:30 PM")
+  entryFee             Float?
+  prizeInfo            String?
+  description          String?
+  contactEmail         String?
+  contactPhone         String?
+
+  // Platform management (for super-admin)
+  status           String    @default("active")  // "active", "suspended", "cancelled"
+  subscriptionTier String    @default("free")    // "free", "basic", "pro" (future billing)
+  billingEmail     String?
+  expiresAt        DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  teams       Team[]
+  matchups    Matchup[]
+}
+
 model Team {
   id          Int       @id @default(autoincrement())
-  name        String    @unique
+  name        String
+
+  // League association
+  leagueId    Int
+  league      League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
 
   // Captain/Contact information
   captainName String?
@@ -34,21 +95,19 @@ model Team {
   // Relations
   matchupsAsTeamA Matchup[] @relation("TeamA")
   matchupsAsTeamB Matchup[] @relation("TeamB")
-}
 
-model LeagueSettings {
-  id                   Int       @id @default(autoincrement())
-  maxTeams             Int       @default(16)
-  registrationOpen     Boolean   @default(true)
-
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  // Team name must be unique within a league
+  @@unique([leagueId, name])
 }
 
 model Matchup {
   id              Int      @id @default(autoincrement())
   weekNumber      Int
   playedAt        DateTime @default(now())
+
+  // League association
+  leagueId        Int
+  league          League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
 
   // Team A data
   teamAId         Int
@@ -75,6 +134,6 @@ model Matchup {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // Constraint: unique matchup per week per team pair
-  @@unique([weekNumber, teamAId, teamBId])
+  // Constraint: unique matchup per week per team pair within a league
+  @@unique([leagueId, weekNumber, teamAId, teamBId])
 }

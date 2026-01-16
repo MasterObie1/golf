@@ -8,11 +8,12 @@ const globalForPrisma = globalThis as unknown as {
 function createPrismaClient() {
   // Use Turso if TURSO_DATABASE_URL is set, otherwise use local SQLite
   const useTurso = !!process.env.TURSO_DATABASE_URL;
+  const dbUrl = useTurso
+    ? process.env.TURSO_DATABASE_URL!
+    : (process.env.DATABASE_URL || "file:./dev.db");
 
   const adapter = new PrismaLibSql({
-    url: useTurso
-      ? process.env.TURSO_DATABASE_URL!
-      : (process.env.DATABASE_URL || "file:./dev.db"),
+    url: dbUrl,
     authToken: useTurso ? process.env.TURSO_AUTH_TOKEN : undefined,
   });
 

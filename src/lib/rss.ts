@@ -14,11 +14,11 @@ interface CacheEntry {
 
 // In-memory cache
 let cache: CacheEntry | null = null;
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour in milliseconds
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes in milliseconds
 
 const ESPN_GOLF_RSS = "https://www.espn.com/espn/rss/golf/news";
 
-export async function getGolfNews(limit: number = 3): Promise<NewsItem[]> {
+export async function getGolfNews(limit: number = 5): Promise<NewsItem[]> {
   const now = Date.now();
 
   // Return cached data if fresh
@@ -28,7 +28,7 @@ export async function getGolfNews(limit: number = 3): Promise<NewsItem[]> {
 
   try {
     const response = await fetch(ESPN_GOLF_RSS, {
-      next: { revalidate: 3600 }, // Also use Next.js cache
+      cache: "no-store", // Don't cache at fetch level - we handle our own caching
     });
 
     if (!response.ok) {

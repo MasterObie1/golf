@@ -1,76 +1,134 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f5f5f0;
-  --foreground: #1a1a1a;
+  --background: #F0F4F2;
+  --foreground: #1A2E26;
 
-  /* Masters Tournament Theme */
-  --masters-green: #006747;
-  --masters-green-dark: #004d35;
-  --masters-green-light: #008c5f;
-  --masters-yellow: #FFCC00;
-  --masters-yellow-light: #FFD633;
-  --masters-cream: #f5f5f0;
-  --masters-gold: #C5A572;
-  --masters-burgundy: #722F37;
-  --masters-burgundy-light: #8B3A42;
-  --masters-burgundy-dark: #5C252C;
+  /* LeagueLinks Brand Colors */
+  --green-primary: #00573F;
+  --green-dark: #004D38;
+  --green-light: #007A55;
 
-  /* Semantic Colors */
-  --text-primary: #1a1a1a;
-  --text-secondary: #4a5043;
-  --text-muted: #6b7260;
-  --text-light: #8a9180;
+  --gold-primary: #FDB913;
+  --gold-dark: #E5A811;
+  --gold-light: #FFD54F;
 
-  --border-color: #d4d6cf;
-  --border-light: #e8e9e4;
+  --bg-primary: #F0F4F2;
+  --bg-white: #FFFFFF;
 
-  /* Success States (Masters Green) */
-  --success-bg: #e6f2ed;
-  --success-text: #004d35;
-  --success-border: #99c7b3;
+  /* Text Colors */
+  --text-primary: #1A2E26;
+  --text-secondary: #6B7C74;
+  --text-muted: #8A9A92;
+  --text-light: #A4B2AA;
 
-  /* Error States (Burgundy) */
-  --error-bg: #f5e6e8;
-  --error-text: #5C252C;
-  --error-border: #d4a5aa;
+  /* Borders */
+  --border-color: #D4DBD7;
+  --border-light: #E4EBE7;
 
-  /* Warning States (Gold) */
-  --warning-bg: #fef9e6;
-  --warning-text: #8B6914;
-  --warning-border: #e6d38a;
+  /* Semantic Colors - Success (Green) */
+  --success: #22C55E;
+  --success-bg: #E8F5EC;
+  --success-text: #166534;
+  --success-border: #86EFAC;
+
+  /* Semantic Colors - Warning (Amber) */
+  --warning: #F59E0B;
+  --warning-bg: #FEF3C7;
+  --warning-text: #92400E;
+  --warning-border: #FCD34D;
+
+  /* Semantic Colors - Error (Red) */
+  --error: #EF4444;
+  --error-bg: #FEE2E2;
+  --error-text: #991B1B;
+  --error-border: #FCA5A5;
+
+  /* Semantic Colors - Info (Blue) */
+  --info: #3B82F6;
+  --info-bg: #DBEAFE;
+  --info-text: #1E40AF;
+  --info-border: #93C5FD;
+
+  /* Spacing */
+  --space-unit: 4px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(26, 46, 38, 0.08);
+  --shadow-md: 0 4px 12px rgba(26, 46, 38, 0.12);
+  --shadow-lg: 0 8px 24px rgba(26, 46, 38, 0.16);
 }
 
 @theme inline {
+  /* Background & Foreground */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-masters-green: var(--masters-green);
-  --color-masters-green-dark: var(--masters-green-dark);
-  --color-masters-green-light: var(--masters-green-light);
-  --color-masters-yellow: var(--masters-yellow);
-  --color-masters-yellow-light: var(--masters-yellow-light);
-  --color-masters-cream: var(--masters-cream);
-  --color-masters-gold: var(--masters-gold);
-  --color-masters-burgundy: var(--masters-burgundy);
-  --color-masters-burgundy-light: var(--masters-burgundy-light);
-  --color-masters-burgundy-dark: var(--masters-burgundy-dark);
+
+  /* Classic Serif Font */
+  --font-playfair: var(--font-playfair);
+
+  /* Brand Greens */
+  --color-green-primary: var(--green-primary);
+  --color-green-dark: var(--green-dark);
+  --color-green-light: var(--green-light);
+
+  /* Brand Golds */
+  --color-gold-primary: var(--gold-primary);
+  --color-gold-dark: var(--gold-dark);
+  --color-gold-light: var(--gold-light);
+
+  /* Surfaces */
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-white: var(--bg-white);
+
+  /* Text */
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
   --color-text-light: var(--text-light);
+
+  /* Borders */
   --color-border: var(--border-color);
   --color-border-light: var(--border-light);
+
+  /* Success */
+  --color-success: var(--success);
   --color-success-bg: var(--success-bg);
   --color-success-text: var(--success-text);
   --color-success-border: var(--success-border);
-  --color-error-bg: var(--error-bg);
-  --color-error-text: var(--error-text);
-  --color-error-border: var(--error-border);
+
+  /* Warning */
+  --color-warning: var(--warning);
   --color-warning-bg: var(--warning-bg);
   --color-warning-text: var(--warning-text);
   --color-warning-border: var(--warning-border);
+
+  /* Error */
+  --color-error: var(--error);
+  --color-error-bg: var(--error-bg);
+  --color-error-text: var(--error-text);
+  --color-error-border: var(--error-border);
+
+  /* Info */
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-info-text: var(--info-text);
+  --color-info-border: var(--info-border);
+
+  /* Shadows */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  /* Typography */
   --font-sans: var(--font-inter);
-  --font-display: var(--font-playfair);
+  --font-display: var(--font-jakarta);
 }
 
 body {
@@ -79,6 +137,79 @@ body {
   font-family: var(--font-inter), system-ui, sans-serif;
 }
 
-h1, h2, h3 {
-  font-family: var(--font-playfair), Georgia, serif;
+h1, h2, h3, h4 {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  color: var(--text-primary);
+}
+
+/* Utility Classes */
+.btn-primary {
+  background-color: var(--green-primary);
+  color: white;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  transition: background-color 150ms ease;
+}
+
+.btn-primary:hover {
+  background-color: var(--green-dark);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--green-primary);
+  padding: 10px 22px;
+  border: 2px solid var(--green-primary);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  transition: all 150ms ease;
+}
+
+.btn-secondary:hover {
+  background-color: var(--green-primary);
+  color: white;
+}
+
+.btn-accent {
+  background-color: var(--gold-primary);
+  color: var(--text-primary);
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  transition: background-color 150ms ease;
+}
+
+.btn-accent:hover {
+  background-color: var(--gold-dark);
+}
+
+.card {
+  background-color: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 150ms ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Focus States for Accessibility */
+:focus-visible {
+  outline: 2px solid var(--green-primary);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background-color: var(--green-primary);
+  color: white;
 }

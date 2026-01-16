@@ -1,20 +1,66 @@
 /**
- * Calculate handicap using the formula: (Average_Score - 35) * 0.9
- * Always rounds DOWN to a whole number (e.g., 1.9 becomes 1)
+ * Handicap settings interface for configurable formula
+ */
+export interface HandicapSettings {
+  baseScore: number;      // Subtracted from average (default: 35)
+  multiplier: number;     // Multiplied by difference (default: 0.9)
+  rounding: "floor" | "round" | "ceil";  // Rounding method (default: floor)
+  defaultHandicap: number; // When no scores available (default: 0)
+  maxHandicap: number | null; // Maximum handicap cap (null = no limit)
+}
+
+/**
+ * Default handicap settings matching the original hardcoded formula
+ */
+export const DEFAULT_HANDICAP_SETTINGS: HandicapSettings = {
+  baseScore: 35,
+  multiplier: 0.9,
+  rounding: "floor",
+  defaultHandicap: 0,
+  maxHandicap: null,
+};
+
+/**
+ * Calculate handicap using configurable formula:
+ * handicap = round((Average_Score - baseScore) * multiplier)
  *
  * @param scores - Array of gross scores from previous rounds
- * @returns Calculated handicap as whole number, or 0 if no scores available
+ * @param settings - Handicap formula settings (optional, uses defaults if not provided)
+ * @returns Calculated handicap as whole number
  */
-export function calculateHandicap(scores: number[]): number {
+export function calculateHandicap(
+  scores: number[],
+  settings: HandicapSettings = DEFAULT_HANDICAP_SETTINGS
+): number {
   if (scores.length === 0) {
-    return 0;
+    return settings.defaultHandicap;
   }
 
   const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  const handicap = (averageScore - 35) * 0.9;
+  const rawHandicap = (averageScore - settings.baseScore) * settings.multiplier;
 
-  // Always round down to whole number
-  return Math.floor(handicap);
+  // Apply configured rounding method
+  let handicap: number;
+  switch (settings.rounding) {
+    case "floor":
+      handicap = Math.floor(rawHandicap);
+      break;
+    case "ceil":
+      handicap = Math.ceil(rawHandicap);
+      break;
+    case "round":
+      handicap = Math.round(rawHandicap);
+      break;
+    default:
+      handicap = Math.floor(rawHandicap);
+  }
+
+  // Apply maximum handicap cap if set
+  if (settings.maxHandicap !== null && handicap > settings.maxHandicap) {
+    return settings.maxHandicap;
+  }
+
+  return handicap;
 }
 
 /**
