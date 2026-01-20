@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
-import { Navigation } from "@/components/Navigation";
+import { NavigationWrapper } from "@/components/NavigationWrapper";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -36,7 +36,7 @@ export default function RootLayout({
       <body
         className={`${jakarta.variable} ${inter.variable} ${playfair.variable} antialiased`}
       >
-        <Navigation />
+        <NavigationWrapper />
         {children}
       </body>
     </html>

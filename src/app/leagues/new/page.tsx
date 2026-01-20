@@ -73,6 +73,16 @@ export default function NewLeaguePage() {
             </p>
           </div>
 
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+            <h2 className="font-semibold text-amber-800 mb-2">Bookmark Your Admin URL</h2>
+            <p className="text-sm text-amber-700 mb-2">
+              The admin panel is only visible after logging in. Save this URL:
+            </p>
+            <code className="block bg-amber-100 px-3 py-2 rounded text-xs text-amber-900 break-all">
+              {typeof window !== 'undefined' ? window.location.origin : ''}/league/{success.slug}/admin
+            </code>
+          </div>
+
           <div className="space-y-3">
             <Link
               href={`/league/${success.slug}/admin/login`}
