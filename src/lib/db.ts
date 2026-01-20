@@ -6,18 +6,32 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  // Use Turso if TURSO_DATABASE_URL is set, otherwise use local SQLite
-  const useTurso = !!process.env.TURSO_DATABASE_URL;
-  const dbUrl = useTurso
-    ? process.env.TURSO_DATABASE_URL!
-    : (process.env.DATABASE_URL || "file:./dev.db");
+  const tursoUrl = process.env.TURSO_DATABASE_URL;
+  const tursoToken = process.env.TURSO_AUTH_TOKEN;
+  const useTurso = !!tursoUrl;
 
-  const adapter = new PrismaLibSql({
-    url: dbUrl,
-    authToken: useTurso ? process.env.TURSO_AUTH_TOKEN : undefined,
-  });
+  if (useTurso && !tursoToken) {
+    throw new Error(
+      "TURSO_DATABASE_URL is set but TURSO_AUTH_TOKEN is missing. " +
+      "Please add TURSO_AUTH_TOKEN to your environment variables."
+    );
+  }
 
-  return new PrismaClient({ adapter });
+  const dbUrl = useTurso ? tursoUrl : (process.env.DATABASE_URL || "file:./dev.db");
+
+  try {
+    const adapter = new PrismaLibSql({
+      url: dbUrl,
+      authToken: useTurso ? tursoToken : undefined,
+    });
+
+    return new PrismaClient({ adapter });
+  } catch (error) {
+    console.error("Failed to create Prisma client:", error);
+    throw new Error(
+      `Database connection failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();

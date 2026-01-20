@@ -35,29 +35,41 @@ export async function createLeague(
   const trimmedName = name.trim();
   const slug = generateSlug(trimmedName);
 
-  // Check if slug already exists
-  const existing = await prisma.league.findUnique({
-    where: { slug },
-  });
-  if (existing) {
-    throw new Error(`A league with a similar name already exists`);
+  try {
+    // Check if slug already exists
+    const existing = await prisma.league.findUnique({
+      where: { slug },
+    });
+    if (existing) {
+      throw new Error(`A league with a similar name already exists`);
+    }
+
+    // Generate admin username: admin@LeagueName (no spaces)
+    const adminUsername = `admin@${trimmedName.replace(/\s+/g, "")}`;
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+
+    // Create the league
+    return await prisma.league.create({
+      data: {
+        name: trimmedName,
+        slug,
+        adminUsername,
+        adminPassword: hashedPassword,
+      },
+    });
+  } catch (error) {
+    // Re-throw known errors
+    if (error instanceof Error && error.message.includes("already exists")) {
+      throw error;
+    }
+    // Log and re-throw with more context for unknown errors
+    console.error("createLeague error:", error);
+    throw new Error(
+      `Failed to create league: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
   }
-
-  // Generate admin username: admin@LeagueName (no spaces)
-  const adminUsername = `admin@${trimmedName.replace(/\s+/g, "")}`;
-
-  // Hash the password
-  const hashedPassword = await bcrypt.hash(adminPassword, 10);
-
-  // Create the league
-  return prisma.league.create({
-    data: {
-      name: trimmedName,
-      slug,
-      adminUsername,
-      adminPassword: hashedPassword,
-    },
-  });
 }
 
 /**
