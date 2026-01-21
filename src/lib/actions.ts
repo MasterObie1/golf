@@ -3,7 +3,16 @@
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
-import { calculateHandicap, calculateNetScore, suggestPoints, type HandicapSettings } from "./handicap";
+import {
+  calculateHandicap,
+  calculateNetScore,
+  suggestPoints,
+  leagueToHandicapSettings,
+  type HandicapSettings,
+  type ScoreSelectionMethod,
+  type AllowanceType,
+  type RoundingMethod
+} from "./handicap";
 import { requireAdmin, requireLeagueAdmin, getAdminSession } from "./auth";
 
 // ==========================================
@@ -227,13 +236,7 @@ export async function getHandicapSettings(leagueId: number): Promise<HandicapSet
     where: { id: leagueId },
   });
 
-  return {
-    baseScore: league.handicapBaseScore,
-    multiplier: league.handicapMultiplier,
-    rounding: league.handicapRounding as "floor" | "round" | "ceil",
-    defaultHandicap: league.handicapDefault,
-    maxHandicap: league.handicapMax,
-  };
+  return leagueToHandicapSettings(league);
 }
 
 export async function getTeamHandicap(leagueId: number, teamId: number): Promise<number> {
@@ -988,13 +991,51 @@ export async function updateLeagueSettings(
   });
 }
 
+export interface HandicapSettingsInput {
+  // Basic Formula
+  baseScore: number;
+  multiplier: number;
+  rounding: RoundingMethod;
+  defaultHandicap: number;
+  maxHandicap: number | null;
+  minHandicap: number | null;
+
+  // Score Selection
+  scoreSelection: ScoreSelectionMethod;
+  scoreCount: number | null;
+  bestOf: number | null;
+  lastOf: number | null;
+  dropHighest: number;
+  dropLowest: number;
+
+  // Score Weighting
+  useWeighting: boolean;
+  weightRecent: number;
+  weightDecay: number;
+
+  // Exceptional Score Handling
+  capExceptional: boolean;
+  exceptionalCap: number | null;
+
+  // Application Rules
+  percentage: number;
+  maxStrokes: number | null;
+  allowanceType: AllowanceType;
+
+  // Time-Based Rules
+  provWeeks: number;
+  provMultiplier: number;
+  freezeWeek: number | null;
+  useTrend: boolean;
+  trendWeight: number;
+
+  // Administrative
+  requireApproval: boolean;
+}
+
 export async function updateHandicapSettings(
   leagueSlug: string,
-  baseScore: number,
-  multiplier: number,
-  rounding: "floor" | "round" | "ceil",
-  defaultHandicap: number,
-  maxHandicap: number | null
+  settings: HandicapSettingsInput
 ) {
   const session = await requireLeagueAdmin(leagueSlug);
 
@@ -1002,11 +1043,45 @@ export async function updateHandicapSettings(
   await prisma.league.update({
     where: { id: session.leagueId },
     data: {
-      handicapBaseScore: baseScore,
-      handicapMultiplier: multiplier,
-      handicapRounding: rounding,
-      handicapDefault: defaultHandicap,
-      handicapMax: maxHandicap,
+      // Basic Formula
+      handicapBaseScore: settings.baseScore,
+      handicapMultiplier: settings.multiplier,
+      handicapRounding: settings.rounding,
+      handicapDefault: settings.defaultHandicap,
+      handicapMax: settings.maxHandicap,
+      handicapMin: settings.minHandicap,
+
+      // Score Selection
+      handicapScoreSelection: settings.scoreSelection,
+      handicapScoreCount: settings.scoreCount,
+      handicapBestOf: settings.bestOf,
+      handicapLastOf: settings.lastOf,
+      handicapDropHighest: settings.dropHighest,
+      handicapDropLowest: settings.dropLowest,
+
+      // Score Weighting
+      handicapUseWeighting: settings.useWeighting,
+      handicapWeightRecent: settings.weightRecent,
+      handicapWeightDecay: settings.weightDecay,
+
+      // Exceptional Score Handling
+      handicapCapExceptional: settings.capExceptional,
+      handicapExceptionalCap: settings.exceptionalCap,
+
+      // Application Rules
+      handicapPercentage: settings.percentage,
+      handicapMaxStrokes: settings.maxStrokes,
+      handicapAllowanceType: settings.allowanceType,
+
+      // Time-Based Rules
+      handicapProvWeeks: settings.provWeeks,
+      handicapProvMultiplier: settings.provMultiplier,
+      handicapFreezeWeek: settings.freezeWeek,
+      handicapUseTrend: settings.useTrend,
+      handicapTrendWeight: settings.trendWeight,
+
+      // Administrative
+      handicapRequireApproval: settings.requireApproval,
     },
   });
 

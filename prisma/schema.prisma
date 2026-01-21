@@ -32,12 +32,49 @@ model League {
   maxTeams             Int       @default(16)
   registrationOpen     Boolean   @default(true)
 
-  // Handicap Formula: (avg - baseScore) * multiplier
-  handicapBaseScore    Float     @default(35)
-  handicapMultiplier   Float     @default(0.9)
-  handicapRounding     String    @default("floor") // "floor", "round", "ceil"
-  handicapDefault      Float     @default(0)       // Handicap when no scores available
-  handicapMax          Float?                      // Maximum handicap cap (null = no limit)
+  // ============================================
+  // HANDICAP CONFIGURATION
+  // ============================================
+
+  // --- Basic Formula: (avg - baseScore) * multiplier ---
+  handicapBaseScore    Float     @default(35)       // Base score subtracted (typically par)
+  handicapMultiplier   Float     @default(0.9)      // Multiplier applied to difference
+  handicapRounding     String    @default("floor")  // "floor", "round", "ceil"
+  handicapDefault      Float     @default(0)        // Handicap when no scores available
+  handicapMax          Float?                       // Maximum handicap cap (null = no limit)
+  handicapMin          Float?                       // Minimum handicap cap (null = no limit, for scratch golfers)
+
+  // --- Score Selection ---
+  handicapScoreSelection   String    @default("all")   // "all", "last_n", "best_of_last"
+  handicapScoreCount       Int?                        // For "last_n": how many recent scores to use
+  handicapBestOf           Int?                        // For "best_of_last": use best X scores
+  handicapLastOf           Int?                        // For "best_of_last": from last Y scores
+  handicapDropHighest      Int       @default(0)       // Drop N highest scores before averaging
+  handicapDropLowest       Int       @default(0)       // Drop N lowest scores before averaging
+
+  // --- Score Weighting ---
+  handicapUseWeighting     Boolean   @default(false)   // Enable recency weighting
+  handicapWeightRecent     Float     @default(1.5)     // Weight multiplier for most recent score
+  handicapWeightDecay      Float     @default(0.9)     // Decay factor for each older score
+
+  // --- Exceptional Score Handling ---
+  handicapCapExceptional   Boolean   @default(false)   // Cap exceptional scores before averaging
+  handicapExceptionalCap   Float?                      // Cap score at this value (e.g., max 50)
+
+  // --- Handicap Application ---
+  handicapPercentage       Float     @default(100)     // Apply X% of calculated handicap (e.g., 80%)
+  handicapMaxStrokes       Float?                      // Max strokes given between competitors
+  handicapAllowanceType    String    @default("full")  // "full", "percentage", "difference"
+
+  // --- Time-Based Rules ---
+  handicapProvWeeks        Int       @default(0)       // Provisional period in weeks (0 = disabled)
+  handicapProvMultiplier   Float     @default(1.0)     // Multiplier during provisional period
+  handicapFreezeWeek       Int?                        // Freeze handicaps after this week (null = never)
+  handicapUseTrend         Boolean   @default(false)   // Adjust for improvement/decline trend
+  handicapTrendWeight      Float     @default(0.1)     // How much to weight trend (0.1 = 10%)
+
+  // --- Administrative ---
+  handicapRequireApproval  Boolean   @default(false)   // Require admin approval for handicap changes
 
   // About the League fields (all optional)
   startDate            DateTime?
