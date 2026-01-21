@@ -9,7 +9,6 @@
 
 export type RoundingMethod = "floor" | "round" | "ceil";
 export type ScoreSelectionMethod = "all" | "last_n" | "best_of_last";
-export type AllowanceType = "full" | "percentage" | "difference";
 
 /**
  * Complete handicap settings interface with all customization options
@@ -39,11 +38,6 @@ export interface HandicapSettings {
   // Exceptional Score Handling
   capExceptional: boolean;              // Cap exceptional scores (default: false)
   exceptionalCap: number | null;        // Maximum score value (null = no cap)
-
-  // Application Rules
-  percentage: number;                   // Apply X% of handicap (default: 100)
-  maxStrokes: number | null;            // Max strokes between competitors (null = no limit)
-  allowanceType: AllowanceType;         // How to apply handicap (default: full)
 
   // Time-Based Rules
   provWeeks: number;                    // Provisional period in weeks (default: 0 = disabled)
@@ -85,11 +79,6 @@ export const DEFAULT_HANDICAP_SETTINGS: HandicapSettings = {
   capExceptional: false,
   exceptionalCap: null,
 
-  // Application Rules
-  percentage: 100,
-  maxStrokes: null,
-  allowanceType: "full",
-
   // Time-Based Rules
   provWeeks: 0,
   provMultiplier: 1.0,
@@ -124,7 +113,6 @@ export const HANDICAP_PRESETS: PresetTemplate[] = [
       dropHighest: 0,
       dropLowest: 0,
       useWeighting: false,
-      percentage: 100,
     },
   },
   {
@@ -137,7 +125,6 @@ export const HANDICAP_PRESETS: PresetTemplate[] = [
       lastOf: 8,
       multiplier: 0.96,
       useWeighting: false,
-      percentage: 100,
     },
   },
   {
@@ -150,13 +137,12 @@ export const HANDICAP_PRESETS: PresetTemplate[] = [
       dropHighest: 1,
       dropLowest: 0,
       useWeighting: false,
-      percentage: 100,
     },
   },
   {
     name: "competitive",
     label: "Competitive",
-    description: "Uses 80% of handicap, giving slight edge to better players.",
+    description: "Weights recent scores more heavily for active players.",
     settings: {
       scoreSelection: "all",
       dropHighest: 0,
@@ -164,7 +150,6 @@ export const HANDICAP_PRESETS: PresetTemplate[] = [
       useWeighting: true,
       weightRecent: 1.3,
       weightDecay: 0.95,
-      percentage: 80,
     },
   },
   {
@@ -178,7 +163,6 @@ export const HANDICAP_PRESETS: PresetTemplate[] = [
       exceptionalCap: 50,
       useTrend: true,
       trendWeight: 0.15,
-      percentage: 100,
     },
   },
   {
@@ -449,79 +433,10 @@ export function calculateHandicap(
 }
 
 /**
- * Calculate the applied handicap (after percentage adjustment)
- */
-export function getAppliedHandicap(
-  calculatedHandicap: number,
-  settings: HandicapSettings
-): number {
-  const applied = calculatedHandicap * (settings.percentage / 100);
-  return applyRounding(applied, settings.rounding);
-}
-
-/**
- * Calculate net score: Gross Score - Applied Handicap
+ * Calculate net score: Gross Score - Handicap
  */
 export function calculateNetScore(grossScore: number, handicap: number): number {
   return Math.round((grossScore - handicap) * 10) / 10;
-}
-
-/**
- * Calculate strokes given between two competitors based on allowance type
- */
-export function calculateStrokesGiven(
-  handicapA: number,
-  handicapB: number,
-  settings: HandicapSettings
-): { strokesA: number; strokesB: number } {
-  let strokesA = handicapA;
-  let strokesB = handicapB;
-
-  switch (settings.allowanceType) {
-    case "difference":
-      // Only lower handicap player gives strokes based on difference
-      const diff = Math.abs(handicapA - handicapB);
-      if (handicapA > handicapB) {
-        strokesA = diff;
-        strokesB = 0;
-      } else if (handicapB > handicapA) {
-        strokesA = 0;
-        strokesB = diff;
-      } else {
-        strokesA = 0;
-        strokesB = 0;
-      }
-      break;
-
-    case "percentage":
-      // Apply percentage (already calculated in getAppliedHandicap, but can apply here too)
-      strokesA = getAppliedHandicap(handicapA, settings);
-      strokesB = getAppliedHandicap(handicapB, settings);
-      break;
-
-    case "full":
-    default:
-      // Full handicap for each player
-      break;
-  }
-
-  // Apply max strokes limit
-  if (settings.maxStrokes !== null) {
-    const strokeDiff = Math.abs(strokesA - strokesB);
-    if (strokeDiff > settings.maxStrokes) {
-      // Reduce the higher handicap to maintain max difference
-      if (strokesA > strokesB) {
-        strokesA = strokesB + settings.maxStrokes;
-      } else {
-        strokesB = strokesA + settings.maxStrokes;
-      }
-    }
-  }
-
-  return {
-    strokesA: Math.max(0, applyRounding(strokesA, settings.rounding)),
-    strokesB: Math.max(0, applyRounding(strokesB, settings.rounding)),
-  };
 }
 
 /**
@@ -568,9 +483,6 @@ export function leagueToHandicapSettings(league: {
   handicapWeightDecay?: number;
   handicapCapExceptional?: boolean;
   handicapExceptionalCap?: number | null;
-  handicapPercentage?: number;
-  handicapMaxStrokes?: number | null;
-  handicapAllowanceType?: string;
   handicapProvWeeks?: number;
   handicapProvMultiplier?: number;
   handicapFreezeWeek?: number | null;
@@ -603,11 +515,6 @@ export function leagueToHandicapSettings(league: {
     // Exceptional Score Handling
     capExceptional: league.handicapCapExceptional ?? false,
     exceptionalCap: league.handicapExceptionalCap ?? null,
-
-    // Application Rules
-    percentage: league.handicapPercentage ?? 100,
-    maxStrokes: league.handicapMaxStrokes ?? null,
-    allowanceType: (league.handicapAllowanceType as AllowanceType) || "full",
 
     // Time-Based Rules
     provWeeks: league.handicapProvWeeks ?? 0,
@@ -691,12 +598,6 @@ export function describeCalculation(
   }
   if (settings.minHandicap !== null && finalHandicap <= settings.minHandicap) {
     steps.push(`Capped at minimum: ${settings.minHandicap}`);
-  }
-
-  // Application percentage
-  if (settings.percentage !== 100) {
-    const applied = getAppliedHandicap(finalHandicap, settings);
-    steps.push(`Applied at ${settings.percentage}%: ${applied}`);
   }
 
   return steps;

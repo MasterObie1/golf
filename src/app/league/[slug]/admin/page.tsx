@@ -65,10 +65,6 @@ interface League {
   // Exceptional Score Handling
   handicapCapExceptional: boolean;
   handicapExceptionalCap: number | null;
-  // Application Rules
-  handicapPercentage: number;
-  handicapMaxStrokes: number | null;
-  handicapAllowanceType: string;
   // Time-Based Rules
   handicapProvWeeks: number;
   handicapProvMultiplier: number;
@@ -153,11 +149,6 @@ export default function LeagueAdminPage({ params }: Props) {
   // Exceptional Score Handling
   const [handicapCapExceptional, setHandicapCapExceptional] = useState(false);
   const [handicapExceptionalCap, setHandicapExceptionalCap] = useState<number | "">("");
-
-  // Application Rules
-  const [handicapPercentage, setHandicapPercentage] = useState(100);
-  const [handicapMaxStrokes, setHandicapMaxStrokes] = useState<number | "">("");
-  const [handicapAllowanceType, setHandicapAllowanceType] = useState<"full" | "percentage" | "difference">("full");
 
   // Time-Based Rules
   const [handicapProvWeeks, setHandicapProvWeeks] = useState(0);
@@ -253,11 +244,6 @@ export default function LeagueAdminPage({ params }: Props) {
       // Exceptional Score Handling
       setHandicapCapExceptional(leagueData.handicapCapExceptional || false);
       setHandicapExceptionalCap(leagueData.handicapExceptionalCap ?? "");
-
-      // Application Rules
-      setHandicapPercentage(leagueData.handicapPercentage || 100);
-      setHandicapMaxStrokes(leagueData.handicapMaxStrokes ?? "");
-      setHandicapAllowanceType((leagueData.handicapAllowanceType || "full") as "full" | "percentage" | "difference");
 
       // Time-Based Rules
       setHandicapProvWeeks(leagueData.handicapProvWeeks || 0);
@@ -491,11 +477,6 @@ export default function LeagueAdminPage({ params }: Props) {
         capExceptional: handicapCapExceptional,
         exceptionalCap: handicapExceptionalCap === "" ? null : handicapExceptionalCap,
 
-        // Application Rules
-        percentage: handicapPercentage,
-        maxStrokes: handicapMaxStrokes === "" ? null : handicapMaxStrokes,
-        allowanceType: handicapAllowanceType,
-
         // Time-Based Rules
         provWeeks: handicapProvWeeks,
         provMultiplier: handicapProvMultiplier,
@@ -571,10 +552,6 @@ export default function LeagueAdminPage({ params }: Props) {
     if (handicapMin !== "" && result < handicapMin) {
       result = handicapMin;
     }
-    // Apply percentage if not 100%
-    if (handicapPercentage !== 100) {
-      result = Math.floor(result * (handicapPercentage / 100));
-    }
     return result;
   }
 
@@ -598,7 +575,6 @@ export default function LeagueAdminPage({ params }: Props) {
         setHandicapDropHighest(0);
         setHandicapDropLowest(0);
         setHandicapUseWeighting(false);
-        setHandicapPercentage(100);
         break;
       case "usga_style":
         setHandicapScoreSelection("best_of_last");
@@ -606,7 +582,6 @@ export default function LeagueAdminPage({ params }: Props) {
         setHandicapLastOf(8);
         setHandicapMultiplier(0.96);
         setHandicapUseWeighting(false);
-        setHandicapPercentage(100);
         break;
       case "forgiving":
         setHandicapScoreSelection("last_n");
@@ -614,7 +589,6 @@ export default function LeagueAdminPage({ params }: Props) {
         setHandicapDropHighest(1);
         setHandicapDropLowest(0);
         setHandicapUseWeighting(false);
-        setHandicapPercentage(100);
         break;
       case "competitive":
         setHandicapScoreSelection("all");
@@ -623,7 +597,6 @@ export default function LeagueAdminPage({ params }: Props) {
         setHandicapUseWeighting(true);
         setHandicapWeightRecent(1.3);
         setHandicapWeightDecay(0.95);
-        setHandicapPercentage(80);
         break;
       case "strict":
         setHandicapScoreSelection("all");
@@ -632,7 +605,6 @@ export default function LeagueAdminPage({ params }: Props) {
         setHandicapExceptionalCap(50);
         setHandicapUseTrend(true);
         setHandicapTrendWeight(0.15);
-        setHandicapPercentage(100);
         break;
       case "custom":
       default:
@@ -1148,61 +1120,6 @@ export default function LeagueAdminPage({ params }: Props) {
                 )}
               </div>
 
-              {/* Application Rules Section */}
-              <div className="mb-4 border rounded-lg overflow-hidden">
-                <button
-                  onClick={() => toggleSection("application")}
-                  className="w-full px-4 py-3 bg-gray-50 text-left font-medium text-gray-800 flex justify-between items-center hover:bg-gray-100"
-                >
-                  <span>Application Rules</span>
-                  <span className="text-gray-500">{expandedSections.has("application") ? "−" : "+"}</span>
-                </button>
-                {expandedSections.has("application") && (
-                  <div className="p-4 border-t">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Handicap Percentage</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            value={handicapPercentage}
-                            onChange={(e) => { setHandicapPercentage(parseFloat(e.target.value) || 100); setSelectedPreset("custom"); }}
-                            min="0"
-                            max="100"
-                            className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                          />
-                          <span className="text-gray-500">%</span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Apply X% of calculated handicap (80% is common for competitive play)</p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Max Strokes Between Players</label>
-                        <input
-                          type="number"
-                          value={handicapMaxStrokes}
-                          onChange={(e) => { setHandicapMaxStrokes(e.target.value ? parseFloat(e.target.value) : ""); setSelectedPreset("custom"); }}
-                          placeholder="No limit"
-                          className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Limits stroke difference in head-to-head</p>
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Allowance Type</label>
-                        <select
-                          value={handicapAllowanceType}
-                          onChange={(e) => { setHandicapAllowanceType(e.target.value as "full" | "percentage" | "difference"); setSelectedPreset("custom"); }}
-                          className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                        >
-                          <option value="full">Full Handicap</option>
-                          <option value="percentage">Percentage of Handicap</option>
-                          <option value="difference">Difference Only (lower handicap gives strokes)</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Time-Based Rules Section */}
               <div className="mb-4 border rounded-lg overflow-hidden">
                 <button
@@ -1310,14 +1227,10 @@ export default function LeagueAdminPage({ params }: Props) {
                     {handicapMin !== "" && calculatePreviewHandicap(handicapPreviewAvg) <= handicapMin && (
                       <span className="ml-2 text-xs text-blue-600 font-medium">(min capped)</span>
                     )}
-                    {handicapPercentage !== 100 && (
-                      <span className="ml-2 text-xs text-purple-600 font-medium">({handicapPercentage}%)</span>
-                    )}
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
                   Formula: ({handicapPreviewAvg} - {handicapBaseScore}) × {handicapMultiplier} = {((handicapPreviewAvg - handicapBaseScore) * handicapMultiplier).toFixed(2)}
-                  {handicapPercentage !== 100 && ` × ${handicapPercentage}%`}
                 </p>
               </div>
 

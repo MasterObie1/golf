@@ -61,11 +61,6 @@ model League {
   handicapCapExceptional   Boolean   @default(false)   // Cap exceptional scores before averaging
   handicapExceptionalCap   Float?                      // Cap score at this value (e.g., max 50)
 
-  // --- Handicap Application ---
-  handicapPercentage       Float     @default(100)     // Apply X% of calculated handicap (e.g., 80%)
-  handicapMaxStrokes       Float?                      // Max strokes given between competitors
-  handicapAllowanceType    String    @default("full")  // "full", "percentage", "difference"
-
   // --- Time-Based Rules ---
   handicapProvWeeks        Int       @default(0)       // Provisional period in weeks (0 = disabled)
   handicapProvMultiplier   Float     @default(1.0)     // Multiplier during provisional period

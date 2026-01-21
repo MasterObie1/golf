@@ -10,7 +10,6 @@ import {
   leagueToHandicapSettings,
   type HandicapSettings,
   type ScoreSelectionMethod,
-  type AllowanceType,
   type RoundingMethod
 } from "./handicap";
 import { requireAdmin, requireLeagueAdmin, getAdminSession } from "./auth";
@@ -1017,11 +1016,6 @@ export interface HandicapSettingsInput {
   capExceptional: boolean;
   exceptionalCap: number | null;
 
-  // Application Rules
-  percentage: number;
-  maxStrokes: number | null;
-  allowanceType: AllowanceType;
-
   // Time-Based Rules
   provWeeks: number;
   provMultiplier: number;
@@ -1067,11 +1061,6 @@ export async function updateHandicapSettings(
       // Exceptional Score Handling
       handicapCapExceptional: settings.capExceptional,
       handicapExceptionalCap: settings.exceptionalCap,
-
-      // Application Rules
-      handicapPercentage: settings.percentage,
-      handicapMaxStrokes: settings.maxStrokes,
-      handicapAllowanceType: settings.allowanceType,
 
       // Time-Based Rules
       handicapProvWeeks: settings.provWeeks,
