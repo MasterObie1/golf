@@ -44,11 +44,35 @@ interface League {
   slug: string;
   maxTeams: number;
   registrationOpen: boolean;
+  // Basic Formula
   handicapBaseScore: number;
   handicapMultiplier: number;
   handicapRounding: string;
   handicapDefault: number;
   handicapMax: number | null;
+  handicapMin: number | null;
+  // Score Selection
+  handicapScoreSelection: string;
+  handicapScoreCount: number | null;
+  handicapBestOf: number | null;
+  handicapLastOf: number | null;
+  handicapDropHighest: number;
+  handicapDropLowest: number;
+  // Score Weighting
+  handicapUseWeighting: boolean;
+  handicapWeightRecent: number;
+  handicapWeightDecay: number;
+  // Exceptional Score Handling
+  handicapCapExceptional: boolean;
+  handicapExceptionalCap: number | null;
+  // Time-Based Rules
+  handicapProvWeeks: number;
+  handicapProvMultiplier: number;
+  handicapFreezeWeek: number | null;
+  handicapUseTrend: boolean;
+  handicapTrendWeight: number;
+  // Administrative
+  handicapRequireApproval: boolean;
 }
 
 interface Matchup {
@@ -101,13 +125,45 @@ export default function LeagueAdminPage({ params }: Props) {
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
 
-  // Handicap settings state
+  // Handicap settings state - Basic Formula
   const [handicapBaseScore, setHandicapBaseScore] = useState(35);
   const [handicapMultiplier, setHandicapMultiplier] = useState(0.9);
   const [handicapRounding, setHandicapRounding] = useState<"floor" | "round" | "ceil">("floor");
   const [handicapDefault, setHandicapDefault] = useState(0);
   const [handicapMax, setHandicapMax] = useState<number | "">("");
+  const [handicapMin, setHandicapMin] = useState<number | "">("");
+
+  // Score Selection
+  const [handicapScoreSelection, setHandicapScoreSelection] = useState<"all" | "last_n" | "best_of_last">("all");
+  const [handicapScoreCount, setHandicapScoreCount] = useState<number | "">("");
+  const [handicapBestOf, setHandicapBestOf] = useState<number | "">("");
+  const [handicapLastOf, setHandicapLastOf] = useState<number | "">("");
+  const [handicapDropHighest, setHandicapDropHighest] = useState(0);
+  const [handicapDropLowest, setHandicapDropLowest] = useState(0);
+
+  // Score Weighting
+  const [handicapUseWeighting, setHandicapUseWeighting] = useState(false);
+  const [handicapWeightRecent, setHandicapWeightRecent] = useState(1.5);
+  const [handicapWeightDecay, setHandicapWeightDecay] = useState(0.9);
+
+  // Exceptional Score Handling
+  const [handicapCapExceptional, setHandicapCapExceptional] = useState(false);
+  const [handicapExceptionalCap, setHandicapExceptionalCap] = useState<number | "">("");
+
+  // Time-Based Rules
+  const [handicapProvWeeks, setHandicapProvWeeks] = useState(0);
+  const [handicapProvMultiplier, setHandicapProvMultiplier] = useState(1.0);
+  const [handicapFreezeWeek, setHandicapFreezeWeek] = useState<number | "">("");
+  const [handicapUseTrend, setHandicapUseTrend] = useState(false);
+  const [handicapTrendWeight, setHandicapTrendWeight] = useState(0.1);
+
+  // Administrative
+  const [handicapRequireApproval, setHandicapRequireApproval] = useState(false);
+
+  // Preview and UI
   const [handicapPreviewAvg, setHandicapPreviewAvg] = useState(42);
+  const [selectedPreset, setSelectedPreset] = useState<string>("custom");
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["basic"]));
 
   // Form state
   const [teamAId, setTeamAId] = useState<number | "">("");
@@ -164,12 +220,40 @@ export default function LeagueAdminPage({ params }: Props) {
       setMaxTeamsInput(leagueData.maxTeams);
       setRegistrationOpenInput(leagueData.registrationOpen);
 
-      // Load handicap settings
+      // Load handicap settings - Basic Formula
       setHandicapBaseScore(leagueData.handicapBaseScore);
       setHandicapMultiplier(leagueData.handicapMultiplier);
       setHandicapRounding(leagueData.handicapRounding as "floor" | "round" | "ceil");
       setHandicapDefault(leagueData.handicapDefault);
       setHandicapMax(leagueData.handicapMax ?? "");
+      setHandicapMin(leagueData.handicapMin ?? "");
+
+      // Score Selection
+      setHandicapScoreSelection((leagueData.handicapScoreSelection || "all") as "all" | "last_n" | "best_of_last");
+      setHandicapScoreCount(leagueData.handicapScoreCount ?? "");
+      setHandicapBestOf(leagueData.handicapBestOf ?? "");
+      setHandicapLastOf(leagueData.handicapLastOf ?? "");
+      setHandicapDropHighest(leagueData.handicapDropHighest || 0);
+      setHandicapDropLowest(leagueData.handicapDropLowest || 0);
+
+      // Score Weighting
+      setHandicapUseWeighting(leagueData.handicapUseWeighting || false);
+      setHandicapWeightRecent(leagueData.handicapWeightRecent || 1.5);
+      setHandicapWeightDecay(leagueData.handicapWeightDecay || 0.9);
+
+      // Exceptional Score Handling
+      setHandicapCapExceptional(leagueData.handicapCapExceptional || false);
+      setHandicapExceptionalCap(leagueData.handicapExceptionalCap ?? "");
+
+      // Time-Based Rules
+      setHandicapProvWeeks(leagueData.handicapProvWeeks || 0);
+      setHandicapProvMultiplier(leagueData.handicapProvMultiplier || 1.0);
+      setHandicapFreezeWeek(leagueData.handicapFreezeWeek ?? "");
+      setHandicapUseTrend(leagueData.handicapUseTrend || false);
+      setHandicapTrendWeight(leagueData.handicapTrendWeight || 0.1);
+
+      // Administrative
+      setHandicapRequireApproval(leagueData.handicapRequireApproval || false);
 
       // Load about settings
       setAboutData(aboutDataResult);
@@ -367,14 +451,42 @@ export default function LeagueAdminPage({ params }: Props) {
     if (!league) return;
     setLoading(true);
     try {
-      await updateHandicapSettings(
-        slug,
-        handicapBaseScore,
-        handicapMultiplier,
-        handicapRounding,
-        handicapDefault,
-        handicapMax === "" ? null : handicapMax
-      );
+      await updateHandicapSettings(slug, {
+        // Basic Formula
+        baseScore: handicapBaseScore,
+        multiplier: handicapMultiplier,
+        rounding: handicapRounding,
+        defaultHandicap: handicapDefault,
+        maxHandicap: handicapMax === "" ? null : handicapMax,
+        minHandicap: handicapMin === "" ? null : handicapMin,
+
+        // Score Selection
+        scoreSelection: handicapScoreSelection,
+        scoreCount: handicapScoreCount === "" ? null : handicapScoreCount,
+        bestOf: handicapBestOf === "" ? null : handicapBestOf,
+        lastOf: handicapLastOf === "" ? null : handicapLastOf,
+        dropHighest: handicapDropHighest,
+        dropLowest: handicapDropLowest,
+
+        // Score Weighting
+        useWeighting: handicapUseWeighting,
+        weightRecent: handicapWeightRecent,
+        weightDecay: handicapWeightDecay,
+
+        // Exceptional Score Handling
+        capExceptional: handicapCapExceptional,
+        exceptionalCap: handicapExceptionalCap === "" ? null : handicapExceptionalCap,
+
+        // Time-Based Rules
+        provWeeks: handicapProvWeeks,
+        provMultiplier: handicapProvMultiplier,
+        freezeWeek: handicapFreezeWeek === "" ? null : handicapFreezeWeek,
+        useTrend: handicapUseTrend,
+        trendWeight: handicapTrendWeight,
+
+        // Administrative
+        requireApproval: handicapRequireApproval,
+      });
       // Refresh all data since handicaps, nets, points, and team stats were recalculated
       const [leagueData, matchupsData, teamsData] = await Promise.all([
         getLeagueBySlug(slug),
@@ -434,9 +546,71 @@ export default function LeagueAdminPage({ params }: Props) {
     }
     // Apply max cap
     if (handicapMax !== "" && result > handicapMax) {
-      return handicapMax;
+      result = handicapMax;
+    }
+    // Apply min cap
+    if (handicapMin !== "" && result < handicapMin) {
+      result = handicapMin;
     }
     return result;
+  }
+
+  function toggleSection(section: string) {
+    setExpandedSections(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(section)) {
+        newSet.delete(section);
+      } else {
+        newSet.add(section);
+      }
+      return newSet;
+    });
+  }
+
+  function applyPreset(presetName: string) {
+    setSelectedPreset(presetName);
+    switch (presetName) {
+      case "simple":
+        setHandicapScoreSelection("all");
+        setHandicapDropHighest(0);
+        setHandicapDropLowest(0);
+        setHandicapUseWeighting(false);
+        break;
+      case "usga_style":
+        setHandicapScoreSelection("best_of_last");
+        setHandicapBestOf(4);
+        setHandicapLastOf(8);
+        setHandicapMultiplier(0.96);
+        setHandicapUseWeighting(false);
+        break;
+      case "forgiving":
+        setHandicapScoreSelection("last_n");
+        setHandicapScoreCount(5);
+        setHandicapDropHighest(1);
+        setHandicapDropLowest(0);
+        setHandicapUseWeighting(false);
+        break;
+      case "competitive":
+        setHandicapScoreSelection("all");
+        setHandicapDropHighest(0);
+        setHandicapDropLowest(0);
+        setHandicapUseWeighting(true);
+        setHandicapWeightRecent(1.3);
+        setHandicapWeightDecay(0.95);
+        break;
+      case "strict":
+        setHandicapScoreSelection("all");
+        setHandicapMax(18);
+        setHandicapCapExceptional(true);
+        setHandicapExceptionalCap(50);
+        setHandicapUseTrend(true);
+        setHandicapTrendWeight(0.15);
+        break;
+      case "custom":
+      default:
+        // Don't change anything for custom
+        break;
+    }
   }
 
   async function handleApproveTeam(teamId: number) {
@@ -656,89 +830,384 @@ export default function LeagueAdminPage({ params }: Props) {
               </button>
             </div>
 
-            {/* Handicap Formula */}
+            {/* Handicap Formula - Comprehensive Settings */}
             <div className="mt-8 pt-8 border-t">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">Handicap Formula</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Formula: (Average Score - Base Score) × Multiplier
-              </p>
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">Handicap Configuration</h3>
 
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Base Score (Par)
-                  </label>
-                  <input
-                    type="number"
-                    value={handicapBaseScore}
-                    onChange={(e) => setHandicapBaseScore(parseFloat(e.target.value) || 0)}
-                    className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Multiplier
-                  </label>
-                  <input
-                    type="number"
-                    value={handicapMultiplier}
-                    onChange={(e) => setHandicapMultiplier(parseFloat(e.target.value) || 0)}
-                    step="0.1"
-                    className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Rounding Method
-                  </label>
-                  <select
-                    value={handicapRounding}
-                    onChange={(e) => setHandicapRounding(e.target.value as "floor" | "round" | "ceil")}
-                    className="w-48 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="floor">Floor (round down)</option>
-                    <option value="round">Round (nearest)</option>
-                    <option value="ceil">Ceiling (round up)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Default Handicap
-                  </label>
-                  <input
-                    type="number"
-                    value={handicapDefault}
-                    onChange={(e) => setHandicapDefault(parseFloat(e.target.value) || 0)}
-                    className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Maximum Handicap
-                  </label>
-                  <input
-                    type="number"
-                    value={handicapMax}
-                    onChange={(e) => setHandicapMax(e.target.value ? parseFloat(e.target.value) : "")}
-                    placeholder="No limit"
-                    className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    Leave empty for no limit
-                  </p>
+              {/* Preset Templates */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quick Presets</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { name: "simple", label: "Simple Average", desc: "Basic formula using all scores" },
+                    { name: "usga_style", label: "USGA-Inspired", desc: "Best 4 of last 8, like official handicaps" },
+                    { name: "forgiving", label: "Forgiving", desc: "Drops worst scores, uses recent rounds" },
+                    { name: "competitive", label: "Competitive", desc: "80% handicap, slight edge to better players" },
+                    { name: "strict", label: "Strict", desc: "Caps and trend adjustment to prevent sandbagging" },
+                    { name: "custom", label: "Custom", desc: "Full control over all settings" },
+                  ].map(preset => (
+                    <button
+                      key={preset.name}
+                      onClick={() => applyPreset(preset.name)}
+                      className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                        selectedPreset === preset.name
+                          ? "bg-green-600 text-white border-green-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:border-green-500"
+                      }`}
+                      title={preset.desc}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Preview */}
+              {/* Basic Formula Section */}
+              <div className="mb-4 border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => toggleSection("basic")}
+                  className="w-full px-4 py-3 bg-gray-50 text-left font-medium text-gray-800 flex justify-between items-center hover:bg-gray-100"
+                >
+                  <span>Basic Formula</span>
+                  <span className="text-gray-500">{expandedSections.has("basic") ? "−" : "+"}</span>
+                </button>
+                {expandedSections.has("basic") && (
+                  <div className="p-4 border-t">
+                    <p className="text-sm text-gray-500 mb-4">
+                      Formula: (Average Score - Base Score) × Multiplier
+                    </p>
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Base Score (Par)</label>
+                        <input
+                          type="number"
+                          value={handicapBaseScore}
+                          onChange={(e) => { setHandicapBaseScore(parseFloat(e.target.value) || 0); setSelectedPreset("custom"); }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Multiplier</label>
+                        <input
+                          type="number"
+                          value={handicapMultiplier}
+                          onChange={(e) => { setHandicapMultiplier(parseFloat(e.target.value) || 0); setSelectedPreset("custom"); }}
+                          step="0.01"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Rounding</label>
+                        <select
+                          value={handicapRounding}
+                          onChange={(e) => { setHandicapRounding(e.target.value as "floor" | "round" | "ceil"); setSelectedPreset("custom"); }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        >
+                          <option value="floor">Floor (round down)</option>
+                          <option value="round">Round (nearest)</option>
+                          <option value="ceil">Ceiling (round up)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Default Handicap</label>
+                        <input
+                          type="number"
+                          value={handicapDefault}
+                          onChange={(e) => { setHandicapDefault(parseFloat(e.target.value) || 0); setSelectedPreset("custom"); }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">When no scores available</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Maximum Handicap</label>
+                        <input
+                          type="number"
+                          value={handicapMax}
+                          onChange={(e) => { setHandicapMax(e.target.value ? parseFloat(e.target.value) : ""); setSelectedPreset("custom"); }}
+                          placeholder="No limit"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Handicap</label>
+                        <input
+                          type="number"
+                          value={handicapMin}
+                          onChange={(e) => { setHandicapMin(e.target.value ? parseFloat(e.target.value) : ""); setSelectedPreset("custom"); }}
+                          placeholder="No limit"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">For scratch golfers</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Score Selection Section */}
+              <div className="mb-4 border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => toggleSection("selection")}
+                  className="w-full px-4 py-3 bg-gray-50 text-left font-medium text-gray-800 flex justify-between items-center hover:bg-gray-100"
+                >
+                  <span>Score Selection</span>
+                  <span className="text-gray-500">{expandedSections.has("selection") ? "−" : "+"}</span>
+                </button>
+                {expandedSections.has("selection") && (
+                  <div className="p-4 border-t">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Selection Method</label>
+                        <select
+                          value={handicapScoreSelection}
+                          onChange={(e) => { setHandicapScoreSelection(e.target.value as "all" | "last_n" | "best_of_last"); setSelectedPreset("custom"); }}
+                          className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        >
+                          <option value="all">Use All Scores</option>
+                          <option value="last_n">Use Last N Scores</option>
+                          <option value="best_of_last">Best X of Last Y Scores</option>
+                        </select>
+                      </div>
+
+                      {handicapScoreSelection === "last_n" && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Number of Recent Scores</label>
+                          <input
+                            type="number"
+                            value={handicapScoreCount}
+                            onChange={(e) => { setHandicapScoreCount(e.target.value ? parseInt(e.target.value) : ""); setSelectedPreset("custom"); }}
+                            min="1"
+                            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                          />
+                        </div>
+                      )}
+
+                      {handicapScoreSelection === "best_of_last" && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Use Best</label>
+                            <input
+                              type="number"
+                              value={handicapBestOf}
+                              onChange={(e) => { setHandicapBestOf(e.target.value ? parseInt(e.target.value) : ""); setSelectedPreset("custom"); }}
+                              min="1"
+                              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Best X scores</p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Of Last</label>
+                            <input
+                              type="number"
+                              value={handicapLastOf}
+                              onChange={(e) => { setHandicapLastOf(e.target.value ? parseInt(e.target.value) : ""); setSelectedPreset("custom"); }}
+                              min="1"
+                              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">From last Y rounds</p>
+                          </div>
+                        </>
+                      )}
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Drop Highest Scores</label>
+                        <input
+                          type="number"
+                          value={handicapDropHighest}
+                          onChange={(e) => { setHandicapDropHighest(parseInt(e.target.value) || 0); setSelectedPreset("custom"); }}
+                          min="0"
+                          className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Remove worst rounds</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Drop Lowest Scores</label>
+                        <input
+                          type="number"
+                          value={handicapDropLowest}
+                          onChange={(e) => { setHandicapDropLowest(parseInt(e.target.value) || 0); setSelectedPreset("custom"); }}
+                          min="0"
+                          className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Remove best rounds</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Score Weighting Section */}
+              <div className="mb-4 border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => toggleSection("weighting")}
+                  className="w-full px-4 py-3 bg-gray-50 text-left font-medium text-gray-800 flex justify-between items-center hover:bg-gray-100"
+                >
+                  <span>Score Weighting</span>
+                  <span className="text-gray-500">{expandedSections.has("weighting") ? "−" : "+"}</span>
+                </button>
+                {expandedSections.has("weighting") && (
+                  <div className="p-4 border-t">
+                    <div className="mb-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={handicapUseWeighting}
+                          onChange={(e) => { setHandicapUseWeighting(e.target.checked); setSelectedPreset("custom"); }}
+                          className="w-4 h-4 text-green-600 rounded"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Enable Recency Weighting</span>
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1 ml-6">Recent scores count more towards handicap</p>
+                    </div>
+
+                    {handicapUseWeighting && (
+                      <div className="grid md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Recent Score Weight</label>
+                          <input
+                            type="number"
+                            value={handicapWeightRecent}
+                            onChange={(e) => { setHandicapWeightRecent(parseFloat(e.target.value) || 1); setSelectedPreset("custom"); }}
+                            step="0.1"
+                            min="1"
+                            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Weight for most recent (1.0 = no boost)</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Decay Factor</label>
+                          <input
+                            type="number"
+                            value={handicapWeightDecay}
+                            onChange={(e) => { setHandicapWeightDecay(parseFloat(e.target.value) || 0.9); setSelectedPreset("custom"); }}
+                            step="0.05"
+                            min="0.1"
+                            max="1"
+                            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Each older score × this factor</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-4 pt-4 border-t">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={handicapCapExceptional}
+                          onChange={(e) => { setHandicapCapExceptional(e.target.checked); setSelectedPreset("custom"); }}
+                          className="w-4 h-4 text-green-600 rounded"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Cap Exceptional Scores</span>
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1 ml-6">Limit very high scores before averaging</p>
+                    </div>
+
+                    {handicapCapExceptional && (
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Maximum Score Value</label>
+                        <input
+                          type="number"
+                          value={handicapExceptionalCap}
+                          onChange={(e) => { setHandicapExceptionalCap(e.target.value ? parseFloat(e.target.value) : ""); setSelectedPreset("custom"); }}
+                          placeholder="e.g., 50"
+                          className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Scores above this are reduced to this value</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Time-Based Rules Section */}
+              <div className="mb-4 border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => toggleSection("timebased")}
+                  className="w-full px-4 py-3 bg-gray-50 text-left font-medium text-gray-800 flex justify-between items-center hover:bg-gray-100"
+                >
+                  <span>Time-Based Rules</span>
+                  <span className="text-gray-500">{expandedSections.has("timebased") ? "−" : "+"}</span>
+                </button>
+                {expandedSections.has("timebased") && (
+                  <div className="p-4 border-t">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Provisional Period (Weeks)</label>
+                        <input
+                          type="number"
+                          value={handicapProvWeeks}
+                          onChange={(e) => { setHandicapProvWeeks(parseInt(e.target.value) || 0); setSelectedPreset("custom"); }}
+                          min="0"
+                          className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">0 = disabled</p>
+                      </div>
+                      {handicapProvWeeks > 0 && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Provisional Multiplier</label>
+                          <input
+                            type="number"
+                            value={handicapProvMultiplier}
+                            onChange={(e) => { setHandicapProvMultiplier(parseFloat(e.target.value) || 1); setSelectedPreset("custom"); }}
+                            step="0.1"
+                            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Multiply handicap by this during provisional</p>
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Freeze Handicaps After Week</label>
+                        <input
+                          type="number"
+                          value={handicapFreezeWeek}
+                          onChange={(e) => { setHandicapFreezeWeek(e.target.value ? parseInt(e.target.value) : ""); setSelectedPreset("custom"); }}
+                          placeholder="Never"
+                          min="1"
+                          className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Lock handicaps for playoffs</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={handicapUseTrend}
+                          onChange={(e) => { setHandicapUseTrend(e.target.checked); setSelectedPreset("custom"); }}
+                          className="w-4 h-4 text-green-600 rounded"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Enable Trend Adjustment</span>
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1 ml-6">Adjust handicap based on improvement/decline trend</p>
+                    </div>
+
+                    {handicapUseTrend && (
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Trend Weight</label>
+                        <input
+                          type="number"
+                          value={handicapTrendWeight}
+                          onChange={(e) => { setHandicapTrendWeight(parseFloat(e.target.value) || 0.1); setSelectedPreset("custom"); }}
+                          step="0.05"
+                          min="0"
+                          max="0.5"
+                          className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">How much to factor in trend (0.1 = 10%)</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Preview Calculator */}
               <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                 <h4 className="text-sm font-medium text-gray-700 mb-3">Preview Calculator</h4>
                 <div className="flex items-center gap-4 flex-wrap">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Test Average</label>
+                    <label className="block text-xs text-gray-500 mb-1">Test Average Score</label>
                     <input
                       type="number"
                       value={handicapPreviewAvg}
@@ -748,15 +1217,21 @@ export default function LeagueAdminPage({ params }: Props) {
                   </div>
                   <div className="text-gray-400">=</div>
                   <div className="bg-white px-4 py-2 rounded-lg border border-green-200">
-                    <span className="text-xs text-gray-500">Handicap: </span>
+                    <span className="text-xs text-gray-500">Applied Handicap: </span>
                     <span className="text-lg font-bold text-green-700">
                       {calculatePreviewHandicap(handicapPreviewAvg)}
                     </span>
-                    {handicapMax !== "" && calculatePreviewHandicap(handicapPreviewAvg) === handicapMax && (
-                      <span className="ml-2 text-xs text-orange-600 font-medium">(capped)</span>
+                    {handicapMax !== "" && calculatePreviewHandicap(handicapPreviewAvg) >= handicapMax && (
+                      <span className="ml-2 text-xs text-orange-600 font-medium">(max capped)</span>
+                    )}
+                    {handicapMin !== "" && calculatePreviewHandicap(handicapPreviewAvg) <= handicapMin && (
+                      <span className="ml-2 text-xs text-blue-600 font-medium">(min capped)</span>
                     )}
                   </div>
                 </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Formula: ({handicapPreviewAvg} - {handicapBaseScore}) × {handicapMultiplier} = {((handicapPreviewAvg - handicapBaseScore) * handicapMultiplier).toFixed(2)}
+                </p>
               </div>
 
               <button
@@ -764,7 +1239,7 @@ export default function LeagueAdminPage({ params }: Props) {
                 disabled={loading}
                 className="mt-6 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
-                {loading ? "Saving..." : "Save Handicap Formula"}
+                {loading ? "Saving..." : "Save Handicap Settings"}
               </button>
             </div>
           </div>

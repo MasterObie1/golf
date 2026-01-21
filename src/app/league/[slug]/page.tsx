@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLeaguePublicInfo } from "@/lib/actions";
+import { isLeagueAdmin } from "@/lib/auth";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -15,6 +16,9 @@ export default async function LeagueHomePage({ params }: Props) {
   } catch {
     notFound();
   }
+
+  // Check if current user is admin for this league
+  const isAdmin = await isLeagueAdmin(slug);
 
   const formatDate = (date: Date | null) => {
     if (!date) return null;
@@ -40,7 +44,7 @@ export default async function LeagueHomePage({ params }: Props) {
         </div>
 
         {/* Quick Links */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className={`grid grid-cols-2 ${isAdmin ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4 mb-8`}>
           <Link
             href={`/league/${slug}/leaderboard`}
             className="bg-white rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow"
@@ -62,13 +66,15 @@ export default async function LeagueHomePage({ params }: Props) {
             <div className="text-2xl mb-1">✍️</div>
             <div className="font-medium text-green-800">Team Signup</div>
           </Link>
-          <Link
-            href={`/league/${slug}/admin`}
-            className="bg-white rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow"
-          >
-            <div className="text-2xl mb-1">⚙️</div>
-            <div className="font-medium text-green-800">Admin</div>
-          </Link>
+          {isAdmin && (
+            <Link
+              href={`/league/${slug}/admin`}
+              className="bg-white rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow"
+            >
+              <div className="text-2xl mb-1">⚙️</div>
+              <div className="font-medium text-green-800">Admin</div>
+            </Link>
+          )}
         </div>
 
         {/* League Info Card */}

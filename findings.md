@@ -1,34 +1,125 @@
-# Findings: Leaderboard Team Drill-Down
+# Findings: Handicap Customization Overhaul
 
-## Current Structure
+## Current System Analysis
 
-### Leaderboard Component (`src/components/LeaderboardTable.tsx`)
-- Receives `teams` array with: id, name, totalPoints, wins, losses, ties, handicap, roundsPlayed
-- Pure presentation component - doesn't know about league slug
-- Team names are currently plain text in `<td>` elements
+### Database Schema (prisma/schema.prisma)
+```prisma
+handicapBaseScore    Float     @default(35)
+handicapMultiplier   Float     @default(0.9)
+handicapRounding     String    @default("floor")
+handicapDefault      Float     @default(0)
+handicapMax          Float?
+```
 
-### Leaderboard Page (`src/app/league/[slug]/leaderboard/page.tsx`)
-- Fetches league by slug, gets leaderboard data
-- Passes teams to LeaderboardTable
-- Has access to league slug
+### Current Calculation (src/lib/handicap.ts)
+```typescript
+export function calculateHandicap(scores: number[], settings: HandicapSettings): number {
+  if (scores.length === 0) return settings.defaultHandicap;
 
-### History Page (`src/app/league/[slug]/history/page.tsx`)
-- Shows all matchups grouped by week
-- Uses `ScoreCard` component for display
-- Uses `getMatchupHistory(leagueId)` action
+  const average = scores.reduce((sum, s) => sum + s, 0) / scores.length;
+  const raw = (average - settings.baseScore) * settings.multiplier;
 
-### Matchup Model
-- Tracks: weekNumber, teamAId, teamBId, scores, handicaps, net scores, points, forfeit info
-- Relations: teamA, teamB (both Team relations)
+  // Apply rounding, then max cap
+  return applyRounding(raw, settings.rounding);
+}
+```
 
-## Existing Actions Available
-- `getMatchupHistory(leagueId)` - Gets all matchups for a league
-- `getTeamPreviousScores(leagueId, teamId)` - Gets gross scores for handicap calc (limited data)
+### Key Files
+| File | Purpose |
+|------|---------|
+| `src/lib/handicap.ts` | Core calculations |
+| `src/lib/actions.ts` | Server actions |
+| `src/app/league/[slug]/admin/page.tsx` | Admin UI (lines 659-769) |
+| `prisma/schema.prisma` | Database schema |
 
-## Required Changes
+---
 
-1. **New Action**: `getTeamMatchupHistory(leagueId, teamId)` - Get all matchups for a specific team
+## Research: Common Golf Handicap Systems
 
-2. **Component Update**: Add `leagueSlug` prop to LeaderboardTable, make team names into links
+### 1. USGA/World Handicap System
+- Best 8 of last 20 differentials
+- Differential = (Score - Course Rating) × 113 / Slope
+- Multiply average by 0.96
+- Soft cap (3.0 strokes) and hard cap (5.0 strokes)
 
-3. **New Page**: Team history page showing filtered matchups for one team
+### 2. Simple Average (Current System)
+- Average all scores
+- Subtract base (par)
+- Multiply by factor
+
+### 3. Best-of Method
+- Use best N scores from last M rounds
+- More forgiving for bad rounds
+
+### 4. Peoria System
+- Select random holes after play
+- Calculate based on those holes only
+
+### 5. Callaway System
+- Deduct worst holes based on gross score
+- Designed for one-day events
+
+---
+
+## Proposed Feature Analysis
+
+### Score Selection Options
+| Method | Use Case |
+|--------|----------|
+| All scores | Simple, traditional |
+| Last N | Reflects current form |
+| Best of last N | Forgiving, rewards good rounds |
+| Drop high/low | Removes outliers |
+
+### Application Options
+| Method | Effect |
+|--------|--------|
+| Full (100%) | Standard |
+| Percentage (80%) | Slight advantage to better players |
+| Max strokes | Prevents blowouts |
+| Difference-based | Only give difference between players |
+
+### Time-Based Options
+| Feature | Purpose |
+|---------|---------|
+| Provisional period | Stabilize new player handicaps |
+| Freeze after week | Lock in for playoffs |
+| Trend adjustment | Account for improvement |
+
+---
+
+## UI Design Considerations
+
+### Current Issues
+- All 5 settings in one flat section
+- No guidance on what values to use
+- Preview only shows one test value
+
+### Proposed Improvements
+1. **Preset Templates**
+   - "Simple" (current defaults)
+   - "USGA-Inspired" (best of recent, 96%)
+   - "Forgiving" (best of, drop lowest)
+   - "Competitive" (80% handicap)
+   - "Custom" (full control)
+
+2. **Collapsible Sections**
+   - Basic Settings (base, multiplier, rounding)
+   - Score Selection
+   - Application Rules
+   - Advanced Options
+
+3. **Enhanced Preview**
+   - Select actual team to preview
+   - Show before/after comparison
+   - Explain calculation step by step
+
+---
+
+## Edge Cases to Handle
+1. New teams with no scores → default handicap
+2. All substitute games → default handicap
+3. Negative handicaps → minimum cap
+4. Week 1 → manual entry required
+5. Fewer scores than "last N" → use all available
+6. Weighted average with 1 score → no weighting

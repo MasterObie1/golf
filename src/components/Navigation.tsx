@@ -5,7 +5,15 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-export function Navigation() {
+interface AdminSession {
+  leagueSlug: string;
+}
+
+interface NavigationProps {
+  adminSession?: AdminSession | null;
+}
+
+export function Navigation({ adminSession }: NavigationProps) {
   const pathname = usePathname();
   const [leaguesOpen, setLeaguesOpen] = useState(false);
 
@@ -113,13 +121,16 @@ export function Navigation() {
     );
   }
 
-  // League-specific navigation
+  // Check if user is admin for this specific league
+  const isAdminForThisLeague = adminSession?.leagueSlug === leagueSlug;
+
+  // League-specific navigation - only show admin link if logged in as admin for this league
   const leagueLinks = [
     { href: `/league/${leagueSlug}`, label: "Home", icon: null },
     { href: `/league/${leagueSlug}/leaderboard`, label: "Leaderboard", icon: null },
     { href: `/league/${leagueSlug}/history`, label: "History", icon: null },
     { href: `/league/${leagueSlug}/signup`, label: "Sign Up", icon: null },
-    { href: `/league/${leagueSlug}/admin`, label: "Admin", icon: null },
+    ...(isAdminForThisLeague ? [{ href: `/league/${leagueSlug}/admin`, label: "Admin", icon: null }] : []),
   ];
 
   return (

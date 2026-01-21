@@ -1,68 +1,132 @@
-# Task Plan: Leaderboard Movement & Handicap History
+# Task Plan: Comprehensive Handicap Customization Overhaul
 
 ## Goal
-Add week-over-week movement indicators to the leaderboard and create a league-wide handicap history page.
+Completely overhaul the handicap system to give leagues maximum customization over how handicaps are calculated, applied, and managed. Transform the current 5-option formula-based system into a flexible, feature-rich handicap management system.
 
-## Features Requested
-1. **Leaderboard rank movement** - Green up arrow / red down arrow showing position change from previous week
-2. **Leaderboard handicap movement** - Green/red arrows showing handicap change from previous week
-3. **League handicap history page** - Shows handicap progression for all teams week by week
+## Current State
 
-## Current Phase
-Phase 1 - Requirements & Design
+### Existing Handicap Settings (5 options)
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| Base Score | 35 | Subtracted from average |
+| Multiplier | 0.9 | Applied to difference |
+| Rounding | floor | floor/round/ceil |
+| Default Handicap | 0 | When no scores available |
+| Max Handicap | null | Optional cap |
 
-## Phases
+### Current Formula
+```
+handicap = rounding((average_score - baseScore) * multiplier)
+```
 
-### Phase 1: Requirements & Design
-- [ ] Understand how to calculate historical rankings per week
-- [ ] Design data structure for tracking week-over-week changes
-- [ ] Plan UI for movement indicators
-- [ ] Plan handicap history page layout
-- **Status:** in_progress
+---
 
-### Phase 2: Server-side Logic
-- [ ] Create function to calculate rankings at each week point
-- [ ] Create function to get handicap history for all teams
-- [ ] Calculate movement deltas (rank change, handicap change)
-- **Status:** pending
+## Proposed Feature Categories
 
-### Phase 3: Leaderboard UI Updates
-- [ ] Add rank movement column/indicator
-- [ ] Add handicap movement indicator
-- [ ] Style up/down arrows appropriately
-- **Status:** pending
+### Category 1: Calculation Method
+- [ ] Minimum handicap (floor for scratch golfers)
+- [ ] Score selection method (all, last N, best of last N)
+- [ ] Drop highest/lowest scores option
+- [ ] Differential-based calculation (optional)
 
-### Phase 4: Handicap History Page
-- [ ] Create `/league/[slug]/handicap-history` page
-- [ ] Design table/chart showing handicap by week for each team
-- [ ] Add navigation link from league home
-- **Status:** pending
+### Category 2: Score Weighting
+- [ ] Recency weighting toggle
+- [ ] Recency decay factor
+- [ ] Exceptional score capping
 
-### Phase 5: Testing & Build
-- [ ] Test movement calculations
-- [ ] Verify edge cases (new teams, ties, etc.)
-- [ ] Run build
-- **Status:** pending
+### Category 3: Application Rules
+- [ ] Handicap percentage (apply X% of handicap)
+- [ ] Maximum strokes given between competitors
+- [ ] Allowance type (full, percentage, difference)
+
+### Category 4: Time-Based Rules
+- [ ] Provisional period for new players
+- [ ] Provisional multiplier
+- [ ] Handicap freeze after week N
+- [ ] Trend adjustment toggle
+
+### Category 5: Administrative
+- [ ] Manual override options
+- [ ] Handicap change approval requirement
+- [ ] Audit trail enable/disable
+
+---
+
+## Implementation Phases
+
+### Phase 1: Database Schema `status: pending`
+Add new fields to League model with backward-compatible defaults.
+
+**New Fields:**
+```prisma
+// Score Selection
+handicapScoreSelection   String    @default("all")      // "all", "last_n", "best_of_last"
+handicapScoreCount       Int?                           // For last_n: how many
+handicapBestOf           Int?                           // For best_of_last: use best X
+handicapLastOf           Int?                           // For best_of_last: of last Y
+handicapDropHighest      Int       @default(0)          // Drop N highest
+handicapDropLowest       Int       @default(0)          // Drop N lowest
+handicapMinimum          Float?                         // Minimum handicap
+
+// Weighting
+handicapUseWeighting     Boolean   @default(false)
+handicapWeightRecent     Float     @default(1.5)        // Weight for most recent
+handicapWeightDecay      Float     @default(0.9)        // Decay factor per round
+
+// Application
+handicapPercentage       Float     @default(100)        // Apply X% of handicap
+handicapMaxStrokes       Float?                         // Max strokes between players
+handicapAllowanceType    String    @default("full")     // "full", "percentage", "difference"
+
+// Time-Based
+handicapProvWeeks        Int       @default(0)          // Provisional period
+handicapProvMultiplier   Float     @default(1.0)        // During provisional
+handicapFreezeWeek       Int?                           // Freeze after week N
+handicapUseTrend         Boolean   @default(false)      // Trend adjustment
+
+// Admin
+handicapRequireApproval  Boolean   @default(false)
+```
+
+### Phase 2: Core Logic Updates `status: pending`
+- Expand `HandicapSettings` interface
+- Implement score selection algorithms
+- Implement weighting calculations
+- Implement application rules
+
+### Phase 3: Admin UI Overhaul `status: pending`
+- Reorganize into collapsible sections
+- Add preset templates (Simple, USGA-Style, etc.)
+- Enhanced preview calculator with real team data
+- Help tooltips for each option
+
+### Phase 4: Recalculation Updates `status: pending`
+- Update `recalculateLeagueStats` for new options
+- Ensure backward compatibility
+- Handle edge cases
+
+### Phase 5: Testing & Polish `status: pending`
+- Test all calculation combinations
+- Verify edge cases
+- Build verification
+
+---
 
 ## Key Decisions
-
 | Decision | Rationale |
 |----------|-----------|
-| TBD | TBD |
-
-## Technical Considerations
-
-### Calculating Historical Rankings
-Need to determine standings at end of each week by:
-1. Summing points up to that week
-2. Applying same tiebreaker logic (points → wins → head-to-head → net differential)
-
-### Movement Indicators
-- Green up arrow (↑) with number = improved position
-- Red down arrow (↓) with number = dropped position
-- Dash or nothing = no change
-- "NEW" badge for teams with no previous week data
+| All new fields have defaults matching current behavior | Backward compatibility |
+| Features are opt-in | Existing leagues unchanged |
+| Collapsible UI sections | Avoid overwhelming users |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |-------|---------|------------|
+
+## Files to Modify
+| File | Changes |
+|------|---------|
+| `prisma/schema.prisma` | Add new handicap fields |
+| `src/lib/handicap.ts` | Expand calculation functions |
+| `src/lib/actions.ts` | Update server actions |
+| `src/app/league/[slug]/admin/page.tsx` | New handicap UI |
