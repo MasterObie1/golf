@@ -10,6 +10,7 @@ import {
 import { requireLeagueAdmin } from "../auth";
 import { getTeamPreviousScores } from "./teams";
 import { getHandicapSettings } from "./handicap-settings";
+import { type ActionResult } from "./shared";
 
 export interface MatchupPreview {
   weekNumber: number;
@@ -41,7 +42,8 @@ export async function previewMatchup(
   teamBGross: number,
   teamBHandicapManual: number | null,
   teamBIsSub: boolean
-): Promise<MatchupPreview> {
+): Promise<ActionResult<MatchupPreview>> {
+  try {
   // Check if either team already played this week
   const existingMatchups = await prisma.matchup.findMany({
     where: {
@@ -74,7 +76,7 @@ export async function previewMatchup(
       }
     }
     if (teamsAlreadyPlayed.length > 0) {
-      throw new Error(`Team(s) already played in Week ${weekNumber}: ${teamsAlreadyPlayed.join(", ")}`);
+      return { success: false, error: `Team(s) already played in Week ${weekNumber}: ${teamsAlreadyPlayed.join(", ")}` };
     }
   }
 
@@ -112,7 +114,7 @@ export async function previewMatchup(
   const teamBNet = calculateNetScore(teamBGross, teamBHandicap);
   const { teamAPoints, teamBPoints } = suggestPoints(teamANet, teamBNet);
 
-  return {
+  return { success: true, data: {
     weekNumber,
     teamAId,
     teamAName: teamA.name,
@@ -129,7 +131,11 @@ export async function previewMatchup(
     teamBPoints,
     teamBIsSub,
     isWeekOne,
-  };
+  } };
+  } catch (error) {
+    console.error("previewMatchup error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Failed to generate preview." };
+  }
 }
 
 const submitMatchupSchema = z.object({
@@ -163,68 +169,82 @@ export async function submitMatchup(
   teamBNet: number,
   teamBPoints: number,
   teamBIsSub: boolean
-) {
-  const validated = submitMatchupSchema.parse({
-    weekNumber, teamAId, teamAGross, teamAHandicap, teamANet, teamAPoints, teamAIsSub,
-    teamBId, teamBGross, teamBHandicap, teamBNet, teamBPoints, teamBIsSub,
-  });
-  const session = await requireLeagueAdmin(leagueSlug);
+): Promise<ActionResult> {
+  try {
+    const validated = submitMatchupSchema.parse({
+      weekNumber, teamAId, teamAGross, teamAHandicap, teamANet, teamAPoints, teamAIsSub,
+      teamBId, teamBGross, teamBHandicap, teamBNet, teamBPoints, teamBIsSub,
+    });
+    const session = await requireLeagueAdmin(leagueSlug);
 
-  // Use transaction to ensure matchup + team stats stay consistent
-  let teamAWin = 0, teamALoss = 0, teamATie = 0;
-  let teamBWin = 0, teamBLoss = 0, teamBTie = 0;
+    // Get active season for this league
+    const activeSeason = await prisma.season.findFirst({
+      where: { leagueId: session.leagueId, isActive: true },
+    });
 
-  if (validated.teamAPoints > validated.teamBPoints) {
-    teamAWin = 1;
-    teamBLoss = 1;
-  } else if (validated.teamBPoints > validated.teamAPoints) {
-    teamBWin = 1;
-    teamALoss = 1;
-  } else {
-    teamATie = 1;
-    teamBTie = 1;
+    // Use transaction to ensure matchup + team stats stay consistent
+    let teamAWin = 0, teamALoss = 0, teamATie = 0;
+    let teamBWin = 0, teamBLoss = 0, teamBTie = 0;
+
+    if (validated.teamAPoints > validated.teamBPoints) {
+      teamAWin = 1;
+      teamBLoss = 1;
+    } else if (validated.teamBPoints > validated.teamAPoints) {
+      teamBWin = 1;
+      teamALoss = 1;
+    } else {
+      teamATie = 1;
+      teamBTie = 1;
+    }
+
+    await prisma.$transaction([
+      prisma.matchup.create({
+        data: {
+          leagueId: session.leagueId,
+          seasonId: activeSeason?.id ?? null,
+          weekNumber: validated.weekNumber,
+          teamAId: validated.teamAId,
+          teamAGross: validated.teamAGross,
+          teamAHandicap: validated.teamAHandicap,
+          teamANet: validated.teamANet,
+          teamAPoints: validated.teamAPoints,
+          teamAIsSub: validated.teamAIsSub,
+          teamBId: validated.teamBId,
+          teamBGross: validated.teamBGross,
+          teamBHandicap: validated.teamBHandicap,
+          teamBNet: validated.teamBNet,
+          teamBPoints: validated.teamBPoints,
+          teamBIsSub: validated.teamBIsSub,
+        },
+      }),
+      prisma.team.update({
+        where: { id: validated.teamAId },
+        data: {
+          totalPoints: { increment: validated.teamAPoints },
+          wins: { increment: teamAWin },
+          losses: { increment: teamALoss },
+          ties: { increment: teamATie },
+        },
+      }),
+      prisma.team.update({
+        where: { id: validated.teamBId },
+        data: {
+          totalPoints: { increment: validated.teamBPoints },
+          wins: { increment: teamBWin },
+          losses: { increment: teamBLoss },
+          ties: { increment: teamBTie },
+        },
+      }),
+    ]);
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("submitMatchup error:", error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.issues[0]?.message || "Invalid matchup data" };
+    }
+    return { success: false, error: "Failed to submit matchup. Please try again." };
   }
-
-  const [matchup] = await prisma.$transaction([
-    prisma.matchup.create({
-      data: {
-        leagueId: session.leagueId,
-        weekNumber: validated.weekNumber,
-        teamAId: validated.teamAId,
-        teamAGross: validated.teamAGross,
-        teamAHandicap: validated.teamAHandicap,
-        teamANet: validated.teamANet,
-        teamAPoints: validated.teamAPoints,
-        teamAIsSub: validated.teamAIsSub,
-        teamBId: validated.teamBId,
-        teamBGross: validated.teamBGross,
-        teamBHandicap: validated.teamBHandicap,
-        teamBNet: validated.teamBNet,
-        teamBPoints: validated.teamBPoints,
-        teamBIsSub: validated.teamBIsSub,
-      },
-    }),
-    prisma.team.update({
-      where: { id: validated.teamAId },
-      data: {
-        totalPoints: { increment: validated.teamAPoints },
-        wins: { increment: teamAWin },
-        losses: { increment: teamALoss },
-        ties: { increment: teamATie },
-      },
-    }),
-    prisma.team.update({
-      where: { id: validated.teamBId },
-      data: {
-        totalPoints: { increment: validated.teamBPoints },
-        wins: { increment: teamBWin },
-        losses: { increment: teamBLoss },
-        ties: { increment: teamBTie },
-      },
-    }),
-  ]);
-
-  return matchup;
 }
 
 export async function getMatchupHistory(leagueId: number) {
@@ -252,58 +272,63 @@ export async function getTeamMatchupHistory(leagueId: number, teamId: number) {
   });
 }
 
-export async function deleteMatchup(leagueSlug: string, matchupId: number) {
-  const session = await requireLeagueAdmin(leagueSlug);
+export async function deleteMatchup(leagueSlug: string, matchupId: number): Promise<ActionResult> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
 
-  const matchup = await prisma.matchup.findUniqueOrThrow({
-    where: { id: matchupId },
-  });
-
-  // Verify matchup belongs to this league
-  if (matchup.leagueId !== session.leagueId) {
-    throw new Error("Unauthorized: Matchup does not belong to this league");
-  }
-
-  // Determine stats to reverse
-  let teamAWin = 0, teamALoss = 0, teamATie = 0;
-  let teamBWin = 0, teamBLoss = 0, teamBTie = 0;
-
-  if (matchup.teamAPoints > matchup.teamBPoints) {
-    teamAWin = 1;
-    teamBLoss = 1;
-  } else if (matchup.teamBPoints > matchup.teamAPoints) {
-    teamBWin = 1;
-    teamALoss = 1;
-  } else {
-    teamATie = 1;
-    teamBTie = 1;
-  }
-
-  await prisma.$transaction([
-    prisma.team.update({
-      where: { id: matchup.teamAId },
-      data: {
-        totalPoints: { decrement: matchup.teamAPoints },
-        wins: { decrement: teamAWin },
-        losses: { decrement: teamALoss },
-        ties: { decrement: teamATie },
-      },
-    }),
-    prisma.team.update({
-      where: { id: matchup.teamBId },
-      data: {
-        totalPoints: { decrement: matchup.teamBPoints },
-        wins: { decrement: teamBWin },
-        losses: { decrement: teamBLoss },
-        ties: { decrement: teamBTie },
-      },
-    }),
-    prisma.matchup.delete({
+    const matchup = await prisma.matchup.findUniqueOrThrow({
       where: { id: matchupId },
-    }),
-  ]);
+    });
 
-  return { success: true };
+    // Verify matchup belongs to this league
+    if (matchup.leagueId !== session.leagueId) {
+      return { success: false, error: "Unauthorized: Matchup does not belong to this league" };
+    }
+
+    // Determine stats to reverse
+    let teamAWin = 0, teamALoss = 0, teamATie = 0;
+    let teamBWin = 0, teamBLoss = 0, teamBTie = 0;
+
+    if (matchup.teamAPoints > matchup.teamBPoints) {
+      teamAWin = 1;
+      teamBLoss = 1;
+    } else if (matchup.teamBPoints > matchup.teamAPoints) {
+      teamBWin = 1;
+      teamALoss = 1;
+    } else {
+      teamATie = 1;
+      teamBTie = 1;
+    }
+
+    await prisma.$transaction([
+      prisma.team.update({
+        where: { id: matchup.teamAId },
+        data: {
+          totalPoints: { decrement: matchup.teamAPoints },
+          wins: { decrement: teamAWin },
+          losses: { decrement: teamALoss },
+          ties: { decrement: teamATie },
+        },
+      }),
+      prisma.team.update({
+        where: { id: matchup.teamBId },
+        data: {
+          totalPoints: { decrement: matchup.teamBPoints },
+          wins: { decrement: teamBWin },
+          losses: { decrement: teamBLoss },
+          ties: { decrement: teamBTie },
+        },
+      }),
+      prisma.matchup.delete({
+        where: { id: matchupId },
+      }),
+    ]);
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("deleteMatchup error:", error);
+    return { success: false, error: "Failed to delete matchup. Please try again." };
+  }
 }
 
 const submitForfeitSchema = z.object({
@@ -319,65 +344,79 @@ export async function submitForfeit(
   weekNumber: number,
   winningTeamId: number,
   forfeitingTeamId: number
-) {
-  const validated = submitForfeitSchema.parse({ weekNumber, winningTeamId, forfeitingTeamId });
-  const session = await requireLeagueAdmin(leagueSlug);
+): Promise<ActionResult> {
+  try {
+    const validated = submitForfeitSchema.parse({ weekNumber, winningTeamId, forfeitingTeamId });
+    const session = await requireLeagueAdmin(leagueSlug);
 
-  const existingMatchups = await prisma.matchup.findMany({
-    where: {
-      leagueId: session.leagueId,
-      weekNumber: validated.weekNumber,
-      OR: [
-        { teamAId: validated.winningTeamId },
-        { teamBId: validated.winningTeamId },
-        { teamAId: validated.forfeitingTeamId },
-        { teamBId: validated.forfeitingTeamId },
-      ],
-    },
-  });
+    // Get active season for this league
+    const activeSeason = await prisma.season.findFirst({
+      where: { leagueId: session.leagueId, isActive: true },
+    });
 
-  if (existingMatchups.length > 0) {
-    throw new Error(`One or both teams already played in Week ${validated.weekNumber}`);
-  }
-
-  // Use transaction to ensure matchup + team stats stay consistent
-  const [matchup] = await prisma.$transaction([
-    prisma.matchup.create({
-      data: {
+    const existingMatchups = await prisma.matchup.findMany({
+      where: {
         leagueId: session.leagueId,
         weekNumber: validated.weekNumber,
-        teamAId: validated.winningTeamId,
-        teamAGross: 0,
-        teamAHandicap: 0,
-        teamANet: 0,
-        teamAPoints: 20,
-        teamAIsSub: false,
-        teamBId: validated.forfeitingTeamId,
-        teamBGross: 0,
-        teamBHandicap: 0,
-        teamBNet: 0,
-        teamBPoints: 0,
-        teamBIsSub: false,
-        isForfeit: true,
-        forfeitTeamId: validated.forfeitingTeamId,
+        OR: [
+          { teamAId: validated.winningTeamId },
+          { teamBId: validated.winningTeamId },
+          { teamAId: validated.forfeitingTeamId },
+          { teamBId: validated.forfeitingTeamId },
+        ],
       },
-    }),
-    prisma.team.update({
-      where: { id: validated.winningTeamId },
-      data: {
-        totalPoints: { increment: 20 },
-        wins: { increment: 1 },
-      },
-    }),
-    prisma.team.update({
-      where: { id: validated.forfeitingTeamId },
-      data: {
-        losses: { increment: 1 },
-      },
-    }),
-  ]);
+    });
 
-  return matchup;
+    if (existingMatchups.length > 0) {
+      return { success: false, error: `One or both teams already played in Week ${validated.weekNumber}` };
+    }
+
+    // Use transaction to ensure matchup + team stats stay consistent
+    await prisma.$transaction([
+      prisma.matchup.create({
+        data: {
+          leagueId: session.leagueId,
+          seasonId: activeSeason?.id ?? null,
+          weekNumber: validated.weekNumber,
+          teamAId: validated.winningTeamId,
+          teamAGross: 0,
+          teamAHandicap: 0,
+          teamANet: 0,
+          teamAPoints: 20,
+          teamAIsSub: false,
+          teamBId: validated.forfeitingTeamId,
+          teamBGross: 0,
+          teamBHandicap: 0,
+          teamBNet: 0,
+          teamBPoints: 0,
+          teamBIsSub: false,
+          isForfeit: true,
+          forfeitTeamId: validated.forfeitingTeamId,
+        },
+      }),
+      prisma.team.update({
+        where: { id: validated.winningTeamId },
+        data: {
+          totalPoints: { increment: 20 },
+          wins: { increment: 1 },
+        },
+      }),
+      prisma.team.update({
+        where: { id: validated.forfeitingTeamId },
+        data: {
+          losses: { increment: 1 },
+        },
+      }),
+    ]);
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("submitForfeit error:", error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.issues[0]?.message || "Invalid forfeit data" };
+    }
+    return { success: false, error: "Failed to record forfeit. Please try again." };
+  }
 }
 
 export async function getMatchupHistoryForSeason(seasonId: number) {

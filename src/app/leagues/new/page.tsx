@@ -32,12 +32,16 @@ export default function NewLeaguePage() {
     }
 
     try {
-      const league = await createLeague(name, password);
-      setSuccess({
-        slug: league.slug,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create league");
+      const result = await createLeague(name, password);
+      if (result.success) {
+        setSuccess({
+          slug: result.data.slug,
+        });
+      } else {
+        setError(result.error);
+      }
+    } catch {
+      setError("Failed to create league. Please try again.");
     } finally {
       setLoading(false);
     }

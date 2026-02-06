@@ -76,16 +76,20 @@ export default function LeagueSignupPage({ params }: Props) {
     setError("");
 
     try {
-      await registerTeam(
+      const result = await registerTeam(
         slug,
         formData.teamName,
         formData.captainName,
         formData.email,
         formData.phone
       );
-      setSuccess(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      if (result.success) {
+        setSuccess(true);
+      } else {
+        setError(result.error);
+      }
+    } catch {
+      setError("Registration failed. Please try again.");
     } finally {
       setSubmitting(false);
     }

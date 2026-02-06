@@ -45,15 +45,19 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, onTeamsCh
     setLoading(true);
     setMessage(null);
     try {
-      await approveTeam(slug, teamId);
-      const [teamsData, allTeamsData] = await Promise.all([
-        getTeams(leagueId),
-        getAllTeamsWithStatus(slug),
-      ]);
-      onTeamsChanged(teamsData, allTeamsData);
-      setMessage({ type: "success", text: "Team approved!" });
-    } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to approve team." });
+      const result = await approveTeam(slug, teamId);
+      if (result.success) {
+        const [teamsData, allTeamsData] = await Promise.all([
+          getTeams(leagueId),
+          getAllTeamsWithStatus(slug),
+        ]);
+        onTeamsChanged(teamsData, allTeamsData);
+        setMessage({ type: "success", text: "Team approved!" });
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to approve team. Please try again." });
     }
     setLoading(false);
   }
@@ -73,21 +77,26 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, onTeamsCh
     setMessage(null);
 
     try {
+      let result;
       if (action === "reject") {
-        await rejectTeam(slug, teamId);
-        setMessage({ type: "success", text: "Team rejected." });
+        result = await rejectTeam(slug, teamId);
       } else {
-        await deleteTeam(slug, teamId);
-        setMessage({ type: "success", text: `Team "${teamName}" deleted.` });
+        result = await deleteTeam(slug, teamId);
       }
-      const [teamsData, allTeamsData] = await Promise.all([
-        getTeams(leagueId),
-        getAllTeamsWithStatus(slug),
-      ]);
-      onTeamsChanged(teamsData, allTeamsData);
-    } catch (error) {
+
+      if (result.success) {
+        setMessage({ type: "success", text: action === "reject" ? "Team rejected." : `Team "${teamName}" deleted.` });
+        const [teamsData, allTeamsData] = await Promise.all([
+          getTeams(leagueId),
+          getAllTeamsWithStatus(slug),
+        ]);
+        onTeamsChanged(teamsData, allTeamsData);
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch {
       const fallback = action === "reject" ? "Failed to reject team." : "Failed to delete team.";
-      setMessage({ type: "error", text: error instanceof Error ? error.message : fallback });
+      setMessage({ type: "error", text: fallback });
     }
     setLoading(false);
   }

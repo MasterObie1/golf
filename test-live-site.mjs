@@ -6,8 +6,9 @@
 
 import { chromium } from 'playwright';
 
-const BASE_URL = 'https://golf-sigma-six.vercel.app';
+const BASE_URL = process.env.BASE_URL || 'https://leaguelinks.vercel.app';
 const LEAGUE_NAME = 'Test League ' + Date.now().toString().slice(-6);
+const ADMIN_PASSWORD = 'testpassword123';
 
 // Test data - 6 teams for matchups (3 matches per week)
 const TEAMS = [
@@ -20,7 +21,6 @@ const TEAMS = [
 ];
 
 // Matchup data for 10 weeks
-// Week 1 needs manual handicaps, subsequent weeks auto-calculate
 const MATCHUP_DATA = [
   {
     week: 1,
@@ -111,6 +111,7 @@ async function sleep(ms) {
 async function runTest() {
   console.log('========================================');
   console.log('LIVE SITE TESTING - LeagueLinks');
+  console.log(`URL: ${BASE_URL}`);
   console.log('========================================\n');
 
   const browser = await chromium.launch({
@@ -122,7 +123,6 @@ async function runTest() {
   const page = await context.newPage();
 
   let leagueSlug = '';
-  let adminUsername = '';
 
   try {
     // ========================================
@@ -134,85 +134,120 @@ async function runTest() {
     await page.goto(`${BASE_URL}/leagues/new`);
     await page.waitForLoadState('networkidle');
 
-    // Fill in league name
     await page.fill('input#name', LEAGUE_NAME);
+    await page.fill('input#password', ADMIN_PASSWORD);
+    await page.fill('input#confirmPassword', ADMIN_PASSWORD);
     await sleep(500);
 
-    // Click create button
     await page.click('button[type="submit"]');
 
-    // Wait for success page
     await page.waitForSelector('text=League Created!', { timeout: 30000 });
     console.log('   SUCCESS: League created!\n');
 
     // Extract league slug from the admin login link
     const adminLoginLink = await page.getAttribute('a[href*="/admin/login"]', 'href');
     leagueSlug = adminLoginLink.split('/league/')[1].split('/admin')[0];
-
-    // Extract admin username
-    const usernameCode = await page.locator('code').first().textContent();
-    adminUsername = usernameCode;
-
-    console.log(`   League slug: ${leagueSlug}`);
-    console.log(`   Admin username: ${adminUsername}`);
-    console.log(`   Admin password: pass@word1\n`);
+    console.log(`   League slug: ${leagueSlug}\n`);
 
     // ========================================
-    // STEP 2: Register teams via signup page
+    // STEP 2: Login to admin panel
     // ========================================
-    console.log('STEP 2: Registering teams via signup page...');
-
-    for (const team of TEAMS) {
-      console.log(`   Registering: ${team.name}`);
-
-      await page.goto(`${BASE_URL}/league/${leagueSlug}/signup`);
-      await page.waitForLoadState('networkidle');
-      await sleep(500);
-
-      // Fill team registration form using labels
-      // Team Name - first input in form
-      const inputs = page.locator('form input');
-      await inputs.nth(0).fill(team.name);
-      await inputs.nth(1).fill(team.captain);
-      await inputs.nth(2).fill(team.email);
-      await inputs.nth(3).fill(team.phone);
-
-      // Submit
-      await page.click('button[type="submit"]');
-
-      // Wait for success
-      await page.waitForSelector('text=Registration Submitted!', { timeout: 15000 });
-      console.log(`      SUCCESS: ${team.name} registered`);
-    }
-    console.log('   All teams registered!\n');
-
-    // ========================================
-    // STEP 3: Login to admin panel
-    // ========================================
-    console.log('STEP 3: Logging into admin panel...');
+    console.log('STEP 2: Logging into admin panel...');
 
     await page.goto(`${BASE_URL}/league/${leagueSlug}/admin/login`);
     await page.waitForLoadState('networkidle');
     await sleep(500);
 
-    await page.fill('#username', adminUsername);
-    await page.fill('#password', 'pass@word1');
+    await page.fill('#password', ADMIN_PASSWORD);
     await page.click('button[type="submit"]');
 
-    // Wait for admin dashboard
     await page.waitForURL(`**/league/${leagueSlug}/admin`, { timeout: 15000 });
     console.log('   SUCCESS: Logged in!\n');
 
     // ========================================
-    // STEP 4: Approve all teams
+    // STEP 3: Create a season
     // ========================================
-    console.log('STEP 4: Approving teams...');
+    console.log('STEP 3: Creating a season...');
+
+    // Click on Seasons tab
+    await page.click('button:has-text("Seasons")');
+    await sleep(1000);
+
+    // Fill season name
+    const seasonNameInput = page.locator('input[placeholder*="Season"]').first();
+    if (await seasonNameInput.isVisible()) {
+      await seasonNameInput.fill('Season 1');
+    } else {
+      // Try filling the first text input in the seasons section
+      const textInputs = page.locator('input[type="text"]');
+      await textInputs.first().fill('Season 1');
+    }
+
+    // Click create season button
+    const createSeasonBtn = page.locator('button:has-text("Create Season")');
+    if (await createSeasonBtn.isVisible()) {
+      await createSeasonBtn.click();
+      await sleep(1500);
+      console.log('   SUCCESS: Season created!\n');
+    } else {
+      console.log('   WARN: Could not find Create Season button, continuing...\n');
+    }
+
+    // ========================================
+    // STEP 4: Register teams via signup page
+    // ========================================
+    console.log('STEP 4: Registering teams via signup page...');
+
+    for (const team of TEAMS) {
+      console.log(`   Registering: ${team.name}`);
+
+      // Retry up to 3 times for intermittent failures
+      let registered = false;
+      for (let attempt = 1; attempt <= 3 && !registered; attempt++) {
+        if (attempt > 1) {
+          console.log(`      Retry attempt ${attempt}...`);
+          await sleep(2000);
+        }
+
+        await page.goto(`${BASE_URL}/league/${leagueSlug}/signup`);
+        await page.waitForLoadState('networkidle');
+        await sleep(1000);
+
+        await page.fill('#teamName', team.name);
+        await page.fill('#captainName', team.captain);
+        await page.fill('#email', team.email);
+        await page.fill('#phone', team.phone);
+
+        await page.click('button[type="submit"]');
+
+        try {
+          await page.waitForSelector('text=Registration Submitted!', { timeout: 20000 });
+          registered = true;
+          console.log(`      SUCCESS: ${team.name} registered`);
+        } catch (err) {
+          if (attempt === 3) throw err;
+          console.log(`      WARN: Registration attempt ${attempt} failed, retrying...`);
+        }
+      }
+
+      // Delay between registrations to avoid overwhelming the server
+      await sleep(500);
+    }
+    console.log('   All teams registered!\n');
+
+    // ========================================
+    // STEP 5: Approve all teams
+    // ========================================
+    console.log('STEP 5: Approving teams...');
+
+    await page.goto(`${BASE_URL}/league/${leagueSlug}/admin`);
+    await page.waitForLoadState('networkidle');
+    await sleep(1000);
 
     // Click on Teams tab
     await page.click('button:has-text("Teams")');
     await sleep(1000);
 
-    // Approve each pending team
     for (let i = 0; i < TEAMS.length; i++) {
       const approveButtons = page.locator('button:has-text("Approve")');
       const count = await approveButtons.count();
@@ -226,9 +261,9 @@ async function runTest() {
     console.log('   All teams approved!\n');
 
     // ========================================
-    // STEP 5: Enter matchup data for 10 weeks
+    // STEP 6: Enter matchup data for 10 weeks
     // ========================================
-    console.log('STEP 5: Entering matchup data for 10 weeks...\n');
+    console.log('STEP 6: Entering matchup data for 10 weeks...\n');
 
     // Click on Matchups tab
     await page.click('button:has-text("Matchups")');
@@ -244,6 +279,8 @@ async function runTest() {
         if (!page.url().includes('/admin')) {
           await page.goto(`${BASE_URL}/league/${leagueSlug}/admin`);
           await page.waitForLoadState('networkidle');
+          await page.click('button:has-text("Matchups")');
+          await sleep(1000);
         }
 
         // Set week number
@@ -283,7 +320,6 @@ async function runTest() {
         const previewVisible = await page.locator('text=Preview - Week').isVisible();
         if (!previewVisible) {
           console.log(`         ERROR: Preview failed, skipping...`);
-          // Try to go back
           const backBtn = page.locator('button:has-text("Back to Edit")');
           if (await backBtn.isVisible()) {
             await backBtn.click();
@@ -291,42 +327,20 @@ async function runTest() {
           continue;
         }
 
-        // Fill in points (the preview shows suggested points, user must confirm)
-        // Default scoring: winner gets more points based on net score difference
-        // Points must total 20
-        const pointsInputA = page.locator('table input[type="number"]').first();
-        const pointsInputB = page.locator('table input[type="number"]').last();
-
-        // Read suggested points from preview
-        const suggestedA = await pointsInputA.getAttribute('placeholder') || '10';
-        const suggestedB = await pointsInputB.getAttribute('placeholder') || '10';
-
-        // Calculate points based on net scores (simple win/loss/tie logic)
-        // In a real scenario, the UI would show calculated net scores
-        // For this test, we'll use a simple formula
-        let pointsA, pointsB;
-        if (match.teamAGross < match.teamBGross) {
-          pointsA = 12;
-          pointsB = 8;
-        } else if (match.teamBGross < match.teamAGross) {
-          pointsA = 8;
-          pointsB = 12;
-        } else {
-          pointsA = 10;
-          pointsB = 10;
-        }
-
-        await pointsInputA.fill(pointsA.toString());
-        await pointsInputB.fill(pointsB.toString());
+        // Points are pre-populated with the handicap engine's suggested values
+        // Just wait for them to appear
+        await sleep(500);
 
         // Submit the matchup
         await page.click('button:has-text("Submit Matchup")');
-        await sleep(1500);
+        await sleep(2000);
 
         // Check for success message
         const success = await page.locator('text=Matchup submitted successfully').isVisible();
         if (success) {
           console.log(`         Submitted successfully`);
+        } else {
+          console.log(`         WARN: No success message detected`);
         }
       }
 
@@ -334,9 +348,9 @@ async function runTest() {
     }
 
     // ========================================
-    // STEP 6: Verify results
+    // STEP 7: Verify results
     // ========================================
-    console.log('STEP 6: Verifying results...');
+    console.log('STEP 7: Verifying results...');
 
     // Check leaderboard
     await page.goto(`${BASE_URL}/league/${leagueSlug}/leaderboard`);
@@ -372,25 +386,20 @@ async function runTest() {
     console.log('TEST COMPLETE!');
     console.log('========================================\n');
     console.log('League URLs:');
-    console.log(`   Home:     ${BASE_URL}/league/${leagueSlug}`);
-    console.log(`   Admin:    ${BASE_URL}/league/${leagueSlug}/admin`);
+    console.log(`   Home:       ${BASE_URL}/league/${leagueSlug}`);
+    console.log(`   Admin:      ${BASE_URL}/league/${leagueSlug}/admin`);
     console.log(`   Leaderboard: ${BASE_URL}/league/${leagueSlug}/leaderboard`);
-    console.log(`   History:  ${BASE_URL}/league/${leagueSlug}/history`);
-    console.log(`   Handicaps: ${BASE_URL}/league/${leagueSlug}/handicap-history\n`);
-    console.log('Admin Credentials:');
-    console.log(`   Username: ${adminUsername}`);
-    console.log(`   Password: pass@word1\n`);
+    console.log(`   History:    ${BASE_URL}/league/${leagueSlug}/history`);
+    console.log(`   Handicaps:  ${BASE_URL}/league/${leagueSlug}/handicap-history\n`);
+    console.log('Admin Password:', ADMIN_PASSWORD, '\n');
 
   } catch (error) {
     console.error('\nTEST FAILED:', error.message);
     console.error('Stack:', error.stack);
 
-    // Take screenshot on failure
     const screenshotPath = `test-failure-${Date.now()}.png`;
     await page.screenshot({ path: screenshotPath, fullPage: true });
     console.log(`Screenshot saved to: ${screenshotPath}`);
-
-    // Also log current URL and page content snippet
     console.log(`Current URL: ${page.url()}`);
   } finally {
     await browser.close();

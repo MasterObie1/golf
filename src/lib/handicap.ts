@@ -440,21 +440,36 @@ export function calculateNetScore(grossScore: number, handicap: number): number 
 }
 
 /**
- * Suggest points based on net score comparison
- * Default: Winner gets 2 points, Loser gets 0, Tie gives 1 each
+ * Suggest points based on net score comparison (20-point system)
+ * Points always sum to 20. Distribution based on net score margin:
+ * - Tie: 10/10
+ * - Win by 1: 12/8
+ * - Win by 2: 13/7
+ * - Win by 3: 14/6
+ * - Win by 4: 15/5
+ * - Win by 5+: 16/4 (max spread)
  */
 export function suggestPoints(
   teamANet: number,
   teamBNet: number
 ): { teamAPoints: number; teamBPoints: number } {
-  if (teamANet < teamBNet) {
-    // Lower net score wins in golf
-    return { teamAPoints: 2, teamBPoints: 0 };
-  } else if (teamBNet < teamANet) {
-    return { teamAPoints: 0, teamBPoints: 2 };
+  const diff = teamANet - teamBNet;
+
+  if (diff === 0) {
+    return { teamAPoints: 10, teamBPoints: 10 };
+  }
+
+  // Margin-based: base 12 for winner, +1 per whole stroke difference, max 16
+  const margin = Math.round(Math.abs(diff));
+  const winnerPoints = Math.min(11 + margin, 16);
+  const loserPoints = 20 - winnerPoints;
+
+  if (diff < 0) {
+    // Team A wins (lower net in golf)
+    return { teamAPoints: winnerPoints, teamBPoints: loserPoints };
   } else {
-    // Tie
-    return { teamAPoints: 1, teamBPoints: 1 };
+    // Team B wins
+    return { teamAPoints: loserPoints, teamBPoints: winnerPoints };
   }
 }
 

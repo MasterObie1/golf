@@ -5,27 +5,27 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../db";
 import { requireLeagueAdmin } from "../auth";
 import { checkRateLimit, RATE_LIMITS } from "../rate-limit";
-import { getServerActionIp, generateSlug } from "./shared";
+import { getServerActionIp, generateSlug, type ActionResult } from "./shared";
 
 export async function createLeague(
   name: string,
   adminPassword: string
-) {
+): Promise<ActionResult<{ id: number; slug: string; name: string; adminUsername: string }>> {
   // Rate limit
   const ip = await getServerActionIp();
   const rateCheck = checkRateLimit(`create-league:${ip}`, RATE_LIMITS.createLeague);
   if (!rateCheck.allowed) {
-    throw new Error("Too many league creation attempts. Please try again later.");
+    return { success: false, error: "Too many league creation attempts. Please try again later." };
   }
 
   // Validate name
   if (!name || name.trim().length < 3) {
-    throw new Error("League name must be at least 3 characters");
+    return { success: false, error: "League name must be at least 3 characters" };
   }
 
   // Validate password
   if (!adminPassword || adminPassword.length < 8) {
-    throw new Error("Password must be at least 8 characters");
+    return { success: false, error: "Password must be at least 8 characters" };
   }
 
   const trimmedName = name.trim();
@@ -37,7 +37,7 @@ export async function createLeague(
       where: { slug },
     });
     if (existing) {
-      throw new Error(`A league with a similar name already exists`);
+      return { success: false, error: "A league with a similar name already exists" };
     }
 
     // Generate admin username: admin@LeagueName (no spaces)
@@ -47,7 +47,7 @@ export async function createLeague(
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
     // Create the league
-    return await prisma.league.create({
+    const league = await prisma.league.create({
       data: {
         name: trimmedName,
         slug,
@@ -55,16 +55,11 @@ export async function createLeague(
         adminPassword: hashedPassword,
       },
     });
+
+    return { success: true, data: { id: league.id, slug: league.slug, name: league.name, adminUsername: league.adminUsername } };
   } catch (error) {
-    // Re-throw known errors
-    if (error instanceof Error && error.message.includes("already exists")) {
-      throw error;
-    }
-    // Log and re-throw with more context for unknown errors
     console.error("createLeague error:", error);
-    throw new Error(
-      `Failed to create league: ${error instanceof Error ? error.message : "Unknown error"}`
-    );
+    return { success: false, error: "Failed to create league. Please try again." };
   }
 }
 
@@ -72,41 +67,46 @@ export async function changeLeaguePassword(
   leagueSlug: string,
   currentPassword: string,
   newPassword: string
-) {
-  const session = await requireLeagueAdmin(leagueSlug);
+): Promise<ActionResult> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
 
-  if (!currentPassword || !newPassword) {
-    throw new Error("Current password and new password are required");
+    if (!currentPassword || !newPassword) {
+      return { success: false, error: "Current password and new password are required" };
+    }
+
+    if (newPassword.length < 8) {
+      return { success: false, error: "New password must be at least 8 characters" };
+    }
+
+    // Fetch the current password hash
+    const league = await prisma.league.findUnique({
+      where: { id: session.leagueId },
+      select: { adminPassword: true },
+    });
+
+    if (!league) {
+      return { success: false, error: "League not found" };
+    }
+
+    // Verify current password
+    const isValid = await bcrypt.compare(currentPassword, league.adminPassword);
+    if (!isValid) {
+      return { success: false, error: "Current password is incorrect" };
+    }
+
+    // Hash and save new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    await prisma.league.update({
+      where: { id: session.leagueId },
+      data: { adminPassword: hashedPassword },
+    });
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("changeLeaguePassword error:", error);
+    return { success: false, error: "Failed to change password. Please try again." };
   }
-
-  if (newPassword.length < 8) {
-    throw new Error("New password must be at least 8 characters");
-  }
-
-  // Fetch the current password hash
-  const league = await prisma.league.findUnique({
-    where: { id: session.leagueId },
-    select: { adminPassword: true },
-  });
-
-  if (!league) {
-    throw new Error("League not found");
-  }
-
-  // Verify current password
-  const isValid = await bcrypt.compare(currentPassword, league.adminPassword);
-  if (!isValid) {
-    throw new Error("Current password is incorrect");
-  }
-
-  // Hash and save new password
-  const hashedPassword = await bcrypt.hash(newPassword, 12);
-  await prisma.league.update({
-    where: { id: session.leagueId },
-    data: { adminPassword: hashedPassword },
-  });
-
-  return { success: true };
 }
 
 export async function searchLeagues(query: string) {

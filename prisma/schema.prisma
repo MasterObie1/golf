@@ -41,7 +41,7 @@ model League {
   handicapMultiplier   Float     @default(0.9)      // Multiplier applied to difference
   handicapRounding     String    @default("floor")  // "floor", "round", "ceil"
   handicapDefault      Float     @default(0)        // Handicap when no scores available
-  handicapMax          Float?                       // Maximum handicap cap (null = no limit)
+  handicapMax          Float?    @default(9)        // Maximum handicap cap (null = no limit)
   handicapMin          Float?                       // Minimum handicap cap (null = no limit, for scratch golfers)
 
   // --- Score Selection ---

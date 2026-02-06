@@ -3,6 +3,11 @@
 
 import { headers } from "next/headers";
 
+// Result type for server actions — avoids Next.js production error sanitization
+export type ActionResult<T = void> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
 export async function getServerActionIp(): Promise<string> {
   const hdrs = await headers();
   return hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() || hdrs.get("x-real-ip") || "unknown";

@@ -507,20 +507,39 @@ describe("calculateNetScore", () => {
 // ==========================================
 
 describe("suggestPoints", () => {
-  it("awards 2 points to team with lower net (winner in golf)", () => {
-    expect(suggestPoints(38, 42)).toEqual({ teamAPoints: 2, teamBPoints: 0 });
+  it("awards more points to team with lower net (winner in golf)", () => {
+    // 4 stroke margin: 11 + 4 = 15/5
+    expect(suggestPoints(38, 42)).toEqual({ teamAPoints: 15, teamBPoints: 5 });
   });
 
-  it("awards 2 points to team B when it has lower net", () => {
-    expect(suggestPoints(42, 38)).toEqual({ teamAPoints: 0, teamBPoints: 2 });
+  it("awards more points to team B when it has lower net", () => {
+    expect(suggestPoints(42, 38)).toEqual({ teamAPoints: 5, teamBPoints: 15 });
   });
 
-  it("awards 1 point each for a tie", () => {
-    expect(suggestPoints(40, 40)).toEqual({ teamAPoints: 1, teamBPoints: 1 });
+  it("awards 10 points each for a tie", () => {
+    expect(suggestPoints(40, 40)).toEqual({ teamAPoints: 10, teamBPoints: 10 });
+  });
+
+  it("points always sum to 20", () => {
+    for (const [a, b] of [[30, 45], [38, 42], [40, 40], [42, 38], [35, 36]]) {
+      const result = suggestPoints(a, b);
+      expect(result.teamAPoints + result.teamBPoints).toBe(20);
+    }
+  });
+
+  it("caps winner points at 16", () => {
+    // 10 stroke margin: 11 + 10 = 21, capped at 16
+    expect(suggestPoints(30, 40)).toEqual({ teamAPoints: 16, teamBPoints: 4 });
   });
 
   it("handles decimal net scores", () => {
-    expect(suggestPoints(38.5, 39.0)).toEqual({ teamAPoints: 2, teamBPoints: 0 });
+    const result = suggestPoints(38.5, 39.0);
+    expect(result.teamAPoints + result.teamBPoints).toBe(20);
+    expect(result.teamAPoints).toBeGreaterThan(result.teamBPoints);
+  });
+
+  it("1 stroke margin gives 12/8", () => {
+    expect(suggestPoints(39, 40)).toEqual({ teamAPoints: 12, teamBPoints: 8 });
   });
 });
 

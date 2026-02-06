@@ -141,9 +141,18 @@ beforeEach(async () => {
 // createLeague + getLeagueBySlug round-trip
 // ==========================================
 
+// Helper to unwrap ActionResult - asserts success and returns data
+function unwrap<T>(result: { success: true; data: T } | { success: false; error: string }): T {
+  if (!result.success) {
+    throw new Error(`Expected success but got error: ${result.error}`);
+  }
+  return result.data;
+}
+
 describe("createLeague + getLeagueBySlug", () => {
   it("creates a league and retrieves it by slug", async () => {
-    const league = await createLeague("Thursday Night Golf", "securepass123");
+    const result = await createLeague("Thursday Night Golf", "securepass123");
+    const league = unwrap(result);
 
     expect(league.name).toBe("Thursday Night Golf");
     expect(league.slug).toBe("thursday-night-golf");
@@ -172,21 +181,21 @@ describe("createLeague + getLeagueBySlug", () => {
 
   it("rejects duplicate league names", async () => {
     await createLeague("Unique League", "securepass123");
-    await expect(createLeague("Unique League", "securepass123")).rejects.toThrow(
-      "already exists"
-    );
+    const result = await createLeague("Unique League", "securepass123");
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("already exists");
   });
 
   it("rejects short names", async () => {
-    await expect(createLeague("AB", "securepass123")).rejects.toThrow(
-      "at least 3 characters"
-    );
+    const result = await createLeague("AB", "securepass123");
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("at least 3 characters");
   });
 
   it("rejects short passwords", async () => {
-    await expect(createLeague("Good Name", "short")).rejects.toThrow(
-      "at least 8 characters"
-    );
+    const result = await createLeague("Good Name", "short");
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("at least 8 characters");
   });
 });
 
@@ -198,7 +207,8 @@ describe("createSeason + setActiveSeason", () => {
   let leagueSlug: string;
 
   beforeEach(async () => {
-    const league = await createLeague("Season Test League", "securepass123");
+    const result = await createLeague("Season Test League", "securepass123");
+    const league = unwrap(result);
     leagueSlug = league.slug;
     setAuthContext(league.id, league.slug, league.adminUsername);
   });
@@ -254,58 +264,58 @@ describe("registerTeam + approveTeam + rejectTeam", () => {
   let leagueSlug: string;
 
   beforeEach(async () => {
-    const league = await createLeague("Team Test League", "securepass123");
+    const result = await createLeague("Team Test League", "securepass123");
+    const league = unwrap(result);
     leagueSlug = league.slug;
     setAuthContext(league.id, league.slug, league.adminUsername);
     await createSeason(leagueSlug, "Season 1", 2025);
   });
 
   it("registers a team with pending status", async () => {
-    const team = await registerTeam(
+    const result = await registerTeam(
       leagueSlug,
       "The Eagles",
       "John Doe",
       "john@test.com",
       "555-123-4567"
     );
+    expect(result.success).toBe(true);
 
-    expect(team.name).toBe("The Eagles");
-    expect(team.status).toBe("pending");
-    expect(team.captainName).toBe("John Doe");
+    // Verify via DB
+    const team = await testPrisma.team.findFirst({ where: { name: "The Eagles" } });
+    expect(team).not.toBeNull();
+    expect(team!.status).toBe("pending");
+    expect(team!.captainName).toBe("John Doe");
   });
 
   it("approves a pending team", async () => {
-    const team = await registerTeam(
-      leagueSlug,
-      "The Hawks",
-      "Jane Doe",
-      "jane@test.com",
-      "555-987-6543"
-    );
+    await registerTeam(leagueSlug, "The Hawks", "Jane Doe", "jane@test.com", "555-987-6543");
+    const team = await testPrisma.team.findFirst({ where: { name: "The Hawks" } });
 
-    const approved = await approveTeam(leagueSlug, team.id);
-    expect(approved.status).toBe("approved");
+    const result = await approveTeam(leagueSlug, team!.id);
+    expect(result.success).toBe(true);
+
+    const updated = await testPrisma.team.findUnique({ where: { id: team!.id } });
+    expect(updated!.status).toBe("approved");
   });
 
   it("rejects a pending team", async () => {
-    const team = await registerTeam(
-      leagueSlug,
-      "The Badgers",
-      "Bob Smith",
-      "bob@test.com",
-      "555-111-2222"
-    );
+    await registerTeam(leagueSlug, "The Badgers", "Bob Smith", "bob@test.com", "555-111-2222");
+    const team = await testPrisma.team.findFirst({ where: { name: "The Badgers" } });
 
-    const rejected = await rejectTeam(leagueSlug, team.id);
-    expect(rejected.status).toBe("rejected");
+    const result = await rejectTeam(leagueSlug, team!.id);
+    expect(result.success).toBe(true);
+
+    const updated = await testPrisma.team.findUnique({ where: { id: team!.id } });
+    expect(updated!.status).toBe("rejected");
   });
 
   it("prevents duplicate team names in same season", async () => {
     await registerTeam(leagueSlug, "The Eagles", "John", "john@test.com", "555-123-4567");
 
-    await expect(
-      registerTeam(leagueSlug, "The Eagles", "Jane", "jane@test.com", "555-987-6543")
-    ).rejects.toThrow("already exists");
+    const result = await registerTeam(leagueSlug, "The Eagles", "Jane", "jane@test.com", "555-987-6543");
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("already exists");
   });
 });
 
@@ -319,7 +329,8 @@ describe("submitMatchup + team stats", () => {
   let teamBId: number;
 
   beforeEach(async () => {
-    const league = await createLeague("Match Test League", "securepass123");
+    const result = await createLeague("Match Test League", "securepass123");
+    const league = unwrap(result);
     leagueSlug = league.slug;
     setAuthContext(league.id, league.slug, league.adminUsername);
 
@@ -335,9 +346,7 @@ describe("submitMatchup + team stats", () => {
   });
 
   it("creates a matchup and updates team stats", async () => {
-    // submitMatchup(slug, week, teamAId, teamAGross, teamAHandicap, teamANet, teamAPoints, teamAIsSub,
-    //               teamBId, teamBGross, teamBHandicap, teamBNet, teamBPoints, teamBIsSub)
-    const matchup = await submitMatchup(
+    const result = await submitMatchup(
       leagueSlug,
       1,        // week
       teamAId,
@@ -354,14 +363,17 @@ describe("submitMatchup + team stats", () => {
       false,    // teamB isSub
     );
 
+    expect(result.success).toBe(true);
+
+    // Verify matchup was created
+    const matchup = await testPrisma.matchup.findFirst({ where: { weekNumber: 1 } });
     expect(matchup).toBeDefined();
-    expect(matchup.weekNumber).toBe(1);
-    expect(matchup.teamAGross).toBe(40);
-    expect(matchup.teamBGross).toBe(45);
-    expect(matchup.teamANet).toBe(35);
-    expect(matchup.teamBNet).toBe(40);
-    expect(matchup.teamAPoints).toBe(2);
-    expect(matchup.teamBPoints).toBe(0);
+    expect(matchup!.teamAGross).toBe(40);
+    expect(matchup!.teamBGross).toBe(45);
+    expect(matchup!.teamANet).toBe(35);
+    expect(matchup!.teamBNet).toBe(40);
+    expect(matchup!.teamAPoints).toBe(2);
+    expect(matchup!.teamBPoints).toBe(0);
 
     // Check team stats were updated
     const teamA = await testPrisma.team.findUnique({ where: { id: teamAId } });
@@ -374,14 +386,12 @@ describe("submitMatchup + team stats", () => {
   });
 
   it("handles a tied match", async () => {
-    const matchup = await submitMatchup(
+    const result = await submitMatchup(
       leagueSlug, 1,
       teamAId, 40, 5, 35, 1, false,
       teamBId, 40, 5, 35, 1, false,
     );
-
-    expect(matchup.teamAPoints).toBe(1);
-    expect(matchup.teamBPoints).toBe(1);
+    expect(result.success).toBe(true);
 
     const teamA = await testPrisma.team.findUnique({ where: { id: teamAId } });
     const teamB = await testPrisma.team.findUnique({ where: { id: teamBId } });
@@ -391,14 +401,16 @@ describe("submitMatchup + team stats", () => {
   });
 
   it("supports custom point values", async () => {
-    const matchup = await submitMatchup(
+    const result = await submitMatchup(
       leagueSlug, 1,
       teamAId, 40, 5, 35, 10, false,
       teamBId, 45, 5, 40, 10, false,
     );
+    expect(result.success).toBe(true);
 
-    expect(matchup.teamAPoints).toBe(10);
-    expect(matchup.teamBPoints).toBe(10);
+    const matchup = await testPrisma.matchup.findFirst({ where: { weekNumber: 1 } });
+    expect(matchup!.teamAPoints).toBe(10);
+    expect(matchup!.teamBPoints).toBe(10);
   });
 });
 
@@ -412,7 +424,8 @@ describe("deleteMatchup + stats rollback", () => {
   let teamBId: number;
 
   beforeEach(async () => {
-    const league = await createLeague("Delete Test League", "securepass123");
+    const result = await createLeague("Delete Test League", "securepass123");
+    const league = unwrap(result);
     leagueSlug = league.slug;
     setAuthContext(league.id, league.slug, league.adminUsername);
 
@@ -427,7 +440,7 @@ describe("deleteMatchup + stats rollback", () => {
 
   it("rolls back team stats when matchup is deleted", async () => {
     // Submit a matchup (Team A wins)
-    const matchup = await submitMatchup(
+    await submitMatchup(
       leagueSlug, 1,
       teamAId, 40, 5, 35, 2, false,
       teamBId, 45, 5, 40, 0, false,
@@ -438,8 +451,12 @@ describe("deleteMatchup + stats rollback", () => {
     expect(teamA!.wins).toBe(1);
     expect(teamA!.totalPoints).toBe(2);
 
+    // Get the matchup ID from DB
+    const matchup = await testPrisma.matchup.findFirst({ where: { weekNumber: 1 } });
+
     // Delete the matchup
-    await deleteMatchup(leagueSlug, matchup.id);
+    const result = await deleteMatchup(leagueSlug, matchup!.id);
+    expect(result.success).toBe(true);
 
     // Stats should be rolled back to 0
     teamA = await testPrisma.team.findUnique({ where: { id: teamAId } });
@@ -465,7 +482,8 @@ describe("recalculateLeagueStats", () => {
   let teamBId: number;
 
   beforeEach(async () => {
-    const league = await createLeague("Recalc Test League", "securepass123");
+    const result = await createLeague("Recalc Test League", "securepass123");
+    const league = unwrap(result);
     leagueSlug = league.slug;
     leagueId = league.id;
     setAuthContext(league.id, league.slug, league.adminUsername);
@@ -538,7 +556,8 @@ describe("leaderboard tiebreaker ordering", () => {
   let leagueId: number;
 
   beforeEach(async () => {
-    const league = await createLeague("Leaderboard Test League", "securepass123");
+    const result = await createLeague("Leaderboard Test League", "securepass123");
+    const league = unwrap(result);
     leagueSlug = league.slug;
     leagueId = league.id;
     setAuthContext(league.id, league.slug, league.adminUsername);

@@ -257,11 +257,15 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, onDataRe
             if (newPw !== confirmPw) { setMessage({ type: "error", text: "New passwords do not match" }); return; }
             if (newPw.length < 8) { setMessage({ type: "error", text: "New password must be at least 8 characters" }); return; }
             try {
-              await changeLeaguePassword(slug, currentPw, newPw);
-              setMessage({ type: "success", text: "Password changed successfully" });
-              form.reset();
-            } catch (error) {
-              setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to change password" });
+              const result = await changeLeaguePassword(slug, currentPw, newPw);
+              if (result.success) {
+                setMessage({ type: "success", text: "Password changed successfully" });
+                form.reset();
+              } else {
+                setMessage({ type: "error", text: result.error });
+              }
+            } catch {
+              setMessage({ type: "error", text: "Failed to change password. Please try again." });
             }
           }}
           className="space-y-4 max-w-md"

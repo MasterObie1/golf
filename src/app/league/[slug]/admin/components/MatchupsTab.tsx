@@ -98,7 +98,7 @@ export default function MatchupsTab({
     setLoading(true);
     setMessage(null);
     try {
-      const previewData = await previewMatchup(
+      const result = await previewMatchup(
         leagueId,
         weekNumber,
         teamAId as number,
@@ -110,11 +110,15 @@ export default function MatchupsTab({
         (isWeekOne || teamBIsSub) ? (teamBHandicapManual as number) : null,
         teamBIsSub
       );
-      setPreview(previewData);
-      setTeamAPointsOverride("");
-      setTeamBPointsOverride("");
-    } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to generate preview." });
+      if (result.success) {
+        setPreview(result.data);
+        setTeamAPointsOverride(result.data.teamAPoints);
+        setTeamBPointsOverride(result.data.teamBPoints);
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to generate preview. Please try again." });
     }
     setLoading(false);
   }
@@ -124,7 +128,7 @@ export default function MatchupsTab({
 
     setLoading(true);
     try {
-      await submitMatchup(
+      const result = await submitMatchup(
         slug,
         preview.weekNumber,
         preview.teamAId,
@@ -140,24 +144,28 @@ export default function MatchupsTab({
         typeof teamBPointsOverride === "number" ? teamBPointsOverride : preview.teamBPoints,
         preview.teamBIsSub
       );
-      setMessage({ type: "success", text: "Matchup submitted successfully!" });
-      setPreview(null);
-      setTeamAId("");
-      setTeamBId("");
-      setTeamAGross("");
-      setTeamBGross("");
-      setTeamAHandicapManual("");
-      setTeamBHandicapManual("");
-      setTeamAIsSub(false);
-      setTeamBIsSub(false);
-      const [currentWeek, matchupsData] = await Promise.all([
-        getCurrentWeekNumber(leagueId),
-        getMatchupHistory(leagueId),
-      ]);
-      setWeekNumber(currentWeek);
-      onDataRefresh({ weekNumber: currentWeek, matchups: matchupsData });
-    } catch (error) {
-      setMessage({ type: "error", text: "Failed to submit matchup. May already exist for this week." });
+      if (result.success) {
+        setMessage({ type: "success", text: "Matchup submitted successfully!" });
+        setPreview(null);
+        setTeamAId("");
+        setTeamBId("");
+        setTeamAGross("");
+        setTeamBGross("");
+        setTeamAHandicapManual("");
+        setTeamBHandicapManual("");
+        setTeamAIsSub(false);
+        setTeamBIsSub(false);
+        const [currentWeek, matchupsData] = await Promise.all([
+          getCurrentWeekNumber(leagueId),
+          getMatchupHistory(leagueId),
+        ]);
+        setWeekNumber(currentWeek);
+        onDataRefresh({ weekNumber: currentWeek, matchups: matchupsData });
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to submit matchup. Please try again." });
     }
     setLoading(false);
   }
@@ -180,19 +188,23 @@ export default function MatchupsTab({
     setLoading(true);
     setMessage(null);
     try {
-      await submitForfeit(slug, weekNumber, winningTeamId as number, forfeitingTeamId as number);
-      setMessage({ type: "success", text: "Forfeit recorded successfully!" });
-      setWinningTeamId("");
-      setForfeitingTeamId("");
-      setIsForfeitMode(false);
-      const [currentWeek, matchupsData] = await Promise.all([
-        getCurrentWeekNumber(leagueId),
-        getMatchupHistory(leagueId),
-      ]);
-      setWeekNumber(currentWeek);
-      onDataRefresh({ weekNumber: currentWeek, matchups: matchupsData });
-    } catch (error) {
-      setMessage({ type: "error", text: "Failed to record forfeit. Teams may have already played this week." });
+      const result = await submitForfeit(slug, weekNumber, winningTeamId as number, forfeitingTeamId as number);
+      if (result.success) {
+        setMessage({ type: "success", text: "Forfeit recorded successfully!" });
+        setWinningTeamId("");
+        setForfeitingTeamId("");
+        setIsForfeitMode(false);
+        const [currentWeek, matchupsData] = await Promise.all([
+          getCurrentWeekNumber(leagueId),
+          getMatchupHistory(leagueId),
+        ]);
+        setWeekNumber(currentWeek);
+        onDataRefresh({ weekNumber: currentWeek, matchups: matchupsData });
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to record forfeit. Please try again." });
     }
     setLoading(false);
   }
@@ -206,16 +218,20 @@ export default function MatchupsTab({
     setDeleteConfirm({ open: false, matchupId: 0 });
     setLoading(true);
     try {
-      await deleteMatchup(slug, matchupId);
-      setMessage({ type: "success", text: "Matchup deleted successfully!" });
-      const [currentWeek, matchupsData] = await Promise.all([
-        getCurrentWeekNumber(leagueId),
-        getMatchupHistory(leagueId),
-      ]);
-      setWeekNumber(currentWeek);
-      onDataRefresh({ weekNumber: currentWeek, matchups: matchupsData });
-    } catch (error) {
-      setMessage({ type: "error", text: "Failed to delete matchup." });
+      const result = await deleteMatchup(slug, matchupId);
+      if (result.success) {
+        setMessage({ type: "success", text: "Matchup deleted successfully!" });
+        const [currentWeek, matchupsData] = await Promise.all([
+          getCurrentWeekNumber(leagueId),
+          getMatchupHistory(leagueId),
+        ]);
+        setWeekNumber(currentWeek);
+        onDataRefresh({ weekNumber: currentWeek, matchups: matchupsData });
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to delete matchup. Please try again." });
     }
     setLoading(false);
   }
