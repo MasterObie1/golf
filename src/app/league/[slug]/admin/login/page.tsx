@@ -12,7 +12,6 @@ export default function LeagueAdminLoginPage({ params }: Props) {
   const { slug } = use(params);
   const router = useRouter();
 
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,7 +25,7 @@ export default function LeagueAdminLoginPage({ params }: Props) {
       const response = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, leagueSlug: slug }),
+        body: JSON.stringify({ password, leagueSlug: slug }),
       });
 
       const data = await response.json();
@@ -56,24 +55,6 @@ export default function LeagueAdminLoginPage({ params }: Props) {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="username"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Username
-            </label>
-            <input
-              type="text"
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="admin@YourLeagueName"
-              required
-            />
-          </div>
-
           <div>
             <label
               htmlFor="password"

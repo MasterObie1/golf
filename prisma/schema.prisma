@@ -97,6 +97,32 @@ model League {
   // Relations
   teams       Team[]
   matchups    Matchup[]
+  seasons     Season[]
+}
+
+model Season {
+  id            Int       @id @default(autoincrement())
+  leagueId      Int
+  league        League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  name          String    // "2024 Season", "Spring 2025"
+  year          Int       // 2024, 2025
+  seasonNumber  Int       // 1, 2, 3... (order within league)
+  isActive      Boolean   @default(true)
+
+  startDate     DateTime?
+  endDate       DateTime?
+  numberOfWeeks Int?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  matchups      Matchup[]
+  teams         Team[]
+
+  @@unique([leagueId, seasonNumber])
+  @@index([leagueId])
 }
 
 model Team {
@@ -107,6 +133,10 @@ model Team {
   leagueId    Int
   league      League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
 
+  // Season association (teams belong to specific season)
+  seasonId    Int?
+  season      Season?   @relation(fields: [seasonId], references: [id])
+
   // Captain/Contact information
   captainName String?
   email       String?
@@ -115,7 +145,7 @@ model Team {
   // Registration status
   status      String    @default("pending") // "pending", "approved", "rejected"
 
-  // League stats
+  // League stats (per season)
   totalPoints Float     @default(0)
   wins        Int       @default(0)
   losses      Int       @default(0)
@@ -128,8 +158,10 @@ model Team {
   matchupsAsTeamA Matchup[] @relation("TeamA")
   matchupsAsTeamB Matchup[] @relation("TeamB")
 
-  // Team name must be unique within a league
-  @@unique([leagueId, name])
+  // Team name must be unique within a season (allows same team name across seasons)
+  @@unique([seasonId, name])
+  @@index([leagueId])
+  @@index([seasonId])
 }
 
 model Matchup {
@@ -140,6 +172,10 @@ model Matchup {
   // League association
   leagueId        Int
   league          League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  // Season association
+  seasonId        Int?
+  season          Season?  @relation(fields: [seasonId], references: [id])
 
   // Team A data
   teamAId         Int
@@ -168,4 +204,9 @@ model Matchup {
 
   // Constraint: unique matchup per week per team pair within a league
   @@unique([leagueId, weekNumber, teamAId, teamBId])
+  @@index([leagueId])
+  @@index([seasonId])
+  @@index([teamAId])
+  @@index([teamBId])
+  @@index([leagueId, weekNumber])
 }

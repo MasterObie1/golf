@@ -48,13 +48,13 @@ export default function LeaguesPage() {
   }, [query, allLeagues]);
 
   return (
-    <div className="min-h-screen bg-green-50">
+    <div className="min-h-screen bg-bg-primary">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-green-800">Find a League</h1>
+          <h1 className="text-3xl font-bold text-green-dark">Find a League</h1>
           <Link
             href="/leagues/new"
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+            className="bg-green-primary text-white px-4 py-2 rounded-lg hover:bg-green-dark transition-colors"
           >
             Create League
           </Link>
@@ -67,7 +67,7 @@ export default function LeaguesPage() {
             placeholder="Search leagues by name..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
+            className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-primary text-lg"
           />
         </div>
 
@@ -81,7 +81,7 @@ export default function LeaguesPage() {
             </p>
             <Link
               href="/leagues/new"
-              className="text-green-600 hover:text-green-700 font-medium"
+              className="text-green-primary hover:text-green-dark font-medium"
             >
               Create the first league
             </Link>
@@ -95,9 +95,9 @@ export default function LeaguesPage() {
               <Link
                 key={league.id}
                 href={`/league/${league.slug}`}
-                className="block bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-gray-100"
+                className="block bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-border-light"
               >
-                <h2 className="text-xl font-semibold text-green-800 mb-2">
+                <h2 className="text-xl font-semibold text-green-dark mb-2">
                   {league.name}
                 </h2>
                 <div className="text-gray-600 space-y-1">
@@ -125,7 +125,7 @@ export default function LeaguesPage() {
 
         {/* Back to Home */}
         <div className="mt-8 text-center">
-          <Link href="/" className="text-green-600 hover:text-green-700">
+          <Link href="/" className="text-green-primary hover:text-green-dark">
             &larr; Back to Home
           </Link>
         </div>

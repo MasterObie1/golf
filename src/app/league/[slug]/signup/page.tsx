@@ -13,6 +13,7 @@ export default function LeagueSignupPage({ params }: Props) {
 
   const [leagueName, setLeagueName] = useState("");
   const [registrationOpen, setRegistrationOpen] = useState(true);
+  const [activeSeasonName, setActiveSeasonName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [formData, setFormData] = useState({
@@ -24,12 +25,43 @@ export default function LeagueSignupPage({ params }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  function getFieldError(field: string): string | null {
+    const value = formData[field as keyof typeof formData];
+    switch (field) {
+      case "teamName":
+        if (!value) return "Team name is required";
+        if (value.length < 2) return "Team name must be at least 2 characters";
+        return null;
+      case "captainName":
+        if (!value) return "Captain name is required";
+        if (value.length < 2) return "Captain name must be at least 2 characters";
+        return null;
+      case "email":
+        if (!value) return "Email is required";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Please enter a valid email address";
+        return null;
+      case "phone":
+        if (!value) return "Phone number is required";
+        if (value.length < 10) return "Phone number must be at least 10 digits";
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  function handleBlur(field: string) {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  }
 
   useEffect(() => {
     getLeaguePublicInfo(slug)
       .then((league) => {
         setLeagueName(league.name);
         setRegistrationOpen(league.registrationOpen);
+        const activeSeason = (league as { seasons?: { name: string }[] }).seasons?.[0];
+        setActiveSeasonName(activeSeason?.name || null);
         setLoading(false);
       })
       .catch(() => {
@@ -61,7 +93,7 @@ export default function LeagueSignupPage({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-green-50 flex items-center justify-center">
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center">
         <div className="text-gray-500">Loading...</div>
       </div>
     );
@@ -69,9 +101,9 @@ export default function LeagueSignupPage({ params }: Props) {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-green-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center px-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-success-bg rounded-full flex items-center justify-center mx-auto mb-4">
             <svg
               className="w-8 h-8 text-green-600"
               fill="none"
@@ -86,7 +118,7 @@ export default function LeagueSignupPage({ params }: Props) {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-green-800 mb-2">
+          <h1 className="text-2xl font-bold text-green-dark mb-2">
             Registration Submitted!
           </h1>
           <p className="text-gray-600 mb-6">
@@ -95,7 +127,7 @@ export default function LeagueSignupPage({ params }: Props) {
           </p>
           <Link
             href={`/league/${slug}`}
-            className="inline-block bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"
+            className="inline-block bg-green-primary text-white px-6 py-3 rounded-lg hover:bg-green-dark transition-colors"
           >
             Back to League
           </Link>
@@ -106,7 +138,7 @@ export default function LeagueSignupPage({ params }: Props) {
 
   if (!registrationOpen) {
     return (
-      <div className="min-h-screen bg-green-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center px-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">
             Registration Closed
@@ -116,7 +148,28 @@ export default function LeagueSignupPage({ params }: Props) {
           </p>
           <Link
             href={`/league/${slug}`}
-            className="inline-block bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"
+            className="inline-block bg-green-primary text-white px-6 py-3 rounded-lg hover:bg-green-dark transition-colors"
+          >
+            Back to League
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeSeasonName) {
+    return (
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">
+            No Active Season
+          </h1>
+          <p className="text-gray-600 mb-6">
+            The league admin needs to create a season before teams can register.
+          </p>
+          <Link
+            href={`/league/${slug}`}
+            className="inline-block bg-green-primary text-white px-6 py-3 rounded-lg hover:bg-green-dark transition-colors"
           >
             Back to League
           </Link>
@@ -126,86 +179,129 @@ export default function LeagueSignupPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-green-50">
+    <div className="min-h-screen bg-bg-primary">
       <div className="max-w-md mx-auto px-4 py-8">
         <div className="mb-6">
           <Link
             href={`/league/${slug}`}
-            className="text-green-600 hover:text-green-700"
+            className="text-green-primary hover:text-green-dark"
           >
             &larr; Back to {leagueName}
           </Link>
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-6">
-          <h1 className="text-2xl font-bold text-green-800 mb-2">Team Signup</h1>
-          <p className="text-gray-600 mb-6">{leagueName}</p>
+          <h1 className="text-2xl font-bold text-green-dark mb-2">Team Signup</h1>
+          <p className="text-gray-600 mb-2">{leagueName}</p>
+          <p className="text-sm text-gray-500 mb-6">
+            Registering for: <span className="font-medium">{activeSeasonName}</span>
+          </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">
                 Team Name
               </label>
               <input
+                id="teamName"
                 type="text"
                 value={formData.teamName}
                 onChange={(e) =>
                   setFormData({ ...formData, teamName: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                onBlur={() => handleBlur("teamName")}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-primary ${
+                  touched.teamName && getFieldError("teamName") ? "border-red-400" : "border-gray-300"
+                }`}
                 required
                 minLength={2}
                 maxLength={50}
+                aria-describedby={touched.teamName && getFieldError("teamName") ? "teamName-error" : undefined}
               />
+              {touched.teamName && getFieldError("teamName") && (
+                <p id="teamName-error" role="alert" className="mt-1 text-sm text-red-600">
+                  {getFieldError("teamName")}
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="captainName" className="block text-sm font-medium text-gray-700 mb-1">
                 Captain Name
               </label>
               <input
+                id="captainName"
                 type="text"
                 value={formData.captainName}
                 onChange={(e) =>
                   setFormData({ ...formData, captainName: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                onBlur={() => handleBlur("captainName")}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-primary ${
+                  touched.captainName && getFieldError("captainName") ? "border-red-400" : "border-gray-300"
+                }`}
                 required
                 minLength={2}
                 maxLength={100}
+                aria-describedby={touched.captainName && getFieldError("captainName") ? "captainName-error" : undefined}
               />
+              {touched.captainName && getFieldError("captainName") && (
+                <p id="captainName-error" role="alert" className="mt-1 text-sm text-red-600">
+                  {getFieldError("captainName")}
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email
               </label>
               <input
+                id="email"
                 type="email"
                 value={formData.email}
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                onBlur={() => handleBlur("email")}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-primary ${
+                  touched.email && getFieldError("email") ? "border-red-400" : "border-gray-300"
+                }`}
                 required
+                aria-describedby={touched.email && getFieldError("email") ? "email-error" : undefined}
               />
+              {touched.email && getFieldError("email") && (
+                <p id="email-error" role="alert" className="mt-1 text-sm text-red-600">
+                  {getFieldError("email")}
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
                 Phone
               </label>
               <input
+                id="phone"
                 type="tel"
                 value={formData.phone}
                 onChange={(e) =>
                   setFormData({ ...formData, phone: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                onBlur={() => handleBlur("phone")}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-primary ${
+                  touched.phone && getFieldError("phone") ? "border-red-400" : "border-gray-300"
+                }`}
                 required
                 minLength={10}
                 maxLength={20}
+                aria-describedby={touched.phone && getFieldError("phone") ? "phone-error" : undefined}
               />
+              {touched.phone && getFieldError("phone") && (
+                <p id="phone-error" role="alert" className="mt-1 text-sm text-red-600">
+                  {getFieldError("phone")}
+                </p>
+              )}
             </div>
 
             {error && (
@@ -217,7 +313,7 @@ export default function LeagueSignupPage({ params }: Props) {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
+              className="w-full bg-green-primary text-white py-3 rounded-lg hover:bg-green-dark transition-colors font-medium disabled:opacity-50"
             >
               {submitting ? "Submitting..." : "Register Team"}
             </button>

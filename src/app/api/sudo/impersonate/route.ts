@@ -17,17 +17,18 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get the league
+    // Get the league (only fields needed for session)
     const league = await prisma.league.findUnique({
       where: { id: leagueId },
+      select: { id: true, slug: true, adminUsername: true },
     });
 
     if (!league) {
       return NextResponse.json({ error: "League not found" }, { status: 404 });
     }
 
-    // Create an admin session for this league
-    const sessionToken = createSessionToken({
+    // Create a signed JWT admin session for this league
+    const sessionToken = await createSessionToken({
       leagueId: league.id,
       leagueSlug: league.slug,
       adminUsername: league.adminUsername,

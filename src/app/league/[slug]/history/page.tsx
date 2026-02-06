@@ -1,21 +1,58 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLeagueBySlug, getMatchupHistory } from "@/lib/actions";
+import {
+  getLeagueBySlug,
+  getSeasons,
+  getActiveSeason,
+  getMatchupHistoryForSeason,
+} from "@/lib/actions";
 import { ScoreCard } from "@/components/ScoreCard";
+import { SeasonSelector } from "@/components/SeasonSelector";
+import type { Metadata } from "next";
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ seasonId?: string }>;
 }
 
-export default async function LeagueHistoryPage({ params }: Props) {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
+  const league = await getLeagueBySlug(slug);
+  if (!league) return { title: "Match History" };
+  return {
+    title: `Match History - ${league.name}`,
+    description: `Match history and results for ${league.name}`,
+  };
+}
+
+export default async function LeagueHistoryPage({ params, searchParams }: Props) {
+  const { slug } = await params;
+  const { seasonId } = await searchParams;
 
   const league = await getLeagueBySlug(slug);
   if (!league) {
     notFound();
   }
 
-  const matchups = await getMatchupHistory(league.id);
+  const seasons = await getSeasons(league.id);
+  const activeSeason = await getActiveSeason(league.id);
+
+  // Determine which season to show
+  let currentSeasonId: number | null = null;
+  if (seasonId) {
+    const parsed = parseInt(seasonId, 10);
+    if (!isNaN(parsed)) currentSeasonId = parsed;
+  }
+  if (currentSeasonId === null && activeSeason) {
+    currentSeasonId = activeSeason.id;
+  } else if (seasons.length > 0) {
+    currentSeasonId = seasons[0].id;
+  }
+
+  // Get matchups for the current season
+  const matchups = currentSeasonId
+    ? await getMatchupHistoryForSeason(currentSeasonId)
+    : [];
 
   // Group matchups by week and transform to ScoreCard format
   const matchupsByWeek = matchups.reduce(
@@ -23,7 +60,6 @@ export default async function LeagueHistoryPage({ params }: Props) {
       if (!acc[matchup.weekNumber]) {
         acc[matchup.weekNumber] = [];
       }
-      // Transform to ScoreCard format
       acc[matchup.weekNumber].push({
         id: matchup.id,
         teamA: {
@@ -64,22 +100,42 @@ export default async function LeagueHistoryPage({ params }: Props) {
     .map(Number)
     .sort((a, b) => b - a);
 
+  const currentSeason = currentSeasonId
+    ? seasons.find((s) => s.id === currentSeasonId)
+    : null;
+
   return (
-    <div className="min-h-screen bg-green-50">
+    <div className="min-h-screen bg-bg-primary">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="mb-6">
           <Link
             href={`/league/${slug}`}
-            className="text-green-600 hover:text-green-700"
+            className="text-green-primary hover:text-green-dark"
           >
             &larr; Back to {league.name}
           </Link>
         </div>
 
-        <h1 className="text-3xl font-bold text-green-800 mb-2">Match History</h1>
-        <p className="text-gray-600 mb-8">{league.name}</p>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-3xl font-bold text-green-dark">Match History</h1>
+          {seasons.length > 0 && (
+            <SeasonSelector
+              seasons={seasons}
+              currentSeasonId={currentSeasonId}
+              leagueSlug={slug}
+            />
+          )}
+        </div>
+        <p className="text-gray-600 mb-8">
+          {league.name}
+          {currentSeason && ` - ${currentSeason.name}`}
+        </p>
 
-        {matchups.length === 0 ? (
+        {seasons.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-8 text-center">
+            <p className="text-gray-500">No seasons have been created yet.</p>
+          </div>
+        ) : matchups.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <p className="text-gray-500">No matches have been played yet.</p>
           </div>

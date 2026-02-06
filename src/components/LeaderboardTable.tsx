@@ -16,16 +16,17 @@ interface Team {
 interface LeaderboardTableProps {
   teams: Team[];
   leagueSlug: string;
+  hideMovement?: boolean;
 }
 
-function MovementIndicator({ change, inverted = false }: { change: number | null | undefined; inverted?: boolean }) {
+function MovementIndicator({ change, inverted = false, label }: { change: number | null | undefined; inverted?: boolean; label: string }) {
   if (change === null || change === undefined) {
     return null;
   }
 
   if (change === 0) {
     return (
-      <span className="inline-flex items-center text-xs text-gray-400 ml-1">
+      <span className="inline-flex items-center text-xs text-gray-400 ml-1" aria-label={`${label} unchanged`}>
         —
       </span>
     );
@@ -35,11 +36,12 @@ function MovementIndicator({ change, inverted = false }: { change: number | null
   // For handicap: we might want inverted logic where lower handicap = better
   const isPositive = inverted ? change < 0 : change > 0;
   const absChange = Math.abs(change);
+  const direction = isPositive ? "up" : "down";
 
   if (isPositive) {
     return (
-      <span className="inline-flex items-center text-xs text-green-600 ml-1">
-        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+      <span className="inline-flex items-center text-xs text-green-600 ml-1" role="img" aria-label={`${label} ${direction} ${absChange}`}>
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
           <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
         </svg>
         <span className="font-medium">{absChange}</span>
@@ -47,8 +49,8 @@ function MovementIndicator({ change, inverted = false }: { change: number | null
     );
   } else {
     return (
-      <span className="inline-flex items-center text-xs text-red-600 ml-1">
-        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+      <span className="inline-flex items-center text-xs text-red-600 ml-1" role="img" aria-label={`${label} ${direction} ${absChange}`}>
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
           <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
         <span className="font-medium">{absChange}</span>
@@ -57,21 +59,22 @@ function MovementIndicator({ change, inverted = false }: { change: number | null
   }
 }
 
-export function LeaderboardTable({ teams, leagueSlug }: LeaderboardTableProps) {
+export function LeaderboardTable({ teams, leagueSlug, hideMovement = false }: LeaderboardTableProps) {
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-[var(--green-primary)]/20">
       <div className="overflow-x-auto">
         <table className="w-full text-left">
+          <caption className="sr-only">League standings showing team rankings, handicaps, and match records</caption>
           <thead className="bg-[var(--green-primary)] text-white">
             <tr>
-              <th className="py-4 px-4 font-semibold">Rank</th>
-              <th className="py-4 px-4 font-semibold">Team Name</th>
-              <th className="py-4 px-4 text-center font-semibold">Hcp</th>
-              <th className="py-4 px-4 text-center font-semibold">Rounds</th>
-              <th className="py-4 px-4 text-center font-semibold">Points</th>
-              <th className="py-4 px-4 text-center font-semibold">W</th>
-              <th className="py-4 px-4 text-center font-semibold">L</th>
-              <th className="py-4 px-4 text-center font-semibold">T</th>
+              <th scope="col" className="py-4 px-4 font-semibold">Rank</th>
+              <th scope="col" className="py-4 px-4 font-semibold">Team Name</th>
+              <th scope="col" className="py-4 px-4 text-center font-semibold">Hcp</th>
+              <th scope="col" className="py-4 px-4 text-center font-semibold">Rounds</th>
+              <th scope="col" className="py-4 px-4 text-center font-semibold">Points</th>
+              <th scope="col" className="py-4 px-4 text-center font-semibold">W</th>
+              <th scope="col" className="py-4 px-4 text-center font-semibold">L</th>
+              <th scope="col" className="py-4 px-4 text-center font-semibold">T</th>
             </tr>
           </thead>
           <tbody className="text-[var(--text-primary)]">
@@ -110,7 +113,7 @@ export function LeaderboardTable({ teams, leagueSlug }: LeaderboardTableProps) {
                       >
                         {index + 1}
                       </span>
-                      <MovementIndicator change={team.rankChange} />
+                      {!hideMovement && <MovementIndicator change={team.rankChange} label="Rank" />}
                     </div>
                   </td>
                   <td className="py-4 px-4 font-medium">
@@ -124,7 +127,7 @@ export function LeaderboardTable({ teams, leagueSlug }: LeaderboardTableProps) {
                   <td className="py-4 px-4 text-center">
                     <div className="inline-flex items-center">
                       <span className="text-[var(--gold-dark)]">{team.handicap}</span>
-                      <MovementIndicator change={team.handicapChange} inverted={true} />
+                      {!hideMovement && <MovementIndicator change={team.handicapChange} inverted={true} label="Handicap" />}
                     </div>
                   </td>
                   <td className="py-4 px-4 text-center">{team.roundsPlayed}</td>

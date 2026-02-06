@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { GolfNews } from "@/components/GolfNews";
+import { Logo } from "@/components/Logo";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ async function getFeaturedLeagues() {
 // Golf Flag SVG Component
 function GolfFlag({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 64 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} viewBox="0 0 64 128" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path d="M32 0V128" stroke="currentColor" strokeWidth="3" />
       <path d="M32 4L58 20L32 36V4Z" fill="#FDB913" stroke="#E5A811" strokeWidth="1" />
       <ellipse cx="32" cy="124" rx="16" ry="4" fill="currentColor" opacity="0.3" />
@@ -102,11 +103,7 @@ export default async function Home() {
         <div className="relative max-w-6xl mx-auto px-4 py-16 md:py-24">
           {/* Clubhouse Crest/Badge */}
           <div className="flex justify-center mb-8">
-            <div className="w-20 h-20 rounded-full border-4 border-[var(--gold-primary)] bg-[var(--green-dark)] flex items-center justify-center">
-              <span className="text-[var(--gold-primary)] text-3xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>
-                LL
-              </span>
-            </div>
+            <Logo variant="badge" size="lg" />
           </div>
 
           {/* Main Title - Classic Style */}
@@ -247,7 +244,7 @@ export default async function Home() {
                 className="flex items-center justify-center gap-2 text-[var(--gold-primary)] hover:text-[var(--gold-light)] transition-colors text-sm font-medium"
               >
                 View All Leagues
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </Link>
@@ -278,7 +275,7 @@ export default async function Home() {
               <div className="absolute top-0 left-0 w-2 h-full bg-red-500" />
               <div className="pl-4">
                 <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
                 </div>
@@ -296,7 +293,7 @@ export default async function Home() {
               <div className="absolute top-0 left-0 w-2 h-full bg-white border-l-2 border-[var(--border-color)]" />
               <div className="pl-4">
                 <div className="w-10 h-10 rounded-full bg-[var(--green-primary)]/10 flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-[var(--green-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-[var(--green-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                   </svg>
                 </div>
@@ -314,7 +311,7 @@ export default async function Home() {
               <div className="absolute top-0 left-0 w-2 h-full bg-[var(--gold-primary)]" />
               <div className="pl-4">
                 <div className="w-10 h-10 rounded-full bg-[var(--gold-primary)]/10 flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-[var(--gold-dark)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-[var(--gold-dark)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
@@ -332,7 +329,7 @@ export default async function Home() {
           <div className="grid md:grid-cols-2 gap-6 mt-6">
             <div className="bg-white rounded-lg p-6 shadow-sm border border-[var(--border-color)] flex items-start gap-4">
               <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                 </svg>
               </div>
@@ -346,7 +343,7 @@ export default async function Home() {
 
             <div className="bg-white rounded-lg p-6 shadow-sm border border-[var(--border-color)] flex items-start gap-4">
               <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
               </div>
@@ -480,7 +477,7 @@ export default async function Home() {
                     className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[var(--gold-primary)] text-[var(--green-dark)] font-semibold rounded-sm hover:bg-[var(--gold-light)] transition-colors"
                   >
                     Start Your League
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                     </svg>
                   </Link>
@@ -497,11 +494,7 @@ export default async function Home() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-8">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full border-2 border-[var(--gold-primary)] flex items-center justify-center">
-                <span className="text-[var(--gold-primary)] font-bold" style={{ fontFamily: "var(--font-playfair)" }}>
-                  LL
-                </span>
-              </div>
+              <Logo variant="badge" size="sm" />
               <span className="text-xl" style={{ fontFamily: "var(--font-playfair)" }}>
                 LeagueLinks
               </span>

@@ -80,8 +80,17 @@ yarn-error.log*
 scripts/
 
 # ===========================================
+# TESTING
+# ===========================================
+/test-results/
+/playwright-report/
+/blob-report/
+test-failure-*.png
+
+# ===========================================
 # PLANNING FILES (optional - remove if you want to track these)
 # ===========================================
 task_plan.md
 findings.md
 progress.md
+.github/

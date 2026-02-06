@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createLeague } from "@/lib/actions";
 
 export default function NewLeaguePage() {
-  const router = useRouter();
   const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<{
     slug: string;
-    adminUsername: string;
   } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,11 +19,22 @@ export default function NewLeaguePage() {
     setLoading(true);
     setError("");
 
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const league = await createLeague(name);
+      const league = await createLeague(name, password);
       setSuccess({
         slug: league.slug,
-        adminUsername: league.adminUsername,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create league");
@@ -57,19 +67,10 @@ export default function NewLeaguePage() {
           </div>
 
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <h2 className="font-semibold text-gray-800 mb-3">Admin Credentials</h2>
-            <div className="space-y-2 text-sm">
-              <p>
-                <span className="text-gray-500">Username:</span>{" "}
-                <code className="bg-gray-200 px-2 py-1 rounded">{success.adminUsername}</code>
-              </p>
-              <p>
-                <span className="text-gray-500">Password:</span>{" "}
-                <code className="bg-gray-200 px-2 py-1 rounded">pass@word1</code>
-              </p>
-            </div>
-            <p className="text-xs text-gray-500 mt-3">
-              Save these credentials! You&apos;ll need them to manage your league.
+            <h2 className="font-semibold text-gray-800 mb-3">Admin Access</h2>
+            <p className="text-sm text-gray-600">
+              Use the password you just set to log in to the admin dashboard.
+              You can change it later in admin settings.
             </p>
           </div>
 
@@ -132,6 +133,44 @@ export default function NewLeaguePage() {
             </p>
           </div>
 
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
+              Admin Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              required
+              minLength={8}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              id="confirmPassword"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter your password"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              required
+              minLength={8}
+            />
+          </div>
+
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
               {error}
@@ -140,7 +179,7 @@ export default function NewLeaguePage() {
 
           <button
             type="submit"
-            disabled={loading || name.trim().length < 3}
+            disabled={loading || name.trim().length < 3 || password.length < 8 || password !== confirmPassword}
             className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Creating..." : "Create League"}

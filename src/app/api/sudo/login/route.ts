@@ -3,9 +3,20 @@ import {
   validateSuperAdminCredentials,
   createSuperAdminSessionToken,
 } from "@/lib/superadmin-auth";
+import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    // Rate limit check — stricter for super-admin
+    const ip = getClientIp(request);
+    const rateCheck = checkRateLimit(`sudo-login:${ip}`, RATE_LIMITS.sudoLogin);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
+      );
+    }
+
     const { username, password } = await request.json();
 
     // Validate input
@@ -16,7 +27,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate credentials
+    // Validate credentials against database
     const result = await validateSuperAdminCredentials(username, password);
 
     if (!result.valid || !result.superAdminId) {
@@ -26,8 +37,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create session token
-    const sessionToken = createSuperAdminSessionToken({
+    // Create signed JWT session token
+    const sessionToken = await createSuperAdminSessionToken({
       superAdminId: result.superAdminId,
       username,
     });
