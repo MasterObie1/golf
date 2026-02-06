@@ -1,0 +1,78 @@
+"use client";
+
+import { useRouter, useSearchParams } from "next/navigation";
+
+interface Season {
+  id: number;
+  name: string;
+  year: number;
+  seasonNumber: number;
+  isActive: boolean;
+}
+
+interface SeasonSelectorProps {
+  seasons: Season[];
+  currentSeasonId: number | null;
+  leagueSlug: string;
+  showAllTime?: boolean;
+}
+
+export function SeasonSelector({
+  seasons,
+  currentSeasonId,
+  leagueSlug,
+  showAllTime = false,
+}: SeasonSelectorProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const handleSeasonChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (value === "all-time") {
+      params.set("view", "all-time");
+      params.delete("seasonId");
+    } else if (value) {
+      params.set("seasonId", value);
+      params.delete("view");
+    } else {
+      params.delete("seasonId");
+      params.delete("view");
+    }
+
+    router.push(`?${params.toString()}`);
+  };
+
+  const currentValue = searchParams.get("view") === "all-time"
+    ? "all-time"
+    : currentSeasonId?.toString() || "";
+
+  if (seasons.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <label htmlFor="season-select" className="text-sm font-medium text-text-secondary">
+        Season:
+      </label>
+      <select
+        id="season-select"
+        value={currentValue}
+        onChange={handleSeasonChange}
+        className="px-3 py-1.5 border border-border rounded-lg text-sm bg-bg-white focus:outline-none focus:ring-2 focus:ring-green-primary"
+      >
+        {seasons.map((season) => (
+          <option key={season.id} value={season.id.toString()}>
+            {season.name}
+            {season.isActive ? " (Current)" : ""}
+          </option>
+        ))}
+        {showAllTime && (
+          <option value="all-time">All-Time Stats</option>
+        )}
+      </select>
+    </div>
+  );
+}

@@ -2,22 +2,40 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { createSessionToken } from "@/lib/auth";
+import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const { username, password, leagueSlug } = await request.json();
+    // Rate limit check
+    const ip = getClientIp(request);
+    const rateCheck = checkRateLimit(`admin-login:${ip}`, RATE_LIMITS.login);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
+      );
+    }
+
+    const { password, leagueSlug } = await request.json();
 
     // Validate input
-    if (!username || !password || !leagueSlug) {
+    if (!password || !leagueSlug) {
       return NextResponse.json(
-        { error: "Username, password, and league are required" },
+        { error: "Password and league are required" },
         { status: 400 }
       );
     }
 
-    // Find the league by slug
+    // Find the league by slug — only fetch auth fields
     const league = await prisma.league.findUnique({
       where: { slug: leagueSlug },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        adminUsername: true,
+        adminPassword: true,
+      },
     });
 
     if (!league) {
@@ -27,25 +45,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate credentials
-    if (username !== league.adminUsername) {
-      return NextResponse.json(
-        { error: "Invalid username or password" },
-        { status: 401 }
-      );
-    }
-
     // Compare password with hashed password
     const passwordValid = await bcrypt.compare(password, league.adminPassword);
     if (!passwordValid) {
       return NextResponse.json(
-        { error: "Invalid username or password" },
+        { error: "Invalid password" },
         { status: 401 }
       );
     }
 
-    // Create session token
-    const sessionToken = createSessionToken({
+    // Create signed JWT session token
+    const sessionToken = await createSessionToken({
       leagueId: league.id,
       leagueSlug: league.slug,
       adminUsername: league.adminUsername,

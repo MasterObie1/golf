@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { SignJWT, jwtVerify } from "jose";
 
 export interface AdminSession {
   leagueId: number;
@@ -6,8 +7,20 @@ export interface AdminSession {
   adminUsername: string;
 }
 
+function getSessionSecret(): Uint8Array {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) {
+    throw new Error(
+      "SESSION_SECRET environment variable is required. " +
+      "Generate one with: openssl rand -base64 32"
+    );
+  }
+  return new TextEncoder().encode(secret);
+}
+
 /**
  * Parse the admin session from the cookie.
+ * Verifies the JWT signature before trusting the payload.
  * Returns null if no valid session exists.
  */
 export async function getAdminSession(): Promise<AdminSession | null> {
@@ -19,8 +32,16 @@ export async function getAdminSession(): Promise<AdminSession | null> {
   }
 
   try {
-    const decoded = Buffer.from(sessionCookie, "base64").toString("utf-8");
-    const session = JSON.parse(decoded) as AdminSession;
+    const secret = getSessionSecret();
+    const { payload } = await jwtVerify(sessionCookie, secret, {
+      algorithms: ["HS256"],
+    });
+
+    const session: AdminSession = {
+      leagueId: payload.leagueId as number,
+      leagueSlug: payload.leagueSlug as string,
+      adminUsername: payload.adminUsername as string,
+    };
 
     // Validate session structure
     if (!session.leagueId || !session.leagueSlug || !session.adminUsername) {
@@ -83,8 +104,45 @@ export async function isLeagueAdmin(leagueSlug: string): Promise<boolean> {
 }
 
 /**
- * Create a session token for the given league admin.
+ * Create a signed JWT session token for the given league admin.
  */
-export function createSessionToken(session: AdminSession): string {
-  return Buffer.from(JSON.stringify(session)).toString("base64");
+export async function createSessionToken(session: AdminSession): Promise<string> {
+  const secret = getSessionSecret();
+
+  return new SignJWT({
+    leagueId: session.leagueId,
+    leagueSlug: session.leagueSlug,
+    adminUsername: session.adminUsername,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(secret);
+}
+
+/**
+ * Verify a JWT token and return the session payload.
+ * Used by middleware where cookies() is not available.
+ */
+export async function verifySessionToken(token: string): Promise<AdminSession | null> {
+  try {
+    const secret = getSessionSecret();
+    const { payload } = await jwtVerify(token, secret, {
+      algorithms: ["HS256"],
+    });
+
+    const session: AdminSession = {
+      leagueId: payload.leagueId as number,
+      leagueSlug: payload.leagueSlug as string,
+      adminUsername: payload.adminUsername as string,
+    };
+
+    if (!session.leagueId || !session.leagueSlug || !session.adminUsername) {
+      return null;
+    }
+
+    return session;
+  } catch {
+    return null;
+  }
 }

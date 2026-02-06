@@ -2,9 +2,26 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLeagueBySlug, getTeamById, getTeamMatchupHistory } from "@/lib/actions";
 import { ScoreCard } from "@/components/ScoreCard";
+import type { Metadata } from "next";
 
 interface Props {
   params: Promise<{ slug: string; teamId: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug, teamId } = await params;
+  const teamIdNum = parseInt(teamId, 10);
+  if (isNaN(teamIdNum)) return { title: "Team" };
+
+  const [league, team] = await Promise.all([
+    getLeagueBySlug(slug),
+    getTeamById(teamIdNum),
+  ]);
+  if (!league || !team) return { title: "Team" };
+  return {
+    title: `${team.name} - ${league.name}`,
+    description: `Match history and stats for ${team.name} in ${league.name}`,
+  };
 }
 
 export default async function TeamHistoryPage({ params }: Props) {
@@ -80,29 +97,29 @@ export default async function TeamHistoryPage({ params }: Props) {
   }, 0);
 
   return (
-    <div className="min-h-screen bg-green-50">
+    <div className="min-h-screen bg-bg-primary">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="mb-6">
           <Link
             href={`/league/${slug}/leaderboard`}
-            className="text-green-600 hover:text-green-700"
+            className="text-green-primary hover:text-green-dark"
           >
             &larr; Back to Leaderboard
           </Link>
         </div>
 
-        <h1 className="text-3xl font-bold text-green-800 mb-2">{team.name}</h1>
+        <h1 className="text-3xl font-bold text-green-dark mb-2">{team.name}</h1>
         <p className="text-gray-600 mb-4">{league.name}</p>
 
         {/* Team Stats Summary */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
             <div>
-              <div className="text-2xl font-bold text-green-700">{totalPoints}</div>
+              <div className="text-2xl font-bold text-green-primary">{totalPoints}</div>
               <div className="text-sm text-gray-500">Total Points</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-green-600">{team.wins}</div>
+              <div className="text-2xl font-bold text-success">{team.wins}</div>
               <div className="text-sm text-gray-500">Wins</div>
             </div>
             <div>
@@ -120,7 +137,7 @@ export default async function TeamHistoryPage({ params }: Props) {
           </div>
         </div>
 
-        <h2 className="text-xl font-semibold text-green-800 mb-4">Match History</h2>
+        <h2 className="text-xl font-semibold text-green-dark mb-4">Match History</h2>
 
         {matchups.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-8 text-center">

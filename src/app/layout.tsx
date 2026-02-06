@@ -22,8 +22,22 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "LeagueLinks",
+  title: {
+    default: "LeagueLinks",
+    template: "%s | LeagueLinks",
+  },
   description: "Premium golf league management - connecting golfers, teams, and leagues",
+  openGraph: {
+    type: "website",
+    siteName: "LeagueLinks",
+    title: "LeagueLinks",
+    description: "Premium golf league management - connecting golfers, teams, and leagues",
+  },
+  twitter: {
+    card: "summary",
+    title: "LeagueLinks",
+    description: "Premium golf league management - connecting golfers, teams, and leagues",
+  },
 };
 
 export default function RootLayout({
@@ -36,8 +50,16 @@ export default function RootLayout({
       <body
         className={`${jakarta.variable} ${inter.variable} ${playfair.variable} antialiased`}
       >
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-green-800 focus:rounded-lg focus:shadow-lg focus:font-semibold"
+        >
+          Skip to main content
+        </a>
         <NavigationWrapper />
-        {children}
+        <main id="main-content">
+          {children}
+        </main>
       </body>
     </html>
   );

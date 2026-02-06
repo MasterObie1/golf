@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { jwtVerify } from "jose";
 
 interface AdminSession {
   leagueId: number;
@@ -12,15 +13,34 @@ interface SuperAdminSession {
   username: string;
 }
 
+function getSessionSecret(): Uint8Array {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) {
+    // In middleware, we can't throw — just return empty to deny all sessions
+    return new Uint8Array(0);
+  }
+  return new TextEncoder().encode(secret);
+}
+
 /**
- * Parse admin session from cookie in middleware context.
+ * Parse and verify admin session JWT from cookie in middleware context.
  */
-function parseSession(cookie: string | undefined): AdminSession | null {
+async function parseSession(cookie: string | undefined): Promise<AdminSession | null> {
   if (!cookie) return null;
 
   try {
-    const decoded = Buffer.from(cookie, "base64").toString("utf-8");
-    const session = JSON.parse(decoded) as AdminSession;
+    const secret = getSessionSecret();
+    if (secret.length === 0) return null;
+
+    const { payload } = await jwtVerify(cookie, secret, {
+      algorithms: ["HS256"],
+    });
+
+    const session: AdminSession = {
+      leagueId: payload.leagueId as number,
+      leagueSlug: payload.leagueSlug as string,
+      adminUsername: payload.adminUsername as string,
+    };
 
     if (!session.leagueId || !session.leagueSlug || !session.adminUsername) {
       return null;
@@ -33,14 +53,23 @@ function parseSession(cookie: string | undefined): AdminSession | null {
 }
 
 /**
- * Parse super-admin session from cookie in middleware context.
+ * Parse and verify super-admin session JWT from cookie in middleware context.
  */
-function parseSuperAdminSession(cookie: string | undefined): SuperAdminSession | null {
+async function parseSuperAdminSession(cookie: string | undefined): Promise<SuperAdminSession | null> {
   if (!cookie) return null;
 
   try {
-    const decoded = Buffer.from(cookie, "base64").toString("utf-8");
-    const session = JSON.parse(decoded) as SuperAdminSession;
+    const secret = getSessionSecret();
+    if (secret.length === 0) return null;
+
+    const { payload } = await jwtVerify(cookie, secret, {
+      algorithms: ["HS256"],
+    });
+
+    const session: SuperAdminSession = {
+      superAdminId: payload.superAdminId as number,
+      username: payload.username as string,
+    };
 
     if (!session.superAdminId || !session.username) {
       return null;
@@ -53,10 +82,10 @@ function parseSuperAdminSession(cookie: string | undefined): SuperAdminSession |
 }
 
 /**
- * Middleware to protect league admin routes.
- * Redirects unauthenticated users to the league's login page.
+ * Middleware to protect league admin routes and super-admin routes.
+ * Redirects unauthenticated users to the appropriate login page.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow access to API routes
@@ -73,7 +102,7 @@ export function middleware(request: NextRequest) {
 
     // Check for valid super-admin session
     const sudoSessionCookie = request.cookies.get("sudo_session")?.value;
-    const sudoSession = parseSuperAdminSession(sudoSessionCookie);
+    const sudoSession = await parseSuperAdminSession(sudoSessionCookie);
 
     if (!sudoSession) {
       // No session - redirect to sudo login
@@ -98,7 +127,7 @@ export function middleware(request: NextRequest) {
 
     // Check for valid session cookie
     const sessionCookie = request.cookies.get("admin_session")?.value;
-    const session = parseSession(sessionCookie);
+    const session = await parseSession(sessionCookie);
 
     if (!session) {
       // No session - redirect to league's login page
