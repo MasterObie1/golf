@@ -91,7 +91,6 @@ import {
   submitMatchup,
   deleteMatchup,
   recalculateLeagueStats,
-  getApprovedTeams,
   getLeaderboard,
 } from "@/lib/actions";
 import { requireAdmin, requireLeagueAdmin, getAdminSession } from "@/lib/auth";
@@ -176,7 +175,7 @@ describe("createLeague + getLeagueBySlug", () => {
     const found = await getLeagueBySlug("secret-league");
     expect(found).not.toBeNull();
     // The select clause should exclude adminPassword
-    expect((found as any).adminPassword).toBeUndefined();
+    expect((found as unknown as Record<string, unknown>).adminPassword).toBeUndefined();
   });
 
   it("returns null for non-existent slug", async () => {

@@ -22,10 +22,16 @@ export function Navigation({ adminSession }: NavigationProps) {
   const menuItemsRef = useRef<(HTMLAnchorElement | null)[]>([]);
 
   // Close mobile menu on route change
+  const prevPathname = useRef(pathname);
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    setMobileMenuOpen(false);
-    setLeaguesOpen(false);
-  }, [pathname]);
+    if (prevPathname.current !== pathname) {
+      prevPathname.current = pathname;
+      setMobileMenuOpen(false);
+      setLeaguesOpen(false);
+    }
+  });
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Click outside to close dropdown
   useEffect(() => {

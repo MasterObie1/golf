@@ -40,7 +40,7 @@ export default async function LeagueLeaderboardPage({ params, searchParams }: Pr
 
   // Determine which season to show
   let currentSeasonId: number | null = null;
-  let showAllTime = view === "all-time";
+  const showAllTime = view === "all-time";
 
   if (!showAllTime) {
     if (seasonId) {

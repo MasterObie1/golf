@@ -11,8 +11,6 @@ import { test, expect } from "@playwright/test";
 const LEAGUE_SLUG = "alexs-league";
 const LEAGUE_URL = `/league/${LEAGUE_SLUG}`;
 const NUM_TEAMS = 18;
-const NUM_WEEKS = 10;
-const MATCHUPS_PER_WEEK = 9; // 18 teams / 2
 const ADMIN_PASSWORD = "alexleague123";
 
 test.describe("Alex's League — Home Page", () => {

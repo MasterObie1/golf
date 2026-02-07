@@ -20,6 +20,7 @@ interface SeasonSelectorProps {
 export function SeasonSelector({
   seasons,
   currentSeasonId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   leagueSlug,
   showAllTime = false,
 }: SeasonSelectorProps) {

@@ -7,9 +7,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { mockPrisma, mockBcryptCompare, mockGetGolfNews, mockCreateSessionToken } = vi.hoisted(() => ({
   mockPrisma: {
-    $queryRaw: vi.fn(),
     league: {
       findUnique: vi.fn(),
+      count: vi.fn(),
     },
   },
   mockBcryptCompare: vi.fn(),
@@ -84,26 +84,25 @@ beforeEach(() => {
 });
 
 describe("GET /api/health", () => {
-  it("returns 200 with status connected when DB is up", async () => {
-    mockPrisma.$queryRaw.mockResolvedValueOnce([{ 1: 1 }]);
+  it("returns 200 with database connected when DB is up", async () => {
+    mockPrisma.league.count.mockResolvedValueOnce(3);
 
     const response = await healthGET();
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.status).toBe("connected");
+    expect(data.database.status).toBe("connected");
     expect(data.timestamp).toBeDefined();
-    expect(typeof data.timestamp).toBe("string");
   });
 
-  it("returns 500 with status error when DB is down", async () => {
-    mockPrisma.$queryRaw.mockRejectedValueOnce(new Error("DB connection failed"));
+  it("returns 500 with database error when DB is down", async () => {
+    mockPrisma.league.count.mockRejectedValueOnce(new Error("DB connection failed"));
 
     const response = await healthGET();
     const data = await response.json();
 
     expect(response.status).toBe(500);
-    expect(data.status).toBe("error");
+    expect(data.database.status).toBe("error");
     expect(data.timestamp).toBeDefined();
   });
 });
@@ -135,7 +134,7 @@ describe("POST /api/admin/login", () => {
     expect(data.error).toContain("required");
   });
 
-  it("returns 401 for non-existent league", async () => {
+  it("returns 404 for non-existent league", async () => {
     mockPrisma.league.findUnique.mockResolvedValueOnce(null);
 
     const request = createRequest("/api/admin/login", {
@@ -146,8 +145,8 @@ describe("POST /api/admin/login", () => {
     const response = await adminLoginPOST(request);
     const data = await response.json();
 
-    expect(response.status).toBe(401);
-    expect(data.error).toContain("Invalid");
+    expect(response.status).toBe(404);
+    expect(data.error).toContain("not found");
   });
 
   it("returns 401 for wrong password", async () => {

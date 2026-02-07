@@ -44,7 +44,6 @@ test.describe("Admin login flow", () => {
   // This test suite requires a league to exist.
   // We use a well-known test league or create one in a beforeAll.
   let leagueSlug: string;
-  let adminUsername: string;
   const password = "e2etestadmin123";
 
   test.beforeAll(async ({ browser }) => {
@@ -62,9 +61,6 @@ test.describe("Admin login flow", () => {
     // Extract slug from the admin login link
     const link = await page.getAttribute('a[href*="/admin/login"]', "href");
     leagueSlug = link!.split("/league/")[1].split("/admin")[0];
-
-    // Extract admin username
-    adminUsername = (await page.locator("code").first().textContent()) || "";
     await page.close();
   });
 

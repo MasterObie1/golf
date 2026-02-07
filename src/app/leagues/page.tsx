@@ -31,6 +31,7 @@ export default function LeaguesPage() {
   }, []);
 
   // Search as user types
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (query.length < 2) {
       setResults(allLeagues);
@@ -46,6 +47,7 @@ export default function LeaguesPage() {
 
     return () => clearTimeout(timer);
   }, [query, allLeagues]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <div className="min-h-screen bg-bg-primary">

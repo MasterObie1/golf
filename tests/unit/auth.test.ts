@@ -215,7 +215,7 @@ describe("getAdminSession", () => {
 
     mockedCookies.mockResolvedValue({
       get: (name: string) => (name === "admin_session" ? { value: token } : undefined),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     const result = await getAdminSession();
     expect(result).toEqual(session);
@@ -224,7 +224,7 @@ describe("getAdminSession", () => {
   it("returns null when no cookie exists", async () => {
     mockedCookies.mockResolvedValue({
       get: () => undefined,
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     const result = await getAdminSession();
     expect(result).toBeNull();
@@ -234,7 +234,7 @@ describe("getAdminSession", () => {
     mockedCookies.mockResolvedValue({
       get: (name: string) =>
         name === "admin_session" ? { value: "invalid-token" } : undefined,
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     const result = await getAdminSession();
     expect(result).toBeNull();
@@ -256,7 +256,7 @@ describe("requireAdmin", () => {
     const token = await createSessionToken(session);
     mockedCookies.mockResolvedValue({
       get: (name: string) => (name === "admin_session" ? { value: token } : undefined),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     const result = await requireAdmin();
     expect(result).toEqual(session);
@@ -265,7 +265,7 @@ describe("requireAdmin", () => {
   it("throws when not authenticated", async () => {
     mockedCookies.mockResolvedValue({
       get: () => undefined,
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     await expect(requireAdmin()).rejects.toThrow("Unauthorized");
   });
@@ -286,7 +286,7 @@ describe("requireLeagueAdmin", () => {
     const token = await createSessionToken(session);
     mockedCookies.mockResolvedValue({
       get: (name: string) => (name === "admin_session" ? { value: token } : undefined),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     const result = await requireLeagueAdmin("my-league");
     expect(result).toEqual(session);
@@ -302,7 +302,7 @@ describe("requireLeagueAdmin", () => {
     const token = await createSessionToken(session);
     mockedCookies.mockResolvedValue({
       get: (name: string) => (name === "admin_session" ? { value: token } : undefined),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     await expect(requireLeagueAdmin("other-league")).rejects.toThrow(
       "Unauthorized: You do not have access to this league"
@@ -312,7 +312,7 @@ describe("requireLeagueAdmin", () => {
   it("throws when not authenticated at all", async () => {
     mockedCookies.mockResolvedValue({
       get: () => undefined,
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     await expect(requireLeagueAdmin("any-league")).rejects.toThrow("Unauthorized");
   });
@@ -331,7 +331,7 @@ describe("isAdmin", () => {
     });
     mockedCookies.mockResolvedValue({
       get: (name: string) => (name === "admin_session" ? { value: token } : undefined),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     expect(await isAdmin()).toBe(true);
   });
@@ -339,7 +339,7 @@ describe("isAdmin", () => {
   it("returns false when not authenticated", async () => {
     mockedCookies.mockResolvedValue({
       get: () => undefined,
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     expect(await isAdmin()).toBe(false);
   });
@@ -354,7 +354,7 @@ describe("isLeagueAdmin", () => {
     });
     mockedCookies.mockResolvedValue({
       get: (name: string) => (name === "admin_session" ? { value: token } : undefined),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     expect(await isLeagueAdmin("test-league")).toBe(true);
   });
@@ -367,7 +367,7 @@ describe("isLeagueAdmin", () => {
     });
     mockedCookies.mockResolvedValue({
       get: (name: string) => (name === "admin_session" ? { value: token } : undefined),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     expect(await isLeagueAdmin("other-league")).toBe(false);
   });
@@ -375,7 +375,7 @@ describe("isLeagueAdmin", () => {
   it("returns false when not authenticated", async () => {
     mockedCookies.mockResolvedValue({
       get: () => undefined,
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof cookies>>);
 
     expect(await isLeagueAdmin("any-league")).toBe(false);
   });
