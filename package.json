@@ -10,7 +10,8 @@
     "test": "vitest",
     "test:ci": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "npm run seed:e2e && playwright test",
+    "seed:e2e": "npx tsx scripts/seed-e2e.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.0",

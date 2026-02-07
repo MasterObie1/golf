@@ -61,6 +61,11 @@ vi.mock("next/headers", () => ({
   })),
 }));
 
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+}));
+
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: () => ({ allowed: true, remaining: 100, resetAt: Date.now() + 60000 }),
   RATE_LIMITS: {

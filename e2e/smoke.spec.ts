@@ -70,13 +70,11 @@ test.describe("Admin login flow", () => {
 
   test("admin login page loads", async ({ page }) => {
     await page.goto(`/league/${leagueSlug}/admin/login`);
-    await expect(page.locator("#username")).toBeVisible();
     await expect(page.locator("#password")).toBeVisible();
   });
 
   test("rejects invalid credentials", async ({ page }) => {
     await page.goto(`/league/${leagueSlug}/admin/login`);
-    await page.fill("#username", "wrong");
     await page.fill("#password", "wrong");
     await page.click('button[type="submit"]');
 
@@ -86,7 +84,6 @@ test.describe("Admin login flow", () => {
 
   test("accepts valid credentials", async ({ page }) => {
     await page.goto(`/league/${leagueSlug}/admin/login`);
-    await page.fill("#username", adminUsername);
     await page.fill("#password", password);
     await page.click('button[type="submit"]');
 
