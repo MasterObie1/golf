@@ -200,9 +200,7 @@ describe("POST /api/admin/login", () => {
 
 describe("GET /api/golf-news", () => {
   it("returns 200 with news array", async () => {
-    const request = createRequest("/api/golf-news");
-
-    const response = await golfNewsGET(request);
+    const response = await golfNewsGET();
     const data = await response.json();
 
     expect(response.status).toBe(200);
