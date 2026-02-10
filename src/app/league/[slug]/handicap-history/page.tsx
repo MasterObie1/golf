@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  getLeagueBySlug,
-  getSeasons,
-  getActiveSeason,
-  getHandicapHistoryForSeason,
-} from "@/lib/actions";
+import { getLeagueBySlug } from "@/lib/actions/leagues";
+import { getSeasons, getActiveSeason } from "@/lib/actions/seasons";
+import { getHandicapHistoryForSeason } from "@/lib/actions/handicap-settings";
 import { SeasonSelector } from "@/components/SeasonSelector";
+import { ContourBackground } from "@/components/grounds/ContourBackground";
 import type { Metadata } from "next";
+
+export const revalidate = 60;
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -33,8 +33,10 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
     notFound();
   }
 
-  const seasons = await getSeasons(league.id);
-  const activeSeason = await getActiveSeason(league.id);
+  const [seasons, activeSeason] = await Promise.all([
+    getSeasons(league.id),
+    getActiveSeason(league.id),
+  ]);
 
   // Determine which season to show
   let currentSeasonId: number | null = null;
@@ -89,19 +91,21 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
     : null;
 
   return (
-    <div className="min-h-screen bg-bg-primary">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-surface relative">
+      <ContourBackground variant="hills" color="text-fairway" opacity="opacity-[0.04]" />
+
+      <div className="relative max-w-6xl mx-auto px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
           <Link
             href={`/league/${slug}/leaderboard${currentSeasonId ? `?seasonId=${currentSeasonId}` : ""}`}
-            className="text-green-primary hover:text-green-dark"
+            className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider transition-colors"
           >
             &larr; Back to Leaderboard
           </Link>
         </div>
 
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-3xl font-bold text-green-dark">Handicap History</h1>
+          <h1 className="text-3xl font-bold text-scorecard-pencil font-display uppercase tracking-wider">Handicap History</h1>
           {seasons.length > 0 && (
             <SeasonSelector
               seasons={seasons}
@@ -110,50 +114,50 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
             />
           )}
         </div>
-        <p className="text-gray-600 mb-8">
+        <p className="text-text-secondary mb-8 font-sans">
           {league.name}
-          {currentSeason && ` - ${currentSeason.name}`}
+          {currentSeason && ` \u2014 ${currentSeason.name}`}
         </p>
 
         {seasons.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-gray-500">No seasons have been created yet.</p>
+          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-scorecard-line/50 p-8 text-center">
+            <p className="text-text-muted font-sans">No seasons have been created yet.</p>
           </div>
         ) : handicapHistory.length === 0 || weekNumbers.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-gray-500">No handicap data available yet.</p>
+          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-scorecard-line/50 p-8 text-center">
+            <p className="text-text-muted font-sans">No handicap data available yet.</p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-border">
+          <div className="bg-scorecard-paper rounded-lg shadow-md overflow-hidden border border-scorecard-line/50">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-green-dark text-white">
+                <thead className="bg-rough text-white">
                   <tr>
-                    <th className="py-3 px-4 text-left font-semibold sticky left-0 bg-green-dark z-10">
+                    <th className="py-3 px-4 text-left font-display font-semibold uppercase tracking-wider text-xs sticky left-0 bg-rough z-10">
                       Team
                     </th>
                     {weekNumbers.map((week) => (
-                      <th key={week} className="py-3 px-3 text-center font-semibold min-w-[70px]">
+                      <th key={week} className="py-3 px-3 text-center font-display font-semibold uppercase tracking-wider text-xs min-w-[70px]">
                         Wk {week}
                       </th>
                     ))}
-                    <th className="py-3 px-4 text-center font-semibold bg-green-primary">
+                    <th className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs bg-fairway">
                       Current
                     </th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-700">
+                <tbody className="text-scorecard-pencil">
                   {handicapHistory.map((team, idx) => (
                     <tr
                       key={team.teamId}
-                      className={`border-b border-gray-100 ${
-                        idx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                      } hover:bg-bg-primary`}
+                      className={`border-b border-scorecard-line/30 ${
+                        idx % 2 === 0 ? "bg-scorecard-paper" : "bg-bunker/10"
+                      } hover:bg-bunker/20`}
                     >
-                      <td className="py-3 px-4 font-medium sticky left-0 bg-inherit z-10">
+                      <td className="py-3 px-4 font-medium font-sans sticky left-0 bg-inherit z-10">
                         <Link
                           href={`/league/${slug}/team/${team.teamId}`}
-                          className="text-green-primary hover:text-green-dark hover:underline"
+                          className="text-fairway hover:text-rough hover:underline transition-colors"
                         >
                           {team.teamName}
                         </Link>
@@ -163,14 +167,14 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
                         const change = getChange(team.teamId, week);
 
                         return (
-                          <td key={week} className="py-3 px-3 text-center">
+                          <td key={week} className="py-3 px-3 text-center font-mono tabular-nums">
                             {hcp !== undefined ? (
                               <div className="flex items-center justify-center gap-1">
                                 <span>{hcp}</span>
                                 {change !== null && change !== 0 && (
                                   <span
                                     className={`text-xs ${
-                                      change < 0 ? "text-success" : "text-error"
+                                      change < 0 ? "text-fairway" : "text-board-red"
                                     }`}
                                   >
                                     {change < 0 ? (
@@ -192,13 +196,13 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
                                 )}
                               </div>
                             ) : (
-                              <span className="text-gray-300">—</span>
+                              <span className="text-text-light" title="No handicap data for this week">&mdash;</span>
                             )}
                           </td>
                         );
                       })}
-                      <td className="py-3 px-4 text-center font-bold text-green-primary bg-success-bg">
-                        {team.currentHandicap}
+                      <td className="py-3 px-4 text-center font-mono font-bold tabular-nums text-fairway bg-fairway/10">
+                        {team.currentHandicap != null ? team.currentHandicap : "\u2014"}
                       </td>
                     </tr>
                   ))}
@@ -208,15 +212,15 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
           </div>
         )}
 
-        <div className="mt-6 text-sm text-gray-500">
+        <div className="mt-6 text-sm text-text-muted font-sans">
           <p className="flex items-center gap-2">
-            <span className="inline-flex items-center text-success">
+            <span className="inline-flex items-center text-fairway">
               <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                 <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
               </svg>
             </span>
             = Handicap decreased (improved)
-            <span className="ml-4 inline-flex items-center text-error">
+            <span className="ml-4 inline-flex items-center text-board-red">
               <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                 <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>

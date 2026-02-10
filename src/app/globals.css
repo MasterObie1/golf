@@ -1,51 +1,66 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F0F4F2;
-  --foreground: #1A2E26;
+  /* === "The Grounds" Color System === */
 
-  /* LeagueLinks Brand Colors */
-  --green-primary: #00573F;
-  --green-dark: #004D38;
-  --green-light: #007A55;
+  /* Course Greens */
+  --fairway: #2D5A27;
+  --rough: #1A3A1A;
+  --putting: #4A7C59;
+  --tee: #3A6B34;
 
-  --gold-primary: #FDB913;
-  --gold-dark: #E5A811;
-  --gold-light: #FFD54F;
+  /* Natural Materials */
+  --bunker: #E5E7EB;
+  --wood: #B8960C;
+  --water: #3B7CB8;
 
-  --bg-primary: #F0F4F2;
-  --bg-white: #FFFFFF;
+  /* Tournament Board */
+  --board-green: #006633;
+  --board-green-dark: #004D26;
+  --board-yellow: #FFD700;
+  --board-red: #CC0000;
 
-  /* Text Colors */
-  --text-primary: #1A2E26;
-  --text-secondary: #6B7C74;
-  --text-muted: #8A9A92;
-  --text-light: #A4B2AA;
+  /* Scorecard */
+  --scorecard-paper: #FAFCFA;
+  --scorecard-line: #D1D5DB;
+  --scorecard-pencil: #1F2937;
+
+  /* Surfaces */
+  --surface: #F5F7F5;
+  --surface-warm: #F0F4F1;
+  --surface-white: #FFFFFF;
+  --dusk: #0F1B0F;
+
+  /* Text */
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-muted: #6B7280;
+  --text-light: #9CA3AF;
 
   /* Borders */
-  --border-color: #D4DBD7;
-  --border-light: #E4EBE7;
+  --border-color: #D1D5DB;
+  --border-light: #E5E7EB;
 
-  /* Semantic Colors - Success (Green) */
-  --success: #22C55E;
-  --success-bg: #E8F5EC;
-  --success-text: #166534;
-  --success-border: #86EFAC;
+  /* Semantic — Success */
+  --success: #2D5A27;
+  --success-bg: #E8F0E6;
+  --success-text: #1A3A1A;
+  --success-border: #86C07A;
 
-  /* Semantic Colors - Warning (Amber) */
-  --warning: #F59E0B;
+  /* Semantic — Warning */
+  --warning: #D4A017;
   --warning-bg: #FEF3C7;
   --warning-text: #92400E;
   --warning-border: #FCD34D;
 
-  /* Semantic Colors - Error (Red) */
-  --error: #EF4444;
+  /* Semantic — Error */
+  --error: #CC0000;
   --error-bg: #FEE2E2;
   --error-text: #991B1B;
   --error-border: #FCA5A5;
 
-  /* Semantic Colors - Info (Blue) */
-  --info: #3B82F6;
+  /* Semantic — Info */
+  --info: #3B7CB8;
   --info-bg: #DBEAFE;
   --info-text: #1E40AF;
   --info-border: #93C5FD;
@@ -60,32 +75,58 @@
   --radius-xl: 16px;
 
   /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(26, 46, 38, 0.08);
-  --shadow-md: 0 4px 12px rgba(26, 46, 38, 0.12);
-  --shadow-lg: 0 8px 24px rgba(26, 46, 38, 0.16);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-board: 0 8px 32px rgba(0, 51, 26, 0.30);
+
+  /* Time-aware defaults (JS adjustments are additive) */
+  --time-surface-warmth: rgba(255, 255, 255, 0.0);
+  --time-sky: rgba(255, 255, 255, 0.0);
+  --time-accent-shift: 0deg;
+
+  /* Legacy aliases (keep old names working during migration) */
+  --background: var(--surface);
+  --foreground: var(--text-primary);
+  --green-primary: var(--fairway);
+  --green-dark: var(--rough);
+  --green-light: var(--putting);
+  --gold-primary: var(--board-yellow);
+  --gold-dark: var(--wood);
+  --gold-light: #FFE066;
+  --bg-primary: var(--surface);
+  --bg-white: var(--surface-white);
 }
 
 @theme inline {
-  /* Background & Foreground */
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* Core surfaces */
+  --color-background: var(--surface);
+  --color-foreground: var(--text-primary);
+  --color-surface: var(--surface);
+  --color-surface-warm: var(--surface-warm);
+  --color-surface-white: var(--surface-white);
 
-  /* Classic Serif Font */
-  --font-playfair: var(--font-playfair);
+  /* Course greens */
+  --color-fairway: var(--fairway);
+  --color-rough: var(--rough);
+  --color-putting: var(--putting);
+  --color-tee: var(--tee);
 
-  /* Brand Greens */
-  --color-green-primary: var(--green-primary);
-  --color-green-dark: var(--green-dark);
-  --color-green-light: var(--green-light);
+  /* Natural materials */
+  --color-bunker: var(--bunker);
+  --color-wood: var(--wood);
+  --color-water: var(--water);
 
-  /* Brand Golds */
-  --color-gold-primary: var(--gold-primary);
-  --color-gold-dark: var(--gold-dark);
-  --color-gold-light: var(--gold-light);
+  /* Tournament board */
+  --color-board-green: var(--board-green);
+  --color-board-green-dark: var(--board-green-dark);
+  --color-board-yellow: var(--board-yellow);
+  --color-board-red: var(--board-red);
 
-  /* Surfaces */
-  --color-bg-primary: var(--bg-primary);
-  --color-bg-white: var(--bg-white);
+  /* Scorecard */
+  --color-scorecard-paper: var(--scorecard-paper);
+  --color-scorecard-line: var(--scorecard-line);
+  --color-scorecard-pencil: var(--scorecard-pencil);
 
   /* Text */
   --color-text-primary: var(--text-primary);
@@ -97,25 +138,30 @@
   --color-border: var(--border-color);
   --color-border-light: var(--border-light);
 
-  /* Success */
+  /* Legacy aliases for existing components */
+  --color-green-primary: var(--fairway);
+  --color-green-dark: var(--rough);
+  --color-green-light: var(--putting);
+  --color-gold-primary: var(--board-yellow);
+  --color-gold-dark: var(--wood);
+  --color-gold-light: #FFE066;
+  --color-bg-primary: var(--surface);
+  --color-bg-white: var(--surface-white);
+  --color-dusk: var(--dusk);
+
+  /* Semantic */
   --color-success: var(--success);
   --color-success-bg: var(--success-bg);
   --color-success-text: var(--success-text);
   --color-success-border: var(--success-border);
-
-  /* Warning */
   --color-warning: var(--warning);
   --color-warning-bg: var(--warning-bg);
   --color-warning-text: var(--warning-text);
   --color-warning-border: var(--warning-border);
-
-  /* Error */
   --color-error: var(--error);
   --color-error-bg: var(--error-bg);
   --color-error-text: var(--error-text);
   --color-error-border: var(--error-border);
-
-  /* Info */
   --color-info: var(--info);
   --color-info-bg: var(--info-bg);
   --color-info-text: var(--info-text);
@@ -125,91 +171,202 @@
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
   --shadow-lg: var(--shadow-lg);
+  --shadow-board: var(--shadow-board);
 
   /* Typography */
-  --font-sans: var(--font-inter);
-  --font-display: var(--font-jakarta);
+  --font-display: var(--font-oswald);
+  --font-mono: var(--font-ibm-plex-mono);
+  --font-sans: var(--font-source-sans);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-inter), system-ui, sans-serif;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: var(--font-source-sans), system-ui, sans-serif;
 }
 
 h1, h2, h3, h4 {
-  font-family: var(--font-jakarta), system-ui, sans-serif;
-  color: var(--text-primary);
+  font-family: var(--font-oswald), system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 /* Utility Classes */
 .btn-primary {
-  background-color: var(--green-primary);
+  background-color: var(--fairway);
   color: white;
   padding: 12px 24px;
   border-radius: var(--radius-md);
   font-weight: 600;
   font-size: 14px;
-  letter-spacing: 0.02em;
-  transition: background-color 150ms ease;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: var(--font-oswald), system-ui, sans-serif;
+  transition: background-color 200ms cubic-bezier(0.22, 0.68, 0.36, 1);
 }
 
 .btn-primary:hover {
-  background-color: var(--green-dark);
+  background-color: var(--rough);
 }
 
 .btn-secondary {
   background-color: transparent;
-  color: var(--green-primary);
+  color: var(--fairway);
   padding: 10px 22px;
-  border: 2px solid var(--green-primary);
+  border: 2px solid var(--fairway);
   border-radius: var(--radius-md);
   font-weight: 600;
   font-size: 14px;
-  letter-spacing: 0.02em;
-  transition: all 150ms ease;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: var(--font-oswald), system-ui, sans-serif;
+  transition: all 200ms cubic-bezier(0.22, 0.68, 0.36, 1);
 }
 
 .btn-secondary:hover {
-  background-color: var(--green-primary);
+  background-color: var(--fairway);
   color: white;
 }
 
 .btn-accent {
-  background-color: var(--gold-primary);
+  background-color: var(--board-yellow);
   color: var(--text-primary);
   padding: 12px 24px;
   border-radius: var(--radius-md);
   font-weight: 600;
   font-size: 14px;
-  letter-spacing: 0.02em;
-  transition: background-color 150ms ease;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: var(--font-oswald), system-ui, sans-serif;
+  transition: background-color 200ms cubic-bezier(0.22, 0.68, 0.36, 1);
 }
 
 .btn-accent:hover {
-  background-color: var(--gold-dark);
+  background-color: var(--wood);
+  color: white;
 }
 
 .card {
-  background-color: var(--bg-white);
+  background-color: var(--surface-white);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 150ms ease;
+  transition: box-shadow 200ms cubic-bezier(0.22, 0.68, 0.36, 1);
 }
 
 .card:hover {
   box-shadow: var(--shadow-md);
 }
 
+/* Scorecard paper texture background */
+.scorecard-paper {
+  background-color: var(--scorecard-paper);
+  background-image:
+    linear-gradient(var(--scorecard-line) 1px, transparent 1px);
+  background-size: 100% 2rem;
+}
+
+/* Pencil-weight input style */
+.pencil-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--scorecard-line);
+  border-radius: 0;
+  padding: 8px 0;
+  font-family: var(--font-ibm-plex-mono), monospace;
+  color: var(--scorecard-pencil);
+  transition: border-color 200ms;
+}
+
+.pencil-input:focus {
+  outline: none;
+  border-bottom-color: var(--fairway);
+  box-shadow: 0 1px 0 var(--fairway);
+}
+
 /* Focus States for Accessibility */
 :focus-visible {
-  outline: 2px solid var(--green-primary);
+  outline: 2px solid var(--fairway);
   outline-offset: 2px;
 }
 
 /* Selection */
 ::selection {
-  background-color: var(--green-primary);
+  background-color: var(--fairway);
   color: white;
+}
+
+/* Ball roll loading animation (CSS-only, works during SSR) */
+@keyframes ball-roll {
+  0% { transform: translateX(-100%) rotate(0deg); }
+  100% { transform: translateX(400%) rotate(720deg); }
+}
+
+@keyframes ball-roll-reduced {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.animate-ball-roll {
+  animation: ball-roll 2s cubic-bezier(0, 0.55, 0.45, 1) infinite;
+}
+
+/* Flag flutter on hover */
+@keyframes flag-flutter {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+  75% { transform: rotate(-2deg); }
+}
+
+.hover-flag-flutter:hover {
+  animation: flag-flutter 0.6s ease-in-out;
+}
+
+/* Registration pulse — subtle glow for open registration badge */
+@property --pulse-spread {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.registration-pulse {
+  animation: reg-pulse 2s ease-in-out infinite;
+}
+
+@keyframes reg-pulse {
+  0%, 100% {
+    --pulse-spread: 0px;
+    box-shadow: 0 0 var(--pulse-spread) rgba(74, 124, 89, 0.4);
+  }
+  50% {
+    --pulse-spread: 8px;
+    box-shadow: 0 0 var(--pulse-spread) rgba(74, 124, 89, 0.4);
+  }
+}
+
+/* Reduced motion: disable all custom animations */
+@media (prefers-reduced-motion: reduce) {
+  .animate-ball-roll {
+    animation: ball-roll-reduced 2s ease-in-out infinite;
+  }
+  .hover-flag-flutter:hover {
+    animation: none;
+  }
+  .registration-pulse {
+    animation: none;
+  }
+}
+
+/* Wood grain texture utility — dark green variant */
+.wood-grain {
+  background-color: #0D2818;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 3px,
+      rgba(255, 255, 255, 0.02) 3px,
+      rgba(255, 255, 255, 0.02) 4px
+    );
 }

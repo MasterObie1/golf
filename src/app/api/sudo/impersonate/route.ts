@@ -1,21 +1,28 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/superadmin-auth";
-import { createSessionToken } from "@/lib/auth";
+import { SignJWT } from "jose";
+import { z } from "zod";
+
+const impersonateSchema = z.object({
+  leagueId: z.number().int().positive(),
+});
 
 // POST /api/sudo/impersonate - Login as a league admin
 export async function POST(request: Request) {
   try {
-    await requireSuperAdmin();
+    const session = await requireSuperAdmin();
 
-    const { leagueId } = await request.json();
-
-    if (!leagueId) {
+    const body = await request.json();
+    const parsed = impersonateSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "League ID is required" },
+        { error: "Invalid league ID" },
         { status: 400 }
       );
     }
+
+    const { leagueId } = parsed.data;
 
     // Get the league (only fields needed for session)
     const league = await prisma.league.findUnique({
@@ -27,12 +34,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "League not found" }, { status: 404 });
     }
 
-    // Create a signed JWT admin session for this league
-    const sessionToken = await createSessionToken({
+    // Create a signed JWT admin session with impersonation marker
+    const secret = new TextEncoder().encode(process.env.SESSION_SECRET!);
+    const sessionToken = await new SignJWT({
       leagueId: league.id,
       leagueSlug: league.slug,
       adminUsername: league.adminUsername,
-    });
+      impersonatedBy: session.username,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("1h") // Shorter expiry for impersonation
+      .setAudience("admin")
+      .sign(secret);
+
+    // Log the impersonation for audit purposes
+    console.warn(
+      `[AUDIT] Super-admin "${session.username}" (id=${session.superAdminId}) impersonated league "${league.slug}" (id=${league.id})`
+    );
 
     // Set the admin_session cookie
     const response = NextResponse.json({
@@ -44,7 +63,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 60 * 60 * 24, // 1 day (shorter than normal admin session)
+      maxAge: 60 * 60, // 1 hour (much shorter than normal admin session)
       path: "/",
     });
 

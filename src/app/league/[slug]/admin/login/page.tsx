@@ -45,20 +45,27 @@ export default function LeagueAdminLoginPage({ params }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-green-50 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <h1 className="text-2xl font-bold text-green-800 text-center mb-2">
-          Admin Login
-        </h1>
-        <p className="text-gray-600 text-center mb-6 text-sm">
-          League administration access
-        </p>
+    <div className="min-h-screen bg-rough flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-scorecard-paper rounded-lg shadow-lg p-8 border border-scorecard-line/50">
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 bg-board-green/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-board-green" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-display font-bold text-scorecard-pencil uppercase tracking-wider">
+            Admin Login
+          </h1>
+          <p className="text-text-secondary text-sm mt-1 font-sans">
+            League administration access
+          </p>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2"
             >
               Password
             </label>
@@ -67,13 +74,14 @@ export default function LeagueAdminLoginPage({ params }: Props) {
               id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
+              autoComplete="current-password"
               required
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-error-bg border border-error-border text-error-text px-4 py-3 rounded-lg text-sm font-sans">
               {error}
             </div>
           )}
@@ -81,7 +89,7 @@ export default function LeagueAdminLoginPage({ params }: Props) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
+            className="w-full bg-fairway text-white py-3 rounded-lg hover:bg-rough transition-colors font-display font-semibold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Logging in..." : "Login"}
           </button>
@@ -90,7 +98,7 @@ export default function LeagueAdminLoginPage({ params }: Props) {
         <div className="mt-6 text-center">
           <Link
             href={`/league/${slug}`}
-            className="text-green-600 hover:text-green-700 text-sm"
+            className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider"
           >
             &larr; Back to League
           </Link>

@@ -55,14 +55,14 @@ export function SeasonSelector({
 
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor="season-select" className="text-sm font-medium text-text-secondary">
+      <label htmlFor="season-select" className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">
         Season:
       </label>
       <select
         id="season-select"
         value={currentValue}
         onChange={handleSeasonChange}
-        className="px-3 py-1.5 border border-border rounded-lg text-sm bg-bg-white focus:outline-none focus:ring-2 focus:ring-green-primary"
+        className="px-3 py-1.5 border-b-2 border-scorecard-line bg-surface-white text-sm text-scorecard-pencil font-sans focus:outline-none focus:border-fairway transition-colors rounded-none appearance-none cursor-pointer"
       >
         {seasons.map((season) => (
           <option key={season.id} value={season.id.toString()}>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { searchLeagues, getAllLeagues } from "@/lib/actions";
+import { searchLeagues, getAllLeagues } from "@/lib/actions/leagues";
 
 interface LeagueResult {
   id: number;
@@ -50,13 +50,13 @@ export default function LeaguesPage() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
-    <div className="min-h-screen bg-bg-primary">
+    <div className="min-h-screen bg-surface">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-green-dark">Find a League</h1>
+          <h1 className="text-3xl font-display font-bold text-scorecard-pencil uppercase tracking-wider">Find a League</h1>
           <Link
             href="/leagues/new"
-            className="bg-green-primary text-white px-4 py-2 rounded-lg hover:bg-green-dark transition-colors"
+            className="bg-fairway text-white px-4 py-2 rounded-lg hover:bg-rough transition-colors font-display font-semibold uppercase tracking-wider text-sm"
           >
             Create League
           </Link>
@@ -69,21 +69,21 @@ export default function LeaguesPage() {
             placeholder="Search leagues by name..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-primary text-lg"
+            className="w-full pencil-input text-lg !border-b-2"
           />
         </div>
 
         {/* Results */}
         {loading ? (
-          <div className="text-center py-12 text-gray-500">Loading leagues...</div>
+          <div className="text-center py-12 text-text-muted font-sans">Loading leagues...</div>
         ) : results.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500 mb-4">
+            <p className="text-text-muted mb-4 font-sans">
               {query ? "No leagues found matching your search." : "No leagues yet."}
             </p>
             <Link
               href="/leagues/new"
-              className="text-green-primary hover:text-green-dark font-medium"
+              className="text-fairway hover:text-rough font-display font-semibold uppercase tracking-wider text-sm"
             >
               Create the first league
             </Link>
@@ -91,22 +91,22 @@ export default function LeaguesPage() {
         ) : (
           <div className="space-y-4">
             {searching && (
-              <div className="text-sm text-gray-500 mb-2">Searching...</div>
+              <div className="text-sm text-text-muted mb-2 font-sans">Searching...</div>
             )}
             {results.map((league) => (
               <Link
                 key={league.id}
                 href={`/league/${league.slug}`}
-                className="block bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-border-light"
+                className="block bg-surface-white rounded-lg shadow-sm p-6 hover:shadow-md transition-all hover:-translate-y-0.5 border border-border-light"
               >
-                <h2 className="text-xl font-semibold text-green-dark mb-2">
+                <h2 className="text-xl font-display font-semibold text-scorecard-pencil uppercase tracking-wider mb-2">
                   {league.name}
                 </h2>
-                <div className="text-gray-600 space-y-1">
+                <div className="text-text-secondary space-y-1 font-sans">
                   {league.courseName && (
                     <p>
                       <span className="font-medium">Course:</span> {league.courseName}
-                      {league.courseLocation && ` - ${league.courseLocation}`}
+                      {league.courseLocation && ` \u2014 ${league.courseLocation}`}
                     </p>
                   )}
                   {league.playDay && (
@@ -115,7 +115,7 @@ export default function LeaguesPage() {
                     </p>
                   )}
                   {league._count && (
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-text-muted font-mono tabular-nums">
                       {league._count.teams} team{league._count.teams !== 1 ? "s" : ""}
                     </p>
                   )}
@@ -127,7 +127,7 @@ export default function LeaguesPage() {
 
         {/* Back to Home */}
         <div className="mt-8 text-center">
-          <Link href="/" className="text-green-primary hover:text-green-dark">
+          <Link href="/" className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider">
             &larr; Back to Home
           </Link>
         </div>

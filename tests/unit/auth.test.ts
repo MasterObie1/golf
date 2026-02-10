@@ -78,11 +78,11 @@ describe("createSessionToken", () => {
     const { payload } = await jwtVerify(token, secret);
 
     expect(payload.exp).toBeDefined();
-    // Expiry should be ~7 days from now
+    // Expiry should be ~24 hours from now
     const now = Math.floor(Date.now() / 1000);
-    const sevenDays = 7 * 24 * 60 * 60;
-    expect(payload.exp! - now).toBeGreaterThan(sevenDays - 60); // within 60s tolerance
-    expect(payload.exp! - now).toBeLessThanOrEqual(sevenDays + 1);
+    const oneDay = 24 * 60 * 60;
+    expect(payload.exp! - now).toBeGreaterThan(oneDay - 60); // within 60s tolerance
+    expect(payload.exp! - now).toBeLessThanOrEqual(oneDay + 1);
   });
 
   it("uses HS256 algorithm", async () => {

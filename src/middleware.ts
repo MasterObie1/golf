@@ -19,6 +19,11 @@ function getSessionSecret(): Uint8Array {
     // In middleware, we can't throw — just return empty to deny all sessions
     return new Uint8Array(0);
   }
+  // Reject the placeholder value — same check as session-secret.ts
+  if (secret === "CHANGE-ME-generate-a-random-secret") {
+    console.error("SESSION_SECRET is still the placeholder value. All sessions will be denied.");
+    return new Uint8Array(0);
+  }
   return new TextEncoder().encode(secret);
 }
 
@@ -34,18 +39,23 @@ async function parseSession(cookie: string | undefined): Promise<AdminSession | 
 
     const { payload } = await jwtVerify(cookie, secret, {
       algorithms: ["HS256"],
+      issuer: "leaguelinks",
+      audience: "admin",
     });
 
-    const session: AdminSession = {
-      leagueId: payload.leagueId as number,
-      leagueSlug: payload.leagueSlug as string,
-      adminUsername: payload.adminUsername as string,
-    };
+    const leagueId = payload.leagueId;
+    const leagueSlug = payload.leagueSlug;
+    const adminUsername = payload.adminUsername;
 
-    if (!session.leagueId || !session.leagueSlug || !session.adminUsername) {
+    if (typeof leagueId !== "number" || typeof leagueSlug !== "string" || typeof adminUsername !== "string") {
       return null;
     }
 
+    if (!leagueId || !leagueSlug || !adminUsername) {
+      return null;
+    }
+
+    const session: AdminSession = { leagueId, leagueSlug, adminUsername };
     return session;
   } catch {
     return null;
@@ -64,17 +74,22 @@ async function parseSuperAdminSession(cookie: string | undefined): Promise<Super
 
     const { payload } = await jwtVerify(cookie, secret, {
       algorithms: ["HS256"],
+      issuer: "leaguelinks",
+      audience: "sudo",
     });
 
-    const session: SuperAdminSession = {
-      superAdminId: payload.superAdminId as number,
-      username: payload.username as string,
-    };
+    const superAdminId = payload.superAdminId;
+    const username = payload.username;
 
-    if (!session.superAdminId || !session.username) {
+    if (typeof superAdminId !== "number" || typeof username !== "string") {
       return null;
     }
 
+    if (!superAdminId || !username) {
+      return null;
+    }
+
+    const session: SuperAdminSession = { superAdminId, username };
     return session;
   } catch {
     return null;
@@ -88,13 +103,23 @@ async function parseSuperAdminSession(cookie: string | undefined): Promise<Super
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow access to API routes
+  // API routes are protected by their own auth (requireSuperAdmin, requireLeagueAdmin).
+  // The matcher config below determines which routes invoke this middleware.
   if (pathname.startsWith("/api/")) {
+    // Super-admin API routes: verify session in middleware
+    if (pathname.startsWith("/api/sudo/")) {
+      const sudoSessionCookie = request.cookies.get("sudo_session")?.value;
+      const sudoSession = await parseSuperAdminSession(sudoSessionCookie);
+      if (!sudoSession) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+    // /api/admin/* routes handle their own auth via requireLeagueAdmin()
     return NextResponse.next();
   }
 
   // Check if this is a super-admin route: /sudo/*
-  if (pathname.startsWith("/sudo")) {
+  if (pathname === "/sudo" || pathname.startsWith("/sudo/")) {
     // Allow access to login page
     if (pathname === "/sudo/login") {
       return NextResponse.next();
@@ -161,6 +186,7 @@ export const config = {
     "/admin/:path*",
     "/league/:path*/admin/:path*",
     "/api/admin/:path*",
+    "/api/sudo/:path*",
     "/sudo/:path*",
   ],
 };

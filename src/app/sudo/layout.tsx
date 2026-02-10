@@ -18,31 +18,35 @@ export default function SudoLayout({
   }
 
   const handleLogout = async () => {
-    await fetch("/api/sudo/logout", { method: "POST" });
+    try {
+      await fetch("/api/sudo/logout", { method: "POST" });
+    } catch (err) {
+      console.error("Logout request failed:", err);
+    }
     router.push("/sudo/login");
     router.refresh();
   };
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen bg-rough">
       {/* Top bar */}
-      <header className="bg-slate-800 border-b border-slate-700">
+      <header className="bg-board-green border-b border-board-green/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-6">
               <Link
                 href="/sudo"
-                className="text-amber-500 font-semibold text-lg"
+                className="text-board-yellow font-display font-semibold text-lg uppercase tracking-wider"
               >
                 Platform Admin
               </Link>
               <nav className="flex gap-4">
                 <Link
                   href="/sudo"
-                  className={`text-sm ${
+                  className={`text-sm font-display uppercase tracking-wider ${
                     pathname === "/sudo"
                       ? "text-white"
-                      : "text-slate-400 hover:text-white"
+                      : "text-putting/80 hover:text-white"
                   }`}
                 >
                   Dashboard
@@ -51,7 +55,7 @@ export default function SudoLayout({
             </div>
             <button
               onClick={handleLogout}
-              className="text-sm text-slate-400 hover:text-white"
+              className="text-sm text-putting/80 hover:text-white font-display uppercase tracking-wider"
             >
               Logout
             </button>

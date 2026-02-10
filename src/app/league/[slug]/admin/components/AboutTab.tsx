@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { updateLeagueAbout, getLeagueAbout } from "@/lib/actions";
+import { updateLeagueAbout, getLeagueAbout } from "@/lib/actions/league-about";
 
 interface AboutTabProps {
   slug: string;
@@ -36,16 +36,32 @@ export default function AboutTab({ slug, leagueId, leagueName: fallbackName, ini
   const [endDate, setEndDate] = useState(
     initialAbout.endDate ? new Date(initialAbout.endDate).toISOString().split("T")[0] : ""
   );
-  const [numberOfWeeks, setNumberOfWeeks] = useState<number | "">(initialAbout.numberOfWeeks || "");
+  const [numberOfWeeks, setNumberOfWeeks] = useState<number | "">(initialAbout.numberOfWeeks ?? "");
   const [courseName, setCourseName] = useState(initialAbout.courseName || "");
   const [courseLocation, setCourseLocation] = useState(initialAbout.courseLocation || "");
   const [playDay, setPlayDay] = useState(initialAbout.playDay || "");
   const [playTime, setPlayTime] = useState(initialAbout.playTime || "");
-  const [entryFee, setEntryFee] = useState<number | "">(initialAbout.entryFee || "");
+  const [entryFee, setEntryFee] = useState<number | "">(initialAbout.entryFee ?? "");
   const [prizeInfo, setPrizeInfo] = useState(initialAbout.prizeInfo || "");
   const [leagueDescription, setLeagueDescription] = useState(initialAbout.description || "");
   const [contactEmail, setContactEmail] = useState(initialAbout.contactEmail || "");
   const [contactPhone, setContactPhone] = useState(initialAbout.contactPhone || "");
+
+  function populateForm(data: AboutTabProps["initialAbout"]) {
+    setLeagueName(data.leagueName || "");
+    setStartDate(data.startDate ? new Date(data.startDate).toISOString().split("T")[0] : "");
+    setEndDate(data.endDate ? new Date(data.endDate).toISOString().split("T")[0] : "");
+    setNumberOfWeeks(data.numberOfWeeks ?? "");
+    setCourseName(data.courseName || "");
+    setCourseLocation(data.courseLocation || "");
+    setPlayDay(data.playDay || "");
+    setPlayTime(data.playTime || "");
+    setEntryFee(data.entryFee ?? "");
+    setPrizeInfo(data.prizeInfo || "");
+    setLeagueDescription(data.description || "");
+    setContactEmail(data.contactEmail || "");
+    setContactPhone(data.contactPhone || "");
+  }
 
   async function handleSaveAbout() {
     setLoading(true);
@@ -67,19 +83,7 @@ export default function AboutTab({ slug, leagueId, leagueName: fallbackName, ini
         contactPhone: contactPhone || null,
       });
       const aboutDataResult = await getLeagueAbout(leagueId);
-      setLeagueName(aboutDataResult.leagueName || "");
-      setStartDate(aboutDataResult.startDate ? new Date(aboutDataResult.startDate).toISOString().split("T")[0] : "");
-      setEndDate(aboutDataResult.endDate ? new Date(aboutDataResult.endDate).toISOString().split("T")[0] : "");
-      setNumberOfWeeks(aboutDataResult.numberOfWeeks || "");
-      setCourseName(aboutDataResult.courseName || "");
-      setCourseLocation(aboutDataResult.courseLocation || "");
-      setPlayDay(aboutDataResult.playDay || "");
-      setPlayTime(aboutDataResult.playTime || "");
-      setEntryFee(aboutDataResult.entryFee || "");
-      setPrizeInfo(aboutDataResult.prizeInfo || "");
-      setLeagueDescription(aboutDataResult.description || "");
-      setContactEmail(aboutDataResult.contactEmail || "");
-      setContactPhone(aboutDataResult.contactPhone || "");
+      populateForm(aboutDataResult);
       setMessage({ type: "success", text: "League information saved successfully!" });
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to save league information." });
@@ -88,98 +92,107 @@ export default function AboutTab({ slug, leagueId, leagueName: fallbackName, ini
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
+    <div className="bg-scorecard-paper rounded-lg shadow-lg p-6 border border-scorecard-line/50">
       {message && (
         <div
-          className={`mb-4 p-3 rounded-lg ${
-            message.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+          className={`mb-4 p-3 rounded-lg font-sans text-sm ${
+            message.type === "success"
+              ? "bg-fairway/10 border border-fairway/30 text-fairway"
+              : "bg-error-bg border border-error-border text-error-text"
           }`}
         >
           {message.text}
         </div>
       )}
 
-      <h2 className="text-xl font-semibold mb-6 text-gray-800">About the League</h2>
+      <h2 className="text-xl font-display font-semibold uppercase tracking-wider mb-6 text-scorecard-pencil">About the League</h2>
 
       <div className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="about-league-name" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
             League Name
           </label>
           <input
+            id="about-league-name"
             type="text"
             value={leagueName}
             onChange={(e) => setLeagueName(e.target.value)}
             placeholder="e.g., Thursday Night Golf League"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+            className="pencil-input w-full"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="about-description" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
             Description
           </label>
           <textarea
+            id="about-description"
             value={leagueDescription}
             onChange={(e) => setLeagueDescription(e.target.value)}
             rows={3}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+            className="pencil-input w-full"
           />
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="about-start-date" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Start Date
             </label>
             <input
+              id="about-start-date"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="about-end-date" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               End Date
             </label>
             <input
+              id="about-end-date"
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="about-course-name" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Course Name
             </label>
             <input
+              id="about-course-name"
               type="text"
               value={courseName}
               onChange={(e) => setCourseName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="about-location" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Location
             </label>
             <input
+              id="about-location"
               type="text"
               value={courseLocation}
               onChange={(e) => setCourseLocation(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="about-play-day" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Play Day
             </label>
             <select
+              id="about-play-day"
               value={playDay}
               onChange={(e) => setPlayDay(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
             >
               <option value="">Select a day...</option>
               {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
@@ -188,37 +201,40 @@ export default function AboutTab({ slug, leagueId, leagueName: fallbackName, ini
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="about-play-time" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Play Time
             </label>
             <input
+              id="about-play-time"
               type="text"
               value={playTime}
               onChange={(e) => setPlayTime(e.target.value)}
               placeholder="e.g., 5:30 PM"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="about-entry-fee" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Entry Fee ($)
             </label>
             <input
+              id="about-entry-fee"
               type="number"
               value={entryFee}
               onChange={(e) => setEntryFee(e.target.value ? parseFloat(e.target.value) : "")}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="about-contact-email" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Contact Email
             </label>
             <input
+              id="about-contact-email"
               type="email"
               value={contactEmail}
               onChange={(e) => setContactEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
             />
           </div>
         </div>
@@ -226,7 +242,7 @@ export default function AboutTab({ slug, leagueId, leagueName: fallbackName, ini
         <button
           onClick={handleSaveAbout}
           disabled={loading}
-          className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+          className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough font-display font-semibold uppercase tracking-wider disabled:opacity-50 transition-colors"
         >
           {loading ? "Saving..." : "Save League Information"}
         </button>

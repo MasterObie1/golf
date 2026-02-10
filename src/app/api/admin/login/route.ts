@@ -6,6 +6,13 @@ import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    // CSRF: verify Origin header matches our host
+    const origin = request.headers.get("origin");
+    const host = request.headers.get("host");
+    if (origin && host && !origin.endsWith(host)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // Rate limit check
     const ip = getClientIp(request);
     const rateCheck = checkRateLimit(`admin-login:${ip}`, RATE_LIMITS.login);
@@ -39,9 +46,12 @@ export async function POST(request: Request) {
     });
 
     if (!league) {
+      // Timing attack mitigation: perform a dummy bcrypt compare so the response
+      // time is indistinguishable from a real password check.
+      await bcrypt.compare(password, "$2a$12$4tdsSuOvxPn843EZvlpMlO9g7WbsIphMfgilddhwRLuGiaCwcClIe");
       return NextResponse.json(
-        { error: "League not found" },
-        { status: 404 }
+        { error: "Invalid credentials" },
+        { status: 401 }
       );
     }
 
@@ -49,7 +59,7 @@ export async function POST(request: Request) {
     const passwordValid = await bcrypt.compare(password, league.adminPassword);
     if (!passwordValid) {
       return NextResponse.json(
-        { error: "Invalid password" },
+        { error: "Invalid credentials" },
         { status: 401 }
       );
     }
@@ -72,13 +82,13 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
+      maxAge: 60 * 60 * 24, // 24 hours
       path: "/",
     });
 
     return response;
   } catch (error) {
-    console.error("Login error:", error);
+    console.error("Login error:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json(
       { error: "An error occurred" },
       { status: 500 }

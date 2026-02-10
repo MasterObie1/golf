@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { createLeague } from "@/lib/actions";
+import { createLeague } from "@/lib/actions/leagues";
 
 export default function NewLeaguePage() {
   const [name, setName] = useState("");
+  const [scoringType, setScoringType] = useState<"match_play" | "stroke_play" | "hybrid">("match_play");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -32,7 +33,7 @@ export default function NewLeaguePage() {
     }
 
     try {
-      const result = await createLeague(name, password);
+      const result = await createLeague(name, password, scoringType);
       if (result.success) {
         setSuccess({
           slug: result.data.slug,
@@ -49,41 +50,31 @@ export default function NewLeaguePage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-green-50 flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+      <div className="min-h-screen bg-surface flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-scorecard-paper rounded-lg shadow-lg p-8 border border-scorecard-line/50">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg
-                className="w-8 h-8 text-green-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
+            <div className="w-16 h-16 bg-fairway/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-fairway" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-green-800">League Created!</h1>
+            <h1 className="text-2xl font-display font-bold text-scorecard-pencil uppercase tracking-wider">League Created!</h1>
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <h2 className="font-semibold text-gray-800 mb-3">Admin Access</h2>
-            <p className="text-sm text-gray-600">
+          <div className="bg-surface rounded-lg p-4 mb-6 border border-border-light">
+            <h2 className="font-display font-semibold text-scorecard-pencil uppercase tracking-wider text-sm mb-3">Admin Access</h2>
+            <p className="text-sm text-text-secondary font-sans">
               Use the password you just set to log in to the admin dashboard.
               You can change it later in admin settings.
             </p>
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-            <h2 className="font-semibold text-amber-800 mb-2">Bookmark Your Admin URL</h2>
-            <p className="text-sm text-amber-700 mb-2">
+          <div className="bg-board-yellow/10 border border-board-yellow/30 rounded-lg p-4 mb-6">
+            <h2 className="font-display font-semibold text-wood uppercase tracking-wider text-sm mb-2">Bookmark Your Admin URL</h2>
+            <p className="text-sm text-text-secondary mb-2 font-sans">
               The admin panel is only visible after logging in. Save this URL:
             </p>
-            <code className="block bg-amber-100 px-3 py-2 rounded text-xs text-amber-900 break-all">
+            <code className="block bg-board-yellow/10 px-3 py-2 rounded text-xs text-scorecard-pencil break-all font-mono">
               {typeof window !== 'undefined' ? window.location.origin : ''}/league/{success.slug}/admin
             </code>
           </div>
@@ -91,13 +82,13 @@ export default function NewLeaguePage() {
           <div className="space-y-3">
             <Link
               href={`/league/${success.slug}/admin/login`}
-              className="block w-full bg-green-600 text-white text-center py-3 rounded-lg hover:bg-green-700 transition-colors font-medium"
+              className="block w-full bg-fairway text-white text-center py-3 rounded-lg hover:bg-rough transition-colors font-display font-semibold uppercase tracking-wider"
             >
               Go to Admin Login
             </Link>
             <Link
               href={`/league/${success.slug}`}
-              className="block w-full bg-gray-100 text-gray-700 text-center py-3 rounded-lg hover:bg-gray-200 transition-colors"
+              className="block w-full bg-surface text-text-primary text-center py-3 rounded-lg hover:bg-bunker/20 transition-colors font-sans border border-border"
             >
               View League Page
             </Link>
@@ -108,18 +99,15 @@ export default function NewLeaguePage() {
   }
 
   return (
-    <div className="min-h-screen bg-green-50 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <h1 className="text-2xl font-bold text-green-800 text-center mb-6">
+    <div className="min-h-screen bg-surface flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-scorecard-paper rounded-lg shadow-lg p-8 border border-scorecard-line/50">
+        <h1 className="text-2xl font-display font-bold text-scorecard-pencil text-center mb-6 uppercase tracking-wider">
           Create a New League
         </h1>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
+            <label htmlFor="name" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               League Name
             </label>
             <input
@@ -128,20 +116,51 @@ export default function NewLeaguePage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Thursday Night Golf League"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
               required
               minLength={3}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-text-muted mt-1 font-sans">
               This will be the public name of your league
             </p>
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
+            <label className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
+              Scoring Format
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { value: "match_play" as const, label: "Match Play", desc: "Head-to-head matchups each week" },
+                { value: "stroke_play" as const, label: "Stroke Play", desc: "All teams compete against the field" },
+                { value: "hybrid" as const, label: "Hybrid", desc: "Match play + field position points" },
+              ]).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setScoringType(option.value)}
+                  className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                    scoringType === option.value
+                      ? "border-fairway bg-fairway/5"
+                      : "border-scorecard-line/50 hover:border-scorecard-line"
+                  }`}
+                >
+                  <div className={`text-sm font-display font-semibold uppercase tracking-wider ${
+                    scoringType === option.value ? "text-fairway" : "text-scorecard-pencil"
+                  }`}>
+                    {option.label}
+                  </div>
+                  <div className="text-xs text-text-muted mt-1 font-sans">{option.desc}</div>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-text-muted mt-1 font-sans">
+              You can change this later in league settings
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Admin Password
             </label>
             <input
@@ -150,17 +169,14 @@ export default function NewLeaguePage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="At least 8 characters"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
               required
               minLength={8}
             />
           </div>
 
           <div>
-            <label
-              htmlFor="confirmPassword"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
+            <label htmlFor="confirmPassword" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Confirm Password
             </label>
             <input
@@ -169,14 +185,14 @@ export default function NewLeaguePage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Re-enter your password"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-full"
               required
               minLength={8}
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <div className="bg-error-bg border border-error-border text-error-text px-4 py-3 rounded-lg font-sans text-sm">
               {error}
             </div>
           )}
@@ -184,14 +200,14 @@ export default function NewLeaguePage() {
           <button
             type="submit"
             disabled={loading || name.trim().length < 3 || password.length < 8 || password !== confirmPassword}
-            className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-fairway text-white py-3 rounded-lg hover:bg-rough transition-colors font-display font-semibold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Creating..." : "Create League"}
           </button>
         </form>
 
         <div className="mt-6 text-center">
-          <Link href="/leagues" className="text-green-600 hover:text-green-700">
+          <Link href="/leagues" className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider">
             &larr; Back to League Search
           </Link>
         </div>

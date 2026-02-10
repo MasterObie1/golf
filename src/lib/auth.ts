@@ -1,21 +1,11 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
+import { getSessionSecret } from "./session-secret";
 
 export interface AdminSession {
   leagueId: number;
   leagueSlug: string;
   adminUsername: string;
-}
-
-function getSessionSecret(): Uint8Array {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) {
-    throw new Error(
-      "SESSION_SECRET environment variable is required. " +
-      "Generate one with: openssl rand -base64 32"
-    );
-  }
-  return new TextEncoder().encode(secret);
 }
 
 /**
@@ -35,19 +25,23 @@ export async function getAdminSession(): Promise<AdminSession | null> {
     const secret = getSessionSecret();
     const { payload } = await jwtVerify(sessionCookie, secret, {
       algorithms: ["HS256"],
+      issuer: "leaguelinks",
+      audience: "admin",
     });
 
-    const session: AdminSession = {
-      leagueId: payload.leagueId as number,
-      leagueSlug: payload.leagueSlug as string,
-      adminUsername: payload.adminUsername as string,
-    };
+    const leagueId = payload.leagueId;
+    const leagueSlug = payload.leagueSlug;
+    const adminUsername = payload.adminUsername;
 
-    // Validate session structure
-    if (!session.leagueId || !session.leagueSlug || !session.adminUsername) {
+    if (typeof leagueId !== "number" || typeof leagueSlug !== "string" || typeof adminUsername !== "string") {
       return null;
     }
 
+    if (!leagueId || !leagueSlug || !adminUsername) {
+      return null;
+    }
+
+    const session: AdminSession = { leagueId, leagueSlug, adminUsername };
     return session;
   } catch {
     return null;
@@ -116,7 +110,9 @@ export async function createSessionToken(session: AdminSession): Promise<string>
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime("24h")
+    .setIssuer("leaguelinks")
+    .setAudience("admin")
     .sign(secret);
 }
 
@@ -129,18 +125,23 @@ export async function verifySessionToken(token: string): Promise<AdminSession | 
     const secret = getSessionSecret();
     const { payload } = await jwtVerify(token, secret, {
       algorithms: ["HS256"],
+      issuer: "leaguelinks",
+      audience: "admin",
     });
 
-    const session: AdminSession = {
-      leagueId: payload.leagueId as number,
-      leagueSlug: payload.leagueSlug as string,
-      adminUsername: payload.adminUsername as string,
-    };
+    const leagueId = payload.leagueId;
+    const leagueSlug = payload.leagueSlug;
+    const adminUsername = payload.adminUsername;
 
-    if (!session.leagueId || !session.leagueSlug || !session.adminUsername) {
+    if (typeof leagueId !== "number" || typeof leagueSlug !== "string" || typeof adminUsername !== "string") {
       return null;
     }
 
+    if (!leagueId || !leagueSlug || !adminUsername) {
+      return null;
+    }
+
+    const session: AdminSession = { leagueId, leagueSlug, adminUsername };
     return session;
   } catch {
     return null;

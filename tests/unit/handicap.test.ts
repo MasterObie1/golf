@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   calculateHandicap,
   calculateNetScore,
@@ -7,12 +7,16 @@ import {
   selectScores,
   capExceptionalScores,
   suggestPoints,
+  calculateStrokePlayPoints,
+  areScoresTied,
   applyPreset,
   leagueToHandicapSettings,
   describeCalculation,
   DEFAULT_HANDICAP_SETTINGS,
   HANDICAP_PRESETS,
   type HandicapSettings,
+  type StrokePlayEntry,
+  type StrokePlayBonusConfig,
 } from "@/lib/handicap";
 
 // Helper to create settings with overrides
@@ -60,14 +64,14 @@ describe("selectScores", () => {
     it("selects best X of last Y scores (lowest is best in golf)", () => {
       // scores in chronological order
       const scores = [50, 48, 40, 42, 38, 44, 36, 41];
-      // last 5 = [38, 44, 36, 41] -> wait, last 5 of 8
       const result = selectScores(
         scores,
         settings({ scoreSelection: "best_of_last", bestOf: 3, lastOf: 5 })
       );
-      // last 5: [38, 44, 36, 41] => actually last 5 is [42, 38, 44, 36, 41]
+      // last 5: [42, 38, 44, 36, 41] (indices 3-7)
       // sorted: [36, 38, 41, 42, 44], best 3: [36, 38, 41]
-      expect(result).toEqual([36, 38, 41]);
+      // Chronological order preserved: 38 (idx4), 36 (idx6), 41 (idx7)
+      expect(result).toEqual([38, 36, 41]);
     });
 
     it("handles when lastOf exceeds available scores", () => {
@@ -77,7 +81,8 @@ describe("selectScores", () => {
         settings({ scoreSelection: "best_of_last", bestOf: 2, lastOf: 10 })
       );
       // all 3 scores, sorted: [38, 40, 42], best 2: [38, 40]
-      expect(result).toEqual([38, 40]);
+      // Chronological order preserved: 40 (idx0), 38 (idx2)
+      expect(result).toEqual([40, 38]);
     });
 
     it("returns all scores when bestOf/lastOf are null", () => {
@@ -94,8 +99,8 @@ describe("selectScores", () => {
     it("drops highest scores", () => {
       const scores = [40, 42, 38, 44];
       const result = selectScores(scores, settings({ dropHighest: 1 }));
-      // sorted: [38, 40, 42, 44], drop highest 1 -> [38, 40, 42]
-      expect(result).toEqual([38, 40, 42]);
+      // Drop highest (44 at idx3), chronological order preserved: [40, 42, 38]
+      expect(result).toEqual([40, 42, 38]);
     });
 
     it("drops lowest scores", () => {
@@ -108,16 +113,16 @@ describe("selectScores", () => {
     it("drops both highest and lowest", () => {
       const scores = [40, 42, 38, 44, 36];
       const result = selectScores(scores, settings({ dropHighest: 1, dropLowest: 1 }));
-      // After drop highest: sorted [36,38,40,42,44] -> [36,38,40,42]
-      // After drop lowest: sorted [36,38,40,42] -> [38,40,42]
-      expect(result).toEqual([38, 40, 42]);
+      // Drop highest 44 (idx3), then drop lowest 36 (idx4) from remaining
+      // Chronological order preserved: [40, 42, 38]
+      expect(result).toEqual([40, 42, 38]);
     });
 
-    it("does not drop when only 1 score (not more than dropHighest)", () => {
+    it("returns empty when totalDrops >= available scores", () => {
       const scores = [40];
       const result = selectScores(scores, settings({ dropHighest: 1 }));
-      // length (1) not > dropHighest (1), so no drop
-      expect(result).toEqual([40]);
+      // totalDrops (1) >= length (1), returns empty
+      expect(result).toEqual([]);
     });
   });
 });
@@ -254,14 +259,15 @@ describe("calculateTrendAdjustment", () => {
     expect(result).toBe(0);
   });
 
-  it("handles odd number of scores", () => {
-    // [50, 48, 40, 38, 36] -> midpoint=2, older=[50,48] avg=49, newer=[40,38,36] avg=38
-    // trend = 49-38 = 11, adjustment = 11*0.1 = 1.1
+  it("handles odd number of scores (middle element excluded)", () => {
+    // [50, 48, 40, 38, 36] -> midpoint=2, older=[50,48] avg=49, newer=[38,36] avg=37
+    // (middle element 40 excluded for symmetric comparison)
+    // trend = 49-37 = 12, adjustment = 12*0.1 = 1.2
     const result = calculateTrendAdjustment(
       [50, 48, 40, 38, 36],
       settings({ useTrend: true, trendWeight: 0.1 })
     );
-    expect(result).toBeCloseTo(1.1);
+    expect(result).toBeCloseTo(1.2);
   });
 });
 
@@ -383,7 +389,7 @@ describe("calculateHandicap", () => {
 
     it("without capping would give different result", () => {
       // scores: [40, 70], no cap, avg=55, (55-35)*0.9=18, floor=18
-      const result = calculateHandicap([40, 70], settings());
+      const result = calculateHandicap([40, 70], settings({ maxHandicap: null }));
       expect(result).toBe(18);
     });
   });
@@ -459,7 +465,10 @@ describe("calculateHandicap", () => {
     });
 
     it("handles very large scores", () => {
-      expect(calculateHandicap([100])).toBe(58); // (100-35)*0.9=58.5, floor=58
+      // (100-35)*0.9=58.5, floor=58, but default maxHandicap=9 caps it
+      expect(calculateHandicap([100])).toBe(9);
+      // Without cap: 58
+      expect(calculateHandicap([100], settings({ maxHandicap: null }))).toBe(58);
     });
 
     it("handles very low scores", () => {
@@ -596,7 +605,7 @@ describe("applyPreset", () => {
     // When applying a preset, it should start from defaults, not current
     const current = settings({ maxHandicap: 99, baseScore: 50 });
     const result = applyPreset("simple", current);
-    expect(result.maxHandicap).toBe(null); // default, not 99
+    expect(result.maxHandicap).toBe(9); // default is 9, not 99 (from current)
     expect(result.baseScore).toBe(35); // default, not 50
   });
 });
@@ -806,5 +815,283 @@ describe("full calculation scenarios", () => {
       settings({ scoreSelection: "last_n", scoreCount: 5, dropHighest: 1 })
     );
     expect(result).toBe(5);
+  });
+});
+
+// ==========================================
+// BUG FIX REGRESSION TESTS
+// ==========================================
+
+describe("Fix 1.1: describeCalculation false cap reporting", () => {
+  it("should NOT report capping when rounding brings value within cap", () => {
+    // rawHandicap = 9.1 (before rounding), maxHandicap = 9, rounding = floor
+    // floor(9.1) = 9, which equals maxHandicap — no cap needed
+    // BUG: old code checked 9.1 > 9 (pre-rounded) and falsely reported "Capped at maximum"
+    // Score that gives raw = 9.1: (avg - 35) * 0.9 = 9.1 => avg = 45.111...
+    // Use two scores: [45, 45.222] => avg = 45.111, raw = (45.111-35)*0.9 = 9.1, floor = 9
+    const s = settings({ maxHandicap: 9, rounding: "floor" });
+    const scores = [45, 45.222];
+    const handicap = calculateHandicap(scores, s);
+    expect(handicap).toBe(9); // floor(9.1) = 9, within cap
+
+    const steps = describeCalculation(scores, s, handicap);
+    const capStep = steps.find((step) => step.includes("Capped at maximum"));
+    expect(capStep).toBeUndefined(); // Should NOT mention capping
+  });
+
+  it("should still report capping when rounded value exceeds cap", () => {
+    // rawHandicap = 10.5, rounding = ceil => 11, maxHandicap = 9 => capped
+    const s = settings({ maxHandicap: 9, rounding: "ceil" });
+    const scores = [46.667]; // (46.667-35)*0.9 = 10.5, ceil = 11
+    const handicap = calculateHandicap(scores, s);
+    expect(handicap).toBe(9); // capped at 9
+
+    const steps = describeCalculation(scores, s, handicap);
+    const capStep = steps.find((step) => step.includes("Capped at maximum"));
+    expect(capStep).toBeDefined();
+  });
+});
+
+describe("Fix 1.2: Inconsistent floating-point tie detection", () => {
+  it("areScoresTied detects exact ties", () => {
+    expect(areScoresTied(40, 40)).toBe(true);
+  });
+
+  it("areScoresTied detects near-ties within epsilon", () => {
+    expect(areScoresTied(40.0, 40.02)).toBe(true);
+    expect(areScoresTied(40.02, 40.0)).toBe(true);
+  });
+
+  it("areScoresTied rejects differences beyond epsilon", () => {
+    expect(areScoresTied(40.0, 40.1)).toBe(false);
+    expect(areScoresTied(40.0, 41.0)).toBe(false);
+  });
+
+  it("calculateStrokePlayPoints treats near-equal net scores as tied", () => {
+    // BUG: old code used === which would miss floating-point near-ties
+    const entries: StrokePlayEntry[] = [
+      { teamId: 1, netScore: 36.0, grossScore: 40, isDnp: false },
+      { teamId: 2, netScore: 36.02, grossScore: 41, isDnp: false }, // within epsilon
+    ];
+    const scale = [10, 6];
+    const bonus: StrokePlayBonusConfig = {
+      showUpBonus: 0,
+      beatHandicapBonus: 0,
+      baseScore: 35,
+      dnpPoints: 0,
+      dnpPenalty: 0,
+    };
+    const results = calculateStrokePlayPoints(entries, scale, "split", bonus);
+    // Both should be position 1 with split points (10+6)/2 = 8
+    const team1 = results.find((r) => r.teamId === 1)!;
+    const team2 = results.find((r) => r.teamId === 2)!;
+    expect(team1.position).toBe(1);
+    expect(team2.position).toBe(1);
+    expect(team1.points).toBe(8); // split
+    expect(team2.points).toBe(8); // split
+  });
+
+  it("suggestPoints treats near-equal net scores as tied", () => {
+    // 40.0 vs 40.02 should be a tie
+    const result = suggestPoints(40.0, 40.02);
+    expect(result.teamAPoints).toBe(10);
+    expect(result.teamBPoints).toBe(10);
+  });
+});
+
+describe("Fix 1.3: Freeze week semantics — temporal truncation order", () => {
+  it("should exclude scores beyond freezeWeek even if earlier weeks have invalid scores", () => {
+    // Scores: [-1, 40, 42, 38] (week1=invalid, week2=40, week3=42, week4=38)
+    // freezeWeek=3, weekNumber=5
+    // BUG: old code filtered [-1] first => [40, 42, 38], then "first 3" kept all 3
+    //       including week 4's score (38)
+    // FIX: truncate first => [-1, 40, 42], then filter [-1] => [40, 42]
+    const s = settings({ freezeWeek: 3 });
+    const result = calculateHandicap([-1, 40, 42, 38], s, 5);
+    // avg of [40, 42] = 41, (41-35)*0.9 = 5.4, floor = 5
+    expect(result).toBe(5);
+
+    // Without the fix, it would use [40, 42, 38]:
+    // avg = 40, (40-35)*0.9 = 4.5, floor = 4
+    // So if we got 4, the bug still exists
+  });
+
+  it("describeCalculation matches the corrected freeze order", () => {
+    const s = settings({ freezeWeek: 3 });
+    const scores = [-1, 40, 42, 38];
+    const handicap = calculateHandicap(scores, s, 5);
+    const steps = describeCalculation(scores, s, handicap, 5);
+
+    // Should mention freeze first, then filtering
+    const freezeIdx = steps.findIndex((step) => step.includes("Freeze week"));
+    const filterIdx = steps.findIndex((step) => step.includes("Filtered"));
+    expect(freezeIdx).toBeGreaterThanOrEqual(0);
+    expect(filterIdx).toBeGreaterThan(freezeIdx); // filter happens AFTER freeze
+  });
+});
+
+describe("Fix 2.1: bestOf uses null check instead of truthiness", () => {
+  it("should handle bestOf=0 without skipping selection", () => {
+    // BUG: `if (settings.bestOf && settings.lastOf)` — bestOf=0 is falsy, silently skips
+    // FIX: `if (settings.bestOf != null && settings.lastOf != null)`
+    const scores = [40, 42, 38, 44, 36];
+    // bestOf=0 means "take best 0 of last 3" => should result in empty selection => default
+    const result = selectScores(
+      scores,
+      settings({ scoreSelection: "best_of_last", bestOf: 0, lastOf: 3 })
+    );
+    // bestOf=0 should select 0 scores (empty)
+    expect(result).toEqual([]);
+  });
+});
+
+describe("Fix 2.2: bestOf > lastOf validation with clamping", () => {
+  it("should clamp bestOf to lastOf when bestOf > lastOf", () => {
+    // bestOf=10, lastOf=3 should behave as bestOf=3 (all of last 3)
+    const scores = [50, 48, 40, 42, 38];
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = selectScores(
+      scores,
+      settings({ scoreSelection: "best_of_last", bestOf: 10, lastOf: 3 })
+    );
+    // last 3: [40, 42, 38], best 3 (clamped from 10): [38, 40, 42] in chronological order
+    expect(result).toEqual([40, 42, 38]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("bestOf (10) > lastOf (3)"));
+
+    warnSpy.mockRestore();
+  });
+});
+
+describe("Fix 2.3: leagueToHandicapSettings Zod validation", () => {
+  it("returns DEFAULT_HANDICAP_SETTINGS when required fields are missing/corrupt", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    // Pass an object missing required numeric fields (handicapBaseScore is string instead of number)
+    const badLeague = {
+      handicapBaseScore: "not a number" as unknown as number,
+      handicapMultiplier: 0.9,
+      handicapRounding: "floor",
+      handicapDefault: 0,
+      handicapMax: null,
+    };
+
+    const result = leagueToHandicapSettings(badLeague);
+    expect(result).toEqual(DEFAULT_HANDICAP_SETTINGS);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Invalid league handicap data"),
+      expect.anything()
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("returns DEFAULT_HANDICAP_SETTINGS when handicapMax is undefined (not nullable)", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const badLeague = {
+      handicapBaseScore: 35,
+      handicapMultiplier: 0.9,
+      handicapRounding: "floor",
+      handicapDefault: 0,
+      handicapMax: undefined as unknown as number | null,
+    };
+
+    const result = leagueToHandicapSettings(badLeague);
+    expect(result).toEqual(DEFAULT_HANDICAP_SETTINGS);
+
+    warnSpy.mockRestore();
+  });
+
+  it("passes through valid league data normally", () => {
+    const league = {
+      handicapBaseScore: 36,
+      handicapMultiplier: 0.96,
+      handicapRounding: "round",
+      handicapDefault: 5,
+      handicapMax: 18,
+    };
+
+    const result = leagueToHandicapSettings(league);
+    expect(result.baseScore).toBe(36);
+    expect(result.multiplier).toBe(0.96);
+  });
+});
+
+describe("Fix 2.4: NaN guards in calculateNetScore and suggestPoints", () => {
+  it("calculateNetScore returns 0 for NaN inputs", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(calculateNetScore(NaN, 5)).toBe(0);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("calculateNetScore returns 0 for Infinity inputs", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(calculateNetScore(Infinity, 5)).toBe(0);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("suggestPoints returns 10/10 tie for NaN inputs", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = suggestPoints(NaN, 40);
+    expect(result).toEqual({ teamAPoints: 10, teamBPoints: 10 });
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("suggestPoints returns 10/10 tie for Infinity inputs", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = suggestPoints(40, Infinity);
+    expect(result).toEqual({ teamAPoints: 10, teamBPoints: 10 });
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+describe("Fix 2.5: Trend calculation symmetric for odd-length arrays", () => {
+  it("excludes middle element for odd-length arrays", () => {
+    // [40, 42, 44] — 3 scores, midpoint=1
+    // older=[40], newer=[44] (middle element 42 excluded)
+    // trend = 40-44 = -4, adjustment = -4*0.1 = -0.4
+    const result = calculateTrendAdjustment(
+      [40, 42, 44],
+      settings({ useTrend: true, trendWeight: 0.1 })
+    );
+    expect(result).toBeCloseTo(-0.4);
+    // BUG: old code included middle in newer half: newer=[42,44] avg=43
+    // trend = 40-43=-3, adjustment=-0.3 — asymmetric bias
+  });
+
+  it("even-length arrays are unaffected", () => {
+    // [40, 42, 44, 46] — 4 scores, midpoint=2
+    // older=[40,42] avg=41, newer=[44,46] avg=45
+    // trend = 41-45 = -4, adjustment = -4*0.1 = -0.4
+    const result = calculateTrendAdjustment(
+      [40, 42, 44, 46],
+      settings({ useTrend: true, trendWeight: 0.1 })
+    );
+    expect(result).toBeCloseTo(-0.4);
+  });
+});
+
+describe("Fix 3.1: applyPreset warns on unknown preset name", () => {
+  it("warns and returns current settings for unknown preset", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const current = settings({ maxHandicap: 20 });
+    const result = applyPreset("nonexistent" as Parameters<typeof applyPreset>[0], current);
+    expect(result).toEqual(current);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown preset name: "nonexistent"'));
+    warnSpy.mockRestore();
+  });
+});
+
+describe("Fix 3.3: USGA-Inspired preset renamed", () => {
+  it("usga_style preset is labeled 'Best of Recent' (not 'USGA-Inspired')", () => {
+    const preset = HANDICAP_PRESETS.find((p) => p.name === "usga_style");
+    expect(preset).toBeDefined();
+    expect(preset!.label).toBe("Best of Recent");
+    expect(preset!.description).not.toContain("official");
   });
 });

@@ -134,7 +134,7 @@ describe("POST /api/admin/login", () => {
     expect(data.error).toContain("required");
   });
 
-  it("returns 404 for non-existent league", async () => {
+  it("returns 401 for non-existent league (no enumeration)", async () => {
     mockPrisma.league.findUnique.mockResolvedValueOnce(null);
 
     const request = createRequest("/api/admin/login", {
@@ -145,8 +145,8 @@ describe("POST /api/admin/login", () => {
     const response = await adminLoginPOST(request);
     const data = await response.json();
 
-    expect(response.status).toBe(404);
-    expect(data.error).toContain("not found");
+    expect(response.status).toBe(401);
+    expect(data.error).toContain("Invalid credentials");
   });
 
   it("returns 401 for wrong password", async () => {

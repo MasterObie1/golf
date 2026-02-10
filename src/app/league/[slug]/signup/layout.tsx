@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getLeaguePublicInfo } from "@/lib/actions";
+import { getLeaguePublicInfo } from "@/lib/actions/leagues";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -8,15 +8,14 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  try {
-    const league = await getLeaguePublicInfo(slug);
-    return {
-      title: `Sign Up - ${league.name}`,
-      description: `Register your team for ${league.name}`,
-    };
-  } catch {
+  const league = await getLeaguePublicInfo(slug);
+  if (!league) {
     return { title: "Team Sign Up" };
   }
+  return {
+    title: `Sign Up - ${league.name}`,
+    description: `Register your team for ${league.name}`,
+  };
 }
 
 export default function SignupLayout({ children }: Props) {

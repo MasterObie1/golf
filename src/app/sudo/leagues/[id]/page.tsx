@@ -11,6 +11,10 @@ interface League {
   adminUsername: string;
   status: string;
   subscriptionTier: string;
+  scoringType: string;
+  scheduleType: string | null;
+  scheduleVisibility: string;
+  byePointsMode: string;
   maxTeams: number;
   registrationOpen: boolean;
   courseName: string | null;
@@ -22,6 +26,7 @@ interface League {
   _count: {
     teams: number;
     matchups: number;
+    scheduledMatchups: number;
   };
 }
 
@@ -58,6 +63,7 @@ export default function LeagueManagementPage({ params }: Props) {
 
   const handleStatusChange = async (newStatus: string) => {
     if (!league) return;
+    setError("");
     setActionLoading(true);
     try {
       const res = await fetch(`/api/sudo/leagues/${id}/status`, {
@@ -76,6 +82,7 @@ export default function LeagueManagementPage({ params }: Props) {
 
   const handleDelete = async () => {
     if (!league || deleteConfirmText !== league.name) return;
+    setError("");
     setActionLoading(true);
     try {
       const res = await fetch(`/api/sudo/leagues/${id}`, {
@@ -92,6 +99,7 @@ export default function LeagueManagementPage({ params }: Props) {
 
   const handleImpersonate = async () => {
     if (!league) return;
+    setError("");
     setActionLoading(true);
     try {
       const res = await fetch(`/api/sudo/impersonate`, {
@@ -111,7 +119,7 @@ export default function LeagueManagementPage({ params }: Props) {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="text-slate-400">Loading...</div>
+        <div className="text-putting/60 font-sans">Loading...</div>
       </div>
     );
   }
@@ -119,12 +127,12 @@ export default function LeagueManagementPage({ params }: Props) {
   if (error || !league) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg">
+        <div className="bg-board-red/20 border border-board-red/50 text-board-red px-4 py-3 rounded-lg font-sans">
           {error || "League not found"}
         </div>
         <Link
           href="/sudo"
-          className="mt-4 inline-block text-amber-500 hover:text-amber-400"
+          className="mt-4 inline-block text-board-yellow hover:text-board-yellow/80 font-display text-sm uppercase tracking-wider"
         >
           &larr; Back to Dashboard
         </Link>
@@ -138,7 +146,7 @@ export default function LeagueManagementPage({ params }: Props) {
       <div className="mb-6">
         <Link
           href="/sudo"
-          className="text-slate-400 hover:text-white text-sm"
+          className="text-putting/60 hover:text-white text-sm font-display uppercase tracking-wider"
         >
           &larr; Back to Dashboard
         </Link>
@@ -147,16 +155,16 @@ export default function LeagueManagementPage({ params }: Props) {
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">{league.name}</h1>
-          <p className="text-slate-400">/{league.slug}</p>
+          <h1 className="text-2xl font-display font-bold text-white uppercase tracking-wider">{league.name}</h1>
+          <p className="text-putting/60 font-mono">/{league.slug}</p>
         </div>
         <span
-          className={`inline-flex px-3 py-1 text-sm font-medium rounded ${
+          className={`inline-flex px-3 py-1 text-sm font-display font-medium rounded uppercase tracking-wider ${
             league.status === "active"
-              ? "bg-green-900/50 text-green-400"
+              ? "bg-fairway/20 text-fairway"
               : league.status === "suspended"
-              ? "bg-amber-900/50 text-amber-400"
-              : "bg-red-900/50 text-red-400"
+              ? "bg-board-yellow/20 text-board-yellow"
+              : "bg-board-red/20 text-board-red"
           }`}
         >
           {league.status}
@@ -164,77 +172,93 @@ export default function LeagueManagementPage({ params }: Props) {
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg">
+        <div className="mb-6 bg-board-red/20 border border-board-red/50 text-board-red px-4 py-3 rounded-lg font-sans">
           {error}
         </div>
       )}
 
       {/* Info cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
-          <div className="text-slate-400 text-xs uppercase">Teams</div>
-          <div className="text-2xl font-bold text-white">{league._count.teams}</div>
+        <div className="bg-board-green border border-board-green/80 rounded-lg p-4">
+          <div className="text-putting/80 text-xs font-display uppercase tracking-wider">Teams</div>
+          <div className="text-2xl font-bold text-white font-mono tabular-nums">{league._count.teams}</div>
         </div>
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
-          <div className="text-slate-400 text-xs uppercase">Matchups</div>
-          <div className="text-2xl font-bold text-white">{league._count.matchups}</div>
+        <div className="bg-board-green border border-board-green/80 rounded-lg p-4">
+          <div className="text-putting/80 text-xs font-display uppercase tracking-wider">Matchups</div>
+          <div className="text-2xl font-bold text-white font-mono tabular-nums">{league._count.matchups}</div>
         </div>
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
-          <div className="text-slate-400 text-xs uppercase">Max Teams</div>
-          <div className="text-2xl font-bold text-white">{league.maxTeams}</div>
+        <div className="bg-board-green border border-board-green/80 rounded-lg p-4">
+          <div className="text-putting/80 text-xs font-display uppercase tracking-wider">Scoring</div>
+          <div className="text-lg font-bold text-white mt-1">
+            <span className={`inline-flex px-2 py-0.5 text-xs font-display font-medium rounded uppercase tracking-wider ${
+              league.scoringType === "stroke_play"
+                ? "bg-water/20 text-water"
+                : league.scoringType === "hybrid"
+                ? "bg-putting/20 text-putting"
+                : "bg-rough text-putting/80"
+            }`}>
+              {league.scoringType === "stroke_play" ? "Stroke Play"
+                : league.scoringType === "hybrid" ? "Hybrid"
+                : "Match Play"}
+            </span>
+          </div>
         </div>
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
-          <div className="text-slate-400 text-xs uppercase">Registration</div>
-          <div className="text-2xl font-bold text-white">
-            {league.registrationOpen ? "Open" : "Closed"}
+        <div className="bg-board-green border border-board-green/80 rounded-lg p-4">
+          <div className="text-putting/80 text-xs font-display uppercase tracking-wider">Schedule</div>
+          <div className="text-lg font-bold text-white mt-1">
+            {league._count.scheduledMatchups > 0 ? (
+              <span className="text-fairway text-sm font-mono tabular-nums">{league._count.scheduledMatchups} matchups</span>
+            ) : (
+              <span className="text-putting/40 text-sm font-sans">Not generated</span>
+            )}
           </div>
         </div>
       </div>
 
       {/* Details */}
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4">League Details</h2>
-        <div className="grid grid-cols-2 gap-4 text-sm">
+      <div className="bg-board-green border border-board-green/80 rounded-lg p-6 mb-6">
+        <h2 className="text-lg font-display font-semibold text-board-yellow uppercase tracking-wider mb-4">League Details</h2>
+        <div className="grid grid-cols-2 gap-4 text-sm font-sans">
           <div>
-            <span className="text-slate-400">Admin Username:</span>
+            <span className="text-putting/80">Admin Username:</span>
             <span className="text-white ml-2">{league.adminUsername}</span>
           </div>
           <div>
-            <span className="text-slate-400">Subscription:</span>
+            <span className="text-putting/80">Subscription:</span>
             <span className="text-white ml-2">{league.subscriptionTier}</span>
           </div>
           {league.courseName && (
             <div>
-              <span className="text-slate-400">Course:</span>
+              <span className="text-putting/80">Course:</span>
               <span className="text-white ml-2">{league.courseName}</span>
             </div>
           )}
           {league.courseLocation && (
             <div>
-              <span className="text-slate-400">Location:</span>
+              <span className="text-putting/80">Location:</span>
               <span className="text-white ml-2">{league.courseLocation}</span>
             </div>
           )}
           {league.playDay && (
             <div>
-              <span className="text-slate-400">Play Day:</span>
+              <span className="text-putting/80">Play Day:</span>
               <span className="text-white ml-2">{league.playDay}</span>
             </div>
           )}
           {league.playTime && (
             <div>
-              <span className="text-slate-400">Play Time:</span>
+              <span className="text-putting/80">Play Time:</span>
               <span className="text-white ml-2">{league.playTime}</span>
             </div>
           )}
           {league.contactEmail && (
             <div>
-              <span className="text-slate-400">Contact:</span>
+              <span className="text-putting/80">Contact:</span>
               <span className="text-white ml-2">{league.contactEmail}</span>
             </div>
           )}
           <div>
-            <span className="text-slate-400">Created:</span>
+            <span className="text-putting/80">Created:</span>
             <span className="text-white ml-2">
               {new Date(league.createdAt).toLocaleDateString()}
             </span>
@@ -243,27 +267,27 @@ export default function LeagueManagementPage({ params }: Props) {
       </div>
 
       {/* Actions */}
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Actions</h2>
+      <div className="bg-board-green border border-board-green/80 rounded-lg p-6 mb-6">
+        <h2 className="text-lg font-display font-semibold text-board-yellow uppercase tracking-wider mb-4">Actions</h2>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={handleImpersonate}
             disabled={actionLoading}
-            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm font-medium"
+            className="px-4 py-2 bg-board-yellow text-rough rounded-lg hover:bg-board-yellow/90 disabled:opacity-50 text-sm font-display font-semibold uppercase tracking-wider"
           >
             Login as Admin
           </button>
           <Link
             href={`/league/${league.slug}`}
             target="_blank"
-            className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 text-sm font-medium"
+            className="px-4 py-2 bg-rough text-putting/80 rounded-lg hover:bg-rough/80 hover:text-white text-sm font-display font-medium uppercase tracking-wider"
           >
             View League Page
           </Link>
           <Link
             href={`/league/${league.slug}/admin`}
             target="_blank"
-            className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 text-sm font-medium"
+            className="px-4 py-2 bg-rough text-putting/80 rounded-lg hover:bg-rough/80 hover:text-white text-sm font-display font-medium uppercase tracking-wider"
           >
             View Admin Panel
           </Link>
@@ -271,14 +295,14 @@ export default function LeagueManagementPage({ params }: Props) {
       </div>
 
       {/* Status management */}
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Status Management</h2>
+      <div className="bg-board-green border border-board-green/80 rounded-lg p-6 mb-6">
+        <h2 className="text-lg font-display font-semibold text-board-yellow uppercase tracking-wider mb-4">Status Management</h2>
         <div className="flex flex-wrap gap-3">
           {league.status !== "active" && (
             <button
               onClick={() => handleStatusChange("active")}
               disabled={actionLoading}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium"
+              className="px-4 py-2 bg-fairway text-white rounded-lg hover:bg-fairway/90 disabled:opacity-50 text-sm font-display font-semibold uppercase tracking-wider"
             >
               Activate
             </button>
@@ -287,7 +311,7 @@ export default function LeagueManagementPage({ params }: Props) {
             <button
               onClick={() => handleStatusChange("suspended")}
               disabled={actionLoading}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm font-medium"
+              className="px-4 py-2 bg-board-yellow text-rough rounded-lg hover:bg-board-yellow/90 disabled:opacity-50 text-sm font-display font-semibold uppercase tracking-wider"
             >
               Suspend
             </button>
@@ -296,7 +320,7 @@ export default function LeagueManagementPage({ params }: Props) {
             <button
               onClick={() => handleStatusChange("cancelled")}
               disabled={actionLoading}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
+              className="px-4 py-2 bg-board-red text-white rounded-lg hover:bg-board-red/90 disabled:opacity-50 text-sm font-display font-semibold uppercase tracking-wider"
             >
               Cancel
             </button>
@@ -305,22 +329,22 @@ export default function LeagueManagementPage({ params }: Props) {
       </div>
 
       {/* Danger zone */}
-      <div className="bg-red-950/30 border border-red-900 rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-red-400 mb-4">Danger Zone</h2>
+      <div className="bg-board-red/10 border border-board-red/30 rounded-lg p-6">
+        <h2 className="text-lg font-display font-semibold text-board-red uppercase tracking-wider mb-4">Danger Zone</h2>
         {!showDeleteConfirm ? (
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
+            className="px-4 py-2 bg-board-red text-white rounded-lg hover:bg-board-red/90 text-sm font-display font-semibold uppercase tracking-wider"
           >
             Delete League
           </button>
         ) : (
           <div className="space-y-4">
-            <p className="text-slate-300 text-sm">
+            <p className="text-putting/80 text-sm font-sans">
               This will permanently delete the league and all associated data
               (teams, matchups). This action cannot be undone.
             </p>
-            <p className="text-slate-300 text-sm">
+            <p className="text-putting/80 text-sm font-sans">
               Type <strong className="text-white">{league.name}</strong> to
               confirm:
             </p>
@@ -328,14 +352,14 @@ export default function LeagueManagementPage({ params }: Props) {
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
-              className="w-full max-w-md px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full max-w-md px-4 py-2 bg-rough border-b-2 border-putting/40 text-white placeholder-putting/30 focus:outline-none focus:border-board-red font-sans transition-colors"
               placeholder="Enter league name"
             />
             <div className="flex gap-3">
               <button
                 onClick={handleDelete}
                 disabled={deleteConfirmText !== league.name || actionLoading}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
+                className="px-4 py-2 bg-board-red text-white rounded-lg hover:bg-board-red/90 disabled:opacity-50 text-sm font-display font-semibold uppercase tracking-wider"
               >
                 {actionLoading ? "Deleting..." : "Confirm Delete"}
               </button>
@@ -344,7 +368,7 @@ export default function LeagueManagementPage({ params }: Props) {
                   setShowDeleteConfirm(false);
                   setDeleteConfirmText("");
                 }}
-                className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 text-sm font-medium"
+                className="px-4 py-2 bg-rough text-putting/80 rounded-lg hover:bg-rough/80 hover:text-white text-sm font-display font-medium uppercase tracking-wider"
               >
                 Cancel
               </button>

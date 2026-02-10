@@ -35,31 +35,31 @@ export function ConfirmDialog({
   }, [open]);
 
   const variantStyles = {
-    danger: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
-    warning: "bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500",
+    danger: "bg-board-red hover:bg-board-red/90 focus:ring-board-red/50",
+    warning: "bg-wood hover:bg-wood/90 focus:ring-wood/50",
   };
 
   return (
     <dialog
       ref={dialogRef}
       onCancel={onCancel}
-      className="fixed inset-0 z-50 rounded-lg shadow-xl p-0 backdrop:bg-black/50 max-w-md w-full"
+      className="fixed inset-0 z-50 rounded-lg shadow-xl p-0 backdrop:bg-black/50 max-w-md w-full bg-scorecard-paper"
     >
       <div className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">{title}</h2>
-        <p className="text-gray-600 mb-6">{message}</p>
+        <h2 className="text-lg font-display font-semibold text-scorecard-pencil uppercase tracking-wider mb-2">{title}</h2>
+        <p className="text-text-secondary mb-6 font-sans">{message}</p>
         <div className="flex justify-end gap-3">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
+            className="px-4 py-2 text-sm font-display font-medium text-text-secondary bg-surface-white border border-border rounded-lg hover:bg-surface focus:outline-none focus:ring-2 focus:ring-scorecard-line uppercase tracking-wider"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 ${variantStyles[variant]}`}
+            className={`px-4 py-2 text-sm font-display font-medium text-white rounded-lg focus:outline-none focus:ring-2 uppercase tracking-wider ${variantStyles[variant]}`}
           >
             {confirmLabel}
           </button>

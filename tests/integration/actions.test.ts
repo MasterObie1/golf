@@ -77,22 +77,22 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 
 // Now import the server actions and mocked auth
+import { createLeague, getLeagueBySlug } from "@/lib/actions/leagues";
 import {
-  createLeague,
-  getLeagueBySlug,
   createTeam,
   registerTeam,
   approveTeam,
   rejectTeam,
+} from "@/lib/actions/teams";
+import {
   createSeason,
   setActiveSeason,
   getSeasons,
   getActiveSeason,
-  submitMatchup,
-  deleteMatchup,
-  recalculateLeagueStats,
-  getLeaderboard,
-} from "@/lib/actions";
+} from "@/lib/actions/seasons";
+import { submitMatchup, deleteMatchup } from "@/lib/actions/matchups";
+import { recalculateLeagueStats } from "@/lib/actions/league-settings";
+import { getLeaderboard } from "@/lib/actions/standings";
 import { requireAdmin, requireLeagueAdmin, getAdminSession } from "@/lib/auth";
 
 const mockedRequireAdmin = vi.mocked(requireAdmin);
@@ -218,17 +218,16 @@ describe("createSeason + setActiveSeason", () => {
   });
 
   it("creates a season that is active by default", async () => {
-    const season = await createSeason(leagueSlug, "Spring 2025", 2025);
+    const season = unwrap(await createSeason(leagueSlug, "Spring 2025", 2025));
 
     expect(season.name).toBe("Spring 2025");
-    expect(season.year).toBe(2025);
     expect(season.isActive).toBe(true);
     expect(season.seasonNumber).toBe(1);
   });
 
   it("deactivates previous season when creating a new one", async () => {
-    const s1 = await createSeason(leagueSlug, "Spring 2025", 2025);
-    const s2 = await createSeason(leagueSlug, "Fall 2025", 2025);
+    const s1 = unwrap(await createSeason(leagueSlug, "Spring 2025", 2025));
+    const s2 = unwrap(await createSeason(leagueSlug, "Fall 2025", 2025));
 
     const seasons = await getSeasons(mockSession.leagueId);
     const s1Updated = seasons.find((s) => s.id === s1.id);
@@ -239,9 +238,9 @@ describe("createSeason + setActiveSeason", () => {
   });
 
   it("increments season number", async () => {
-    const s1 = await createSeason(leagueSlug, "Season 1", 2025);
-    const s2 = await createSeason(leagueSlug, "Season 2", 2025);
-    const s3 = await createSeason(leagueSlug, "Season 3", 2025);
+    const s1 = unwrap(await createSeason(leagueSlug, "Season 1", 2025));
+    const s2 = unwrap(await createSeason(leagueSlug, "Season 2", 2025));
+    const s3 = unwrap(await createSeason(leagueSlug, "Season 3", 2025));
 
     expect(s1.seasonNumber).toBe(1);
     expect(s2.seasonNumber).toBe(2);
@@ -249,11 +248,12 @@ describe("createSeason + setActiveSeason", () => {
   });
 
   it("setActiveSeason switches the active season", async () => {
-    const s1 = await createSeason(leagueSlug, "Season 1", 2025);
+    const s1 = unwrap(await createSeason(leagueSlug, "Season 1", 2025));
     await createSeason(leagueSlug, "Season 2", 2025);
 
     // Season 2 is active. Switch back to Season 1
-    await setActiveSeason(leagueSlug, s1.id);
+    const switchResult = await setActiveSeason(leagueSlug, s1.id);
+    expect(switchResult.success).toBe(true);
 
     const active = await getActiveSeason(mockSession.leagueId);
     expect(active?.id).toBe(s1.id);
@@ -272,7 +272,7 @@ describe("registerTeam + approveTeam + rejectTeam", () => {
     const league = unwrap(result);
     leagueSlug = league.slug;
     setAuthContext(league.id, league.slug, league.adminUsername);
-    await createSeason(leagueSlug, "Season 1", 2025);
+    unwrap(await createSeason(leagueSlug, "Season 1", 2025));
   });
 
   it("registers a team with pending status", async () => {
@@ -338,11 +338,11 @@ describe("submitMatchup + team stats", () => {
     leagueSlug = league.slug;
     setAuthContext(league.id, league.slug, league.adminUsername);
 
-    await createSeason(leagueSlug, "Season 1", 2025);
+    unwrap(await createSeason(leagueSlug, "Season 1", 2025));
 
     // Create two approved teams
-    const teamA = await createTeam(league.id, "Team Alpha");
-    const teamB = await createTeam(league.id, "Team Beta");
+    const teamA = unwrap(await createTeam(league.id, "Team Alpha"));
+    const teamB = unwrap(await createTeam(league.id, "Team Beta"));
     teamAId = teamA.id;
     teamBId = teamB.id;
     await approveTeam(leagueSlug, teamAId);
@@ -357,7 +357,7 @@ describe("submitMatchup + team stats", () => {
       40,       // teamA gross
       5,        // teamA handicap
       35,       // teamA net (40-5)
-      2,        // teamA points (winner)
+      20,       // teamA points (winner — match_play sums to 20)
       false,    // teamA isSub
       teamBId,
       45,       // teamB gross
@@ -376,7 +376,7 @@ describe("submitMatchup + team stats", () => {
     expect(matchup!.teamBGross).toBe(45);
     expect(matchup!.teamANet).toBe(35);
     expect(matchup!.teamBNet).toBe(40);
-    expect(matchup!.teamAPoints).toBe(2);
+    expect(matchup!.teamAPoints).toBe(20);
     expect(matchup!.teamBPoints).toBe(0);
 
     // Check team stats were updated
@@ -384,7 +384,7 @@ describe("submitMatchup + team stats", () => {
     const teamB = await testPrisma.team.findUnique({ where: { id: teamBId } });
 
     expect(teamA!.wins).toBe(1);
-    expect(teamA!.totalPoints).toBe(2);
+    expect(teamA!.totalPoints).toBe(20);
     expect(teamB!.losses).toBe(1);
     expect(teamB!.totalPoints).toBe(0);
   });
@@ -392,8 +392,8 @@ describe("submitMatchup + team stats", () => {
   it("handles a tied match", async () => {
     const result = await submitMatchup(
       leagueSlug, 1,
-      teamAId, 40, 5, 35, 1, false,
-      teamBId, 40, 5, 35, 1, false,
+      teamAId, 40, 5, 35, 10, false,
+      teamBId, 40, 5, 35, 10, false,
     );
     expect(result.success).toBe(true);
 
@@ -433,9 +433,9 @@ describe("deleteMatchup + stats rollback", () => {
     leagueSlug = league.slug;
     setAuthContext(league.id, league.slug, league.adminUsername);
 
-    await createSeason(leagueSlug, "Season 1", 2025);
-    const teamA = await createTeam(league.id, "Team Alpha");
-    const teamB = await createTeam(league.id, "Team Beta");
+    unwrap(await createSeason(leagueSlug, "Season 1", 2025));
+    const teamA = unwrap(await createTeam(league.id, "Team Alpha"));
+    const teamB = unwrap(await createTeam(league.id, "Team Beta"));
     teamAId = teamA.id;
     teamBId = teamB.id;
     await approveTeam(leagueSlug, teamAId);
@@ -443,17 +443,17 @@ describe("deleteMatchup + stats rollback", () => {
   });
 
   it("rolls back team stats when matchup is deleted", async () => {
-    // Submit a matchup (Team A wins)
+    // Submit a matchup (Team A wins — match_play points sum to 20)
     await submitMatchup(
       leagueSlug, 1,
-      teamAId, 40, 5, 35, 2, false,
+      teamAId, 40, 5, 35, 20, false,
       teamBId, 45, 5, 40, 0, false,
     );
 
     // Verify stats exist
     let teamA = await testPrisma.team.findUnique({ where: { id: teamAId } });
     expect(teamA!.wins).toBe(1);
-    expect(teamA!.totalPoints).toBe(2);
+    expect(teamA!.totalPoints).toBe(20);
 
     // Get the matchup ID from DB
     const matchup = await testPrisma.matchup.findFirst({ where: { weekNumber: 1 } });
@@ -492,9 +492,9 @@ describe("recalculateLeagueStats", () => {
     leagueId = league.id;
     setAuthContext(league.id, league.slug, league.adminUsername);
 
-    await createSeason(leagueSlug, "Season 1", 2025);
-    const teamA = await createTeam(leagueId, "Team Alpha");
-    const teamB = await createTeam(leagueId, "Team Beta");
+    unwrap(await createSeason(leagueSlug, "Season 1", 2025));
+    const teamA = unwrap(await createTeam(leagueId, "Team Alpha"));
+    const teamB = unwrap(await createTeam(leagueId, "Team Beta"));
     teamAId = teamA.id;
     teamBId = teamB.id;
     await approveTeam(leagueSlug, teamAId);
@@ -503,10 +503,10 @@ describe("recalculateLeagueStats", () => {
 
   it("recalculates all stats from scratch correctly", async () => {
     // Submit two matchups
-    // Week 1: A(40-5=35) beats B(45-5=40) => A gets 2pts
-    await submitMatchup(leagueSlug, 1, teamAId, 40, 5, 35, 2, false, teamBId, 45, 5, 40, 0, false);
-    // Week 2: B(38-5=33) beats A(42-5=37) => B gets 2pts
-    await submitMatchup(leagueSlug, 2, teamAId, 42, 5, 37, 0, false, teamBId, 38, 5, 33, 2, false);
+    // Week 1: A(40-5=35) beats B(45-5=40) => A gets 20pts (match_play sums to 20)
+    await submitMatchup(leagueSlug, 1, teamAId, 40, 5, 35, 20, false, teamBId, 45, 5, 40, 0, false);
+    // Week 2: B(38-5=33) beats A(42-5=37) => B gets 20pts
+    await submitMatchup(leagueSlug, 2, teamAId, 42, 5, 37, 0, false, teamBId, 38, 5, 33, 20, false);
 
     // Manually corrupt team stats
     await testPrisma.team.update({
@@ -566,27 +566,27 @@ describe("leaderboard tiebreaker ordering", () => {
     leagueId = league.id;
     setAuthContext(league.id, league.slug, league.adminUsername);
 
-    await createSeason(leagueSlug, "Season 1", 2025);
+    unwrap(await createSeason(leagueSlug, "Season 1", 2025));
   });
 
   it("ranks teams by total points descending", async () => {
-    const t1 = await createTeam(leagueId, "First Place");
-    const t2 = await createTeam(leagueId, "Second Place");
-    const t3 = await createTeam(leagueId, "Third Place");
+    const t1 = unwrap(await createTeam(leagueId, "First Place"));
+    const t2 = unwrap(await createTeam(leagueId, "Second Place"));
+    const t3 = unwrap(await createTeam(leagueId, "Third Place"));
     await approveTeam(leagueSlug, t1.id);
     await approveTeam(leagueSlug, t2.id);
     await approveTeam(leagueSlug, t3.id);
 
-    // Week 1: First(38-5=33) beats Second(42-5=37)
-    await submitMatchup(leagueSlug, 1, t1.id, 38, 5, 33, 2, false, t2.id, 42, 5, 37, 0, false);
+    // Week 1: First(38-5=33) beats Second(42-5=37) — match_play points sum to 20
+    await submitMatchup(leagueSlug, 1, t1.id, 38, 5, 33, 20, false, t2.id, 42, 5, 37, 0, false);
 
     // Week 2: First(38-5=33) beats Third(44-5=39)
-    await submitMatchup(leagueSlug, 2, t1.id, 38, 5, 33, 2, false, t3.id, 44, 5, 39, 0, false);
+    await submitMatchup(leagueSlug, 2, t1.id, 38, 5, 33, 20, false, t3.id, 44, 5, 39, 0, false);
 
     const leaderboard = await getLeaderboard(leagueId);
 
     // First Place should be ranked first (most points)
     expect(leaderboard[0].name).toBe("First Place");
-    expect(leaderboard[0].totalPoints).toBe(4); // 2+2
+    expect(leaderboard[0].totalPoints).toBe(40); // 20+20
   });
 });

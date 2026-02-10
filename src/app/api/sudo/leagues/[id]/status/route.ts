@@ -8,7 +8,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireSuperAdmin();
+    const session = await requireSuperAdmin();
 
     const { id } = await params;
     const leagueId = parseInt(id);
@@ -25,10 +25,25 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
 
+    // Verify league exists
+    const existing = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, slug: true, status: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "League not found" }, { status: 404 });
+    }
+
     const league = await prisma.league.update({
       where: { id: leagueId },
       data: { status },
+      select: { id: true, name: true, slug: true, status: true },
     });
+
+    // Audit log
+    console.warn(
+      `[AUDIT] Super-admin "${session.username}" (id=${session.superAdminId}) changed league "${existing.name}" (id=${existing.id}) status: ${existing.status} -> ${status}`
+    );
 
     return NextResponse.json(league);
   } catch (error) {

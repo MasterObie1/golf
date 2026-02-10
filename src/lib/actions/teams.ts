@@ -4,16 +4,32 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { requireAdmin, requireLeagueAdmin } from "../auth";
 import { checkRateLimit, RATE_LIMITS } from "../rate-limit";
+import { logger } from "../logger";
 import { getServerActionIp, type ActionResult } from "./shared";
+import { requireActiveLeague } from "./leagues";
 
 // ==========================================
 // TEAM MANAGEMENT (League-scoped)
 // ==========================================
 
+// Public read — returns approved teams only. No PII fields.
 export async function getTeams(leagueId: number) {
   return prisma.team.findMany({
     where: { leagueId, status: "approved" },
     orderBy: { name: "asc" },
+    select: {
+      id: true,
+      leagueId: true,
+      seasonId: true,
+      name: true,
+      status: true,
+      totalPoints: true,
+      wins: true,
+      losses: true,
+      ties: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 }
 
@@ -22,33 +38,44 @@ const createTeamSchema = z.object({
   name: z.string().min(2, "Team name must be at least 2 characters").max(50).trim(),
 });
 
-export async function createTeam(leagueId: number, name: string) {
-  const validated = createTeamSchema.parse({ leagueId, name });
+export async function createTeam(leagueId: number, name: string): Promise<ActionResult<{ id: number; name: string; leagueId: number; seasonId: number | null }>> {
+  try {
+    const validated = createTeamSchema.parse({ leagueId, name });
 
-  const session = await requireAdmin();
-  if (session.leagueId !== validated.leagueId) {
-    throw new Error("Unauthorized: Cannot create team in another league");
+    const session = await requireAdmin();
+    if (session.leagueId !== validated.leagueId) {
+      return { success: false, error: "Unauthorized: Cannot create team in another league" };
+    }
+    await requireActiveLeague(session.leagueId);
+
+    // Get active season
+    const activeSeason = await prisma.season.findFirst({
+      where: { leagueId: validated.leagueId, isActive: true },
+    });
+
+    if (!activeSeason) {
+      return { success: false, error: "No active season. Please create a season first." };
+    }
+
+    const existing = await prisma.team.findUnique({
+      where: { seasonId_name: { seasonId: activeSeason.id, name: validated.name } },
+    });
+    if (existing) {
+      return { success: false, error: `Team "${validated.name}" already exists in this season` };
+    }
+
+    const team = await prisma.team.create({
+      data: { name: validated.name, leagueId: validated.leagueId, seasonId: activeSeason.id },
+    });
+
+    return { success: true, data: { id: team.id, name: team.name, leagueId: team.leagueId, seasonId: team.seasonId } };
+  } catch (error) {
+    logger.error("createTeam failed", error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.issues[0]?.message || "Invalid input" };
+    }
+    return { success: false, error: error instanceof Error ? error.message : "Failed to create team" };
   }
-
-  // Get active season
-  const activeSeason = await prisma.season.findFirst({
-    where: { leagueId: validated.leagueId, isActive: true },
-  });
-
-  if (!activeSeason) {
-    throw new Error("No active season. Please create a season first.");
-  }
-
-  const existing = await prisma.team.findUnique({
-    where: { seasonId_name: { seasonId: activeSeason.id, name: validated.name } },
-  });
-  if (existing) {
-    throw new Error(`Team "${validated.name}" already exists in this season`);
-  }
-
-  return prisma.team.create({
-    data: { name: validated.name, leagueId: validated.leagueId, seasonId: activeSeason.id },
-  });
 }
 
 export async function getTeamPreviousScores(leagueId: number, teamId: number): Promise<number[]> {
@@ -68,6 +95,40 @@ export async function getTeamPreviousScores(leagueId: number, teamId: number): P
     .map((m) => (m.teamAId === teamId ? m.teamAGross : m.teamBGross));
 }
 
+/**
+ * Get previous gross scores for handicap calculation.
+ * For match_play: pulls from Matchup table (existing behavior).
+ * For stroke_play/hybrid: pulls from WeeklyScore table.
+ */
+export async function getTeamPreviousScoresForScoring(
+  leagueId: number,
+  teamId: number,
+  scoringType: string
+): Promise<number[]> {
+  const validScoringTypes = ["match_play", "stroke_play", "hybrid"];
+  if (!validScoringTypes.includes(scoringType)) {
+    throw new Error(`Invalid scoring type: ${scoringType}`);
+  }
+
+  if (scoringType === "match_play") {
+    return getTeamPreviousScores(leagueId, teamId);
+  }
+
+  // Stroke play / hybrid: pull from WeeklyScore
+  const scores = await prisma.weeklyScore.findMany({
+    where: {
+      leagueId,
+      teamId,
+      isDnp: false,
+      isSub: false,
+    },
+    orderBy: { weekNumber: "asc" },
+    select: { grossScore: true },
+  });
+
+  return scores.map((s) => s.grossScore);
+}
+
 export async function getCurrentWeekNumber(leagueId: number): Promise<number> {
   const lastMatchup = await prisma.matchup.findFirst({
     where: { leagueId },
@@ -79,7 +140,19 @@ export async function getCurrentWeekNumber(leagueId: number): Promise<number> {
 export async function getTeamById(teamId: number) {
   return prisma.team.findUnique({
     where: { id: teamId },
-    include: { league: true },
+    select: {
+      id: true,
+      leagueId: true,
+      seasonId: true,
+      name: true,
+      status: true,
+      totalPoints: true,
+      wins: true,
+      losses: true,
+      ties: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 }
 
@@ -113,10 +186,19 @@ export async function registerTeam(
 
     const league = await prisma.league.findUnique({
       where: { slug: leagueSlug },
+      select: { id: true, status: true, registrationOpen: true, maxTeams: true },
     });
 
     if (!league) {
       return { success: false, error: "League not found" };
+    }
+
+    // Check league status before allowing registration
+    if (league.status === "cancelled") {
+      return { success: false, error: "This league has been cancelled and is no longer accepting registrations." };
+    }
+    if (league.status === "suspended") {
+      return { success: false, error: "This league is currently suspended. Please contact the league administrator." };
     }
 
     if (!league.registrationOpen) {
@@ -163,7 +245,7 @@ export async function registerTeam(
 
     return { success: true, data: undefined };
   } catch (error) {
-    console.error("registerTeam error:", error);
+    logger.error("registerTeam failed", error);
     if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0]?.message || "Invalid input" };
     }
@@ -174,9 +256,26 @@ export async function registerTeam(
 export async function getPendingTeams(leagueSlug: string) {
   const session = await requireLeagueAdmin(leagueSlug);
 
+  // Admin-only: includes PII (captainName, email, phone) for registration review
   return prisma.team.findMany({
     where: { leagueId: session.leagueId, status: "pending" },
     orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      leagueId: true,
+      seasonId: true,
+      name: true,
+      captainName: true,
+      email: true,
+      phone: true,
+      status: true,
+      totalPoints: true,
+      wins: true,
+      losses: true,
+      ties: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 }
 
@@ -184,19 +283,49 @@ export async function getApprovedTeams(leagueId: number) {
   return prisma.team.findMany({
     where: { leagueId, status: "approved" },
     orderBy: { name: "asc" },
+    select: {
+      id: true,
+      leagueId: true,
+      seasonId: true,
+      name: true,
+      status: true,
+      totalPoints: true,
+      wins: true,
+      losses: true,
+      ties: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 }
 
 export async function getAllTeamsWithStatus(leagueSlug: string) {
   const session = await requireLeagueAdmin(leagueSlug);
 
+  // Admin-only: includes PII (captainName, email, phone) for team management
   return prisma.team.findMany({
     where: { leagueId: session.leagueId },
     orderBy: [{ status: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      leagueId: true,
+      seasonId: true,
+      name: true,
+      captainName: true,
+      email: true,
+      phone: true,
+      status: true,
+      totalPoints: true,
+      wins: true,
+      losses: true,
+      ties: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 }
 
-export async function approveTeam(leagueSlug: string, teamId: number): Promise<ActionResult> {
+export async function approveTeam(leagueSlug: string, teamId: number): Promise<ActionResult<{ teamId: number; scheduleIntegrationNeeded: boolean } | undefined>> {
   try {
     const session = await requireLeagueAdmin(leagueSlug);
 
@@ -225,9 +354,25 @@ export async function approveTeam(leagueSlug: string, teamId: number): Promise<A
       data: { status: "approved" },
     });
 
+    // Check if a schedule exists for the active season
+    const activeSeason = await prisma.season.findFirst({
+      where: { leagueId: session.leagueId, isActive: true },
+    });
+
+    const hasSchedule = await prisma.scheduledMatchup.count({
+      where: {
+        leagueId: session.leagueId,
+        ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+      },
+    });
+
+    if (hasSchedule > 0) {
+      return { success: true, data: { teamId, scheduleIntegrationNeeded: true } };
+    }
+
     return { success: true, data: undefined };
   } catch (error) {
-    console.error("approveTeam error:", error);
+    logger.error("approveTeam failed", error);
     return { success: false, error: "Failed to approve team. Please try again." };
   }
 }
@@ -251,14 +396,81 @@ export async function rejectTeam(leagueSlug: string, teamId: number): Promise<Ac
 
     return { success: true, data: undefined };
   } catch (error) {
-    console.error("rejectTeam error:", error);
+    logger.error("rejectTeam failed", error);
     return { success: false, error: "Failed to reject team. Please try again." };
+  }
+}
+
+export async function adminQuickAddTeam(
+  leagueSlug: string,
+  name: string,
+  captainName?: string
+): Promise<ActionResult<{ id: number; name: string }>> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
+
+    const trimmedName = name?.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      return { success: false, error: "Team name must be at least 2 characters" };
+    }
+    if (trimmedName.length > 50) {
+      return { success: false, error: "Team name must be 50 characters or less" };
+    }
+
+    // Get active season
+    const activeSeason = await prisma.season.findFirst({
+      where: { leagueId: session.leagueId, isActive: true },
+    });
+
+    if (!activeSeason) {
+      return { success: false, error: "No active season. Create a season first." };
+    }
+
+    // Check max teams
+    const league = await prisma.league.findUniqueOrThrow({
+      where: { id: session.leagueId },
+      select: { maxTeams: true },
+    });
+
+    const approvedCount = await prisma.team.count({
+      where: { leagueId: session.leagueId, status: "approved" },
+    });
+
+    if (approvedCount >= league.maxTeams) {
+      return { success: false, error: `League is full (${league.maxTeams} teams maximum)` };
+    }
+
+    // Check for duplicate name in season
+    const existing = await prisma.team.findUnique({
+      where: { seasonId_name: { seasonId: activeSeason.id, name: trimmedName } },
+    });
+
+    if (existing) {
+      return { success: false, error: `Team "${trimmedName}" already exists in this season` };
+    }
+
+    const team = await prisma.team.create({
+      data: {
+        name: trimmedName,
+        leagueId: session.leagueId,
+        seasonId: activeSeason.id,
+        captainName: captainName?.trim() || null,
+        status: "approved",
+      },
+    });
+
+    return { success: true, data: { id: team.id, name: team.name } };
+  } catch (error) {
+    logger.error("adminQuickAddTeam failed", error);
+    return { success: false, error: "Failed to add team. Please try again." };
   }
 }
 
 export async function deleteTeam(leagueSlug: string, teamId: number): Promise<ActionResult> {
   try {
     const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
 
     const team = await prisma.team.findUniqueOrThrow({
       where: { id: teamId },
@@ -278,13 +490,55 @@ export async function deleteTeam(leagueSlug: string, teamId: number): Promise<Ac
       return { success: false, error: `Cannot delete team: Team has ${matchupCount} matchup(s) recorded. Delete the matchups first.` };
     }
 
-    await prisma.team.delete({
-      where: { id: teamId },
+    // Handle scheduled matchups + delete team atomically
+    const league = await prisma.league.findUniqueOrThrow({
+      where: { id: session.leagueId },
+      select: { midSeasonRemoveAction: true },
+    });
+
+    const scheduledCount = await prisma.scheduledMatchup.count({
+      where: {
+        leagueId: session.leagueId,
+        OR: [{ teamAId: teamId }, { teamBId: teamId }],
+        status: "scheduled",
+      },
+    });
+
+    if (scheduledCount > 0) {
+      // Convert future scheduled matchups to byes for opponents, then delete team
+      const { removeTeamFromSchedule } = await import("./schedule");
+      await removeTeamFromSchedule(leagueSlug, teamId, league.midSeasonRemoveAction);
+    }
+
+    // Delete related records and team in a transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete weekly scores for this team
+      await tx.weeklyScore.deleteMany({
+        where: { teamId },
+      });
+      // Delete any hole scores for this team's scorecards
+      await tx.holeScore.deleteMany({
+        where: { scorecard: { teamId } },
+      });
+      // Delete scorecards for this team
+      await tx.scorecard.deleteMany({
+        where: { teamId },
+      });
+      // Clean up any remaining scheduled matchups (including completed ones)
+      await tx.scheduledMatchup.deleteMany({
+        where: {
+          leagueId: session.leagueId,
+          OR: [{ teamAId: teamId }, { teamBId: teamId }],
+        },
+      });
+      await tx.team.delete({
+        where: { id: teamId },
+      });
     });
 
     return { success: true, data: undefined };
   } catch (error) {
-    console.error("deleteTeam error:", error);
+    logger.error("deleteTeam failed", error);
     return { success: false, error: "Failed to delete team. Please try again." };
   }
 }

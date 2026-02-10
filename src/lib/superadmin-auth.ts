@@ -2,21 +2,11 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
+import { getSessionSecret } from "./session-secret";
 
 export interface SuperAdminSession {
   superAdminId: number;
   username: string;
-}
-
-function getSessionSecret(): Uint8Array {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) {
-    throw new Error(
-      "SESSION_SECRET environment variable is required. " +
-      "Generate one with: openssl rand -base64 32"
-    );
-  }
-  return new TextEncoder().encode(secret);
 }
 
 /**
@@ -36,18 +26,22 @@ export async function getSuperAdminSession(): Promise<SuperAdminSession | null> 
     const secret = getSessionSecret();
     const { payload } = await jwtVerify(sessionCookie, secret, {
       algorithms: ["HS256"],
+      issuer: "leaguelinks",
+      audience: "sudo",
     });
 
-    const session: SuperAdminSession = {
-      superAdminId: payload.superAdminId as number,
-      username: payload.username as string,
-    };
+    const superAdminId = payload.superAdminId;
+    const username = payload.username;
 
-    // Validate session structure
-    if (!session.superAdminId || !session.username) {
+    if (typeof superAdminId !== "number" || typeof username !== "string") {
       return null;
     }
 
+    if (!superAdminId || !username) {
+      return null;
+    }
+
+    const session: SuperAdminSession = { superAdminId, username };
     return session;
   } catch {
     return null;
@@ -91,7 +85,9 @@ export async function createSuperAdminSessionToken(session: SuperAdminSession): 
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime("4h")
+    .setIssuer("leaguelinks")
+    .setAudience("sudo")
     .sign(secret);
 }
 
@@ -104,17 +100,22 @@ export async function verifySuperAdminSessionToken(token: string): Promise<Super
     const secret = getSessionSecret();
     const { payload } = await jwtVerify(token, secret, {
       algorithms: ["HS256"],
+      issuer: "leaguelinks",
+      audience: "sudo",
     });
 
-    const session: SuperAdminSession = {
-      superAdminId: payload.superAdminId as number,
-      username: payload.username as string,
-    };
+    const superAdminId = payload.superAdminId;
+    const username = payload.username;
 
-    if (!session.superAdminId || !session.username) {
+    if (typeof superAdminId !== "number" || typeof username !== "string") {
       return null;
     }
 
+    if (!superAdminId || !username) {
+      return null;
+    }
+
+    const session: SuperAdminSession = { superAdminId, username };
     return session;
   } catch {
     return null;
@@ -134,8 +135,8 @@ export async function validateSuperAdminCredentials(
   });
 
   if (!admin) {
-    // Constant-time comparison to prevent timing attacks
-    await bcrypt.compare(password, "$2a$12$invalid.hash.for.timing.attack.prevention");
+    // Constant-time comparison to prevent timing attacks — use a valid bcrypt hash
+    await bcrypt.compare(password, "$2a$12$4tdsSuOvxPn843EZvlpMlO9g7WbsIphMfgilddhwRLuGiaCwcClIe");
     return { valid: false };
   }
 
