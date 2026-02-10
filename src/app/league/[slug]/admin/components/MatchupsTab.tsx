@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   previewMatchup,
   submitMatchup,
@@ -67,26 +67,24 @@ export default function MatchupsTab({
 
   const isWeekOne = weekNumber === 1;
 
-  // Reset form fields when week number changes (but not on initial render)
-  const prevWeekNumberRef = useRef(weekNumber);
-  useEffect(() => {
-    if (prevWeekNumberRef.current !== weekNumber) {
-      prevWeekNumberRef.current = weekNumber;
-      setTeamAId("");
-      setTeamBId("");
-      setTeamAGross("");
-      setTeamBGross("");
-      setTeamAHandicapManual("");
-      setTeamBHandicapManual("");
-      setTeamAIsSub(false);
-      setTeamBIsSub(false);
-      setPreview(null);
-      setIsForfeitMode(false);
-      setWinningTeamId("");
-      setForfeitingTeamId("");
-      setMessage(null);
-    }
-  }, [weekNumber]);
+  // Reset form fields when week number changes
+  function changeWeek(newWeek: number) {
+    if (newWeek === weekNumber) return;
+    setWeekNumber(newWeek);
+    setTeamAId("");
+    setTeamBId("");
+    setTeamAGross("");
+    setTeamBGross("");
+    setTeamAHandicapManual("");
+    setTeamBHandicapManual("");
+    setTeamAIsSub(false);
+    setTeamBIsSub(false);
+    setPreview(null);
+    setIsForfeitMode(false);
+    setWinningTeamId("");
+    setForfeitingTeamId("");
+    setMessage(null);
+  }
 
   // Load schedule for current week
   useEffect(() => {
@@ -187,7 +185,7 @@ export default function MatchupsTab({
       getCurrentWeekNumber(leagueId),
       getMatchupHistory(leagueId),
     ]);
-    setWeekNumber(currentWeek);
+    changeWeek(currentWeek);
     onDataRefresh({ weekNumber: currentWeek, matchups: matchupsResult.matchups });
     // Refresh schedule for this week
     try {
@@ -422,7 +420,7 @@ export default function MatchupsTab({
             <input
               type="number"
               value={weekNumber}
-              onChange={(e) => setWeekNumber(parseInt(e.target.value) || 1)}
+              onChange={(e) => changeWeek(parseInt(e.target.value) || 1)}
               min={1}
               className="w-32 pencil-input"
             />

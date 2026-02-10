@@ -107,10 +107,12 @@ export default function ScheduleTab({
   const singleWeeks = evenCount - 1;
   const doubleWeeks = singleWeeks * 2;
 
-  // Sync totalWeeks when teams.length changes
-  useEffect(() => {
+  // Sync totalWeeks when team count changes (render-time adjustment)
+  const [prevTeamCount, setPrevTeamCount] = useState(teamCount);
+  if (prevTeamCount !== teamCount) {
+    setPrevTeamCount(teamCount);
     setTotalWeeks(scheduleType === "single_round_robin" ? singleWeeks : doubleWeeks);
-  }, [singleWeeks, doubleWeeks, scheduleType]);
+  }
 
   function updateScheduleType(type: "single_round_robin" | "double_round_robin") {
     setScheduleType(type);

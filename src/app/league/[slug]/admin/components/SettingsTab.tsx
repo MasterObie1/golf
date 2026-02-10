@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   updateLeagueSettings,
   updateHandicapSettings,
@@ -130,8 +130,10 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
   const [selectedPreset, setSelectedPreset] = useState<string>("custom");
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["basic"]));
 
-  // H5: Re-sync handicap-related state when parent passes updated league data
-  useEffect(() => {
+  // H5: Re-sync handicap-related state when parent passes updated league data (render-time adjustment)
+  const [syncedLeague, setSyncedLeague] = useState(league);
+  if (syncedLeague !== league) {
+    setSyncedLeague(league);
     setHandicapBaseScore(league.handicapBaseScore);
     setHandicapMultiplier(league.handicapMultiplier);
     setHandicapRounding((league.handicapRounding ?? "floor") as "floor" | "round" | "ceil");
@@ -155,7 +157,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
     setHandicapUseTrend(league.handicapUseTrend ?? false);
     setHandicapTrendWeight(league.handicapTrendWeight ?? 0.1);
     setHandicapRequireApproval(league.handicapRequireApproval ?? false);
-  }, [league]);
+  }
 
   function calculatePreviewHandicap(avg: number): number {
     const rawHandicap = (avg - handicapBaseScore) * handicapMultiplier;

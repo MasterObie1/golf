@@ -1,23 +1,23 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useSyncExternalStore, useCallback, useEffect } from "react";
+
+function subscribeToPrefersReducedMotion(callback: () => void) {
+  const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+  mediaQuery.addEventListener("change", callback);
+  return () => mediaQuery.removeEventListener("change", callback);
+}
+
+function getPrefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
 function usePrefersReducedMotion(): boolean {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setPrefersReducedMotion(mediaQuery.matches);
-
-    function handleChange(event: MediaQueryListEvent) {
-      setPrefersReducedMotion(event.matches);
-    }
-
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, []);
-
-  return prefersReducedMotion;
+  return useSyncExternalStore(
+    subscribeToPrefersReducedMotion,
+    getPrefersReducedMotion,
+    () => false,
+  );
 }
 
 export function BallIntoCup() {
