@@ -1167,3 +1167,69 @@ describe("removeTeamFromSchedule", () => {
     expect(teamIdsInSchedule.size).toBe(2);
   });
 });
+
+// ==========================================
+// Cancelled matchups don't block regeneration (Fix 1.3)
+// ==========================================
+
+describe("cancelled matchups and regeneration", () => {
+  it("regenerates schedule successfully after cancelling a matchup", async () => {
+    const { league } = await setupLeagueWithTeams(4);
+    await generateSchedule(league.slug, {
+      type: "single_round_robin",
+      totalWeeks: 10,
+    });
+
+    // Cancel a matchup
+    const matchups = await testPrisma.scheduledMatchup.findMany({
+      where: { leagueId: league.id, status: "scheduled" },
+    });
+    expect(matchups.length).toBeGreaterThan(0);
+    await cancelScheduledMatchup(league.slug, matchups[0].id);
+
+    // Verify it's cancelled
+    const cancelled = await testPrisma.scheduledMatchup.findUnique({
+      where: { id: matchups[0].id },
+    });
+    expect(cancelled!.status).toBe("cancelled");
+
+    // Regenerate — should succeed without constraint errors
+    const result = await generateSchedule(league.slug, {
+      type: "single_round_robin",
+      totalWeeks: 10,
+    });
+    expect(result.success).toBe(true);
+    const data = unwrap(result);
+    expect(data.weeksGenerated).toBe(3);
+
+    // Verify: no cancelled matchups remain (they were deleted during regeneration)
+    const cancelledAfter = await testPrisma.scheduledMatchup.findMany({
+      where: { leagueId: league.id, status: "cancelled" },
+    });
+    expect(cancelledAfter.length).toBe(0);
+  });
+
+  it("clearSchedule removes cancelled matchups too", async () => {
+    const { league } = await setupLeagueWithTeams(4);
+    await generateSchedule(league.slug, {
+      type: "single_round_robin",
+      totalWeeks: 10,
+    });
+
+    // Cancel a matchup
+    const matchups = await testPrisma.scheduledMatchup.findMany({
+      where: { leagueId: league.id, status: "scheduled" },
+    });
+    await cancelScheduledMatchup(league.slug, matchups[0].id);
+
+    // Clear schedule
+    const result = await clearSchedule(league.slug);
+    expect(result.success).toBe(true);
+
+    // Verify: no matchups remain (including cancelled)
+    const remaining = await testPrisma.scheduledMatchup.findMany({
+      where: { leagueId: league.id },
+    });
+    expect(remaining.length).toBe(0);
+  });
+});

@@ -136,13 +136,13 @@ export async function generateSchedule(
     // Build transaction: delete existing scheduled matchups, create new ones, update league
     const operations = [];
 
-    // Delete only "scheduled" status (preserve "completed" ones)
+    // Delete "scheduled" and "cancelled" (preserve "completed" ones)
     operations.push(
       prisma.scheduledMatchup.deleteMany({
         where: {
           leagueId,
           ...(activeSeason ? { seasonId: activeSeason.id } : {}),
-          status: "scheduled",
+          status: { in: ["scheduled", "cancelled"] },
         },
       })
     );
@@ -196,7 +196,7 @@ export async function clearSchedule(
         where: {
           leagueId: session.leagueId,
           ...(activeSeason ? { seasonId: activeSeason.id } : {}),
-          status: "scheduled",
+          status: { in: ["scheduled", "cancelled"] },
         },
       }),
       prisma.league.update({
@@ -466,29 +466,31 @@ export async function rescheduleMatchup(
       return { success: false, error: "Can only reschedule unplayed matchups." };
     }
 
-    // Check for conflicts: is teamA or teamB already playing that week?
-    const conflicts = await prisma.scheduledMatchup.findMany({
-      where: {
-        leagueId: session.leagueId,
-        weekNumber: newWeekNumber,
-        status: { not: "cancelled" },
-        OR: [
-          { teamAId: existing.teamAId },
-          { teamBId: existing.teamAId },
-          ...(existing.teamBId
-            ? [{ teamAId: existing.teamBId }, { teamBId: existing.teamBId }]
-            : []),
-        ],
-      },
-    });
+    // Check for conflicts + update atomically to prevent TOCTOU race
+    await prisma.$transaction(async (tx) => {
+      const conflicts = await tx.scheduledMatchup.findMany({
+        where: {
+          leagueId: session.leagueId,
+          weekNumber: newWeekNumber,
+          status: { not: "cancelled" },
+          OR: [
+            { teamAId: existing.teamAId },
+            { teamBId: existing.teamAId },
+            ...(existing.teamBId
+              ? [{ teamAId: existing.teamBId }, { teamBId: existing.teamBId }]
+              : []),
+          ],
+        },
+      });
 
-    if (conflicts.length > 0) {
-      return { success: false, error: `One or more teams already have a matchup in Week ${newWeekNumber}.` };
-    }
+      if (conflicts.length > 0) {
+        throw new Error(`One or more teams already have a matchup in Week ${newWeekNumber}.`);
+      }
 
-    await prisma.scheduledMatchup.update({
-      where: { id: scheduledMatchupId },
-      data: { weekNumber: newWeekNumber },
+      await tx.scheduledMatchup.update({
+        where: { id: scheduledMatchupId },
+        data: { weekNumber: newWeekNumber },
+      });
     });
 
     return { success: true, data: undefined };
@@ -522,32 +524,46 @@ export async function addManualScheduledMatchup(
       where: { leagueId: session.leagueId, isActive: true },
     });
 
-    // Check conflicts
+    // Check conflicts + create atomically to prevent TOCTOU race
     const teamIdsToCheck = [teamAId, ...(teamBId ? [teamBId] : [])];
-    for (const tid of teamIdsToCheck) {
-      const conflict = await prisma.scheduledMatchup.findFirst({
+
+    await prisma.$transaction(async (tx) => {
+      const conflicts = await tx.scheduledMatchup.findMany({
         where: {
           leagueId: session.leagueId,
           weekNumber,
           status: { not: "cancelled" },
-          OR: [{ teamAId: tid }, { teamBId: tid }],
+          OR: teamIdsToCheck.flatMap((tid) => [
+            { teamAId: tid },
+            { teamBId: tid },
+          ]),
+        },
+        include: { teamA: { select: { name: true } }, teamB: { select: { name: true } } },
+      });
+
+      if (conflicts.length > 0) {
+        // Find which team has the conflict
+        for (const tid of teamIdsToCheck) {
+          const hasConflict = conflicts.some(
+            (c) => c.teamAId === tid || c.teamBId === tid
+          );
+          if (hasConflict) {
+            const team = await tx.team.findUnique({ where: { id: tid }, select: { name: true } });
+            throw new Error(`${team?.name || "Team"} already has a matchup in Week ${weekNumber}.`);
+          }
+        }
+      }
+
+      await tx.scheduledMatchup.create({
+        data: {
+          leagueId: session.leagueId,
+          seasonId: activeSeason?.id ?? null,
+          weekNumber,
+          teamAId,
+          teamBId,
+          status: "scheduled",
         },
       });
-      if (conflict) {
-        const team = await prisma.team.findUnique({ where: { id: tid }, select: { name: true } });
-        return { success: false, error: `${team?.name || "Team"} already has a matchup in Week ${weekNumber}.` };
-      }
-    }
-
-    await prisma.scheduledMatchup.create({
-      data: {
-        leagueId: session.leagueId,
-        seasonId: activeSeason?.id ?? null,
-        weekNumber,
-        teamAId,
-        teamBId,
-        status: "scheduled",
-      },
     });
 
     return { success: true, data: undefined };
@@ -756,14 +772,14 @@ export async function addTeamToSchedule(
     const isDouble = league.scheduleType === "double_round_robin";
     const rounds = generateScheduleForWeeks(allTeamIds, remainingWeeks, isDouble, currentWeek);
 
-    // Delete future scheduled matchups + insert new schedule atomically
+    // Delete future scheduled/cancelled matchups + insert new schedule atomically
     await prisma.$transaction(async (tx) => {
       await tx.scheduledMatchup.deleteMany({
         where: {
           leagueId,
           ...(activeSeason ? { seasonId: activeSeason.id } : {}),
           weekNumber: { gte: currentWeek },
-          status: "scheduled",
+          status: { in: ["scheduled", "cancelled"] },
         },
       });
 
@@ -856,7 +872,7 @@ export async function removeTeamFromSchedule(
 
       const remainingWeeks = maxWeek - currentWeek + 1;
 
-      // Delete future scheduled matchups + insert new schedule atomically
+      // Delete future scheduled/cancelled matchups + insert new schedule atomically
       const isDouble = league.scheduleType === "double_round_robin";
       const rounds = remainingTeams.length >= 2 && remainingWeeks > 0
         ? generateScheduleForWeeks(
@@ -873,7 +889,7 @@ export async function removeTeamFromSchedule(
             leagueId,
             ...(activeSeason ? { seasonId: activeSeason.id } : {}),
             weekNumber: { gte: currentWeek },
-            status: "scheduled",
+            status: { in: ["scheduled", "cancelled"] },
           },
         });
 
