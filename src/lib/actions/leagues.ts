@@ -201,7 +201,7 @@ export async function getAllLeagues() {
       courseLocation: true,
       playDay: true,
       _count: {
-        select: { teams: true },
+        select: { teams: { where: { status: "approved", season: { isActive: true } } } },
       },
     },
     take: 100, // Prevent unbounded results
@@ -319,7 +319,7 @@ export async function getLeaguePublicInfo(slug: string) {
         take: 1,
       },
       _count: {
-        select: { teams: { where: { status: "approved" } } },
+        select: { teams: { where: { status: "approved", season: { isActive: true } } } },
       },
     },
   });
