@@ -29,6 +29,17 @@ const adapter = new PrismaLibSql({
 });
 const prisma = new PrismaClient({ adapter });
 
+// Throttle for production to avoid Turso rate limits
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+let queryCount = 0;
+async function throttle() {
+  queryCount++;
+  // Every 50 queries, pause briefly for Turso rate limits
+  if (isProduction && queryCount % 50 === 0) {
+    await sleep(200);
+  }
+}
+
 // ============================================
 // CONFIRMATION FOR PRODUCTION
 // ============================================
@@ -666,6 +677,7 @@ async function generateMatchPlaySeason(
         pointsB = 10;
       }
 
+      await throttle();
       const matchup = await prisma.matchup.create({
         data: {
           leagueId, seasonId, weekNumber: week,
@@ -759,6 +771,7 @@ async function generateStrokePlaySeason(
         ? (config.strokePlay?.dnpPoints ?? 0)
         : (scale[Math.min(i, scale.length - 1)] + (config.strokePlay?.bonusShow ?? 0));
 
+      await throttle();
       await prisma.weeklyScore.create({
         data: {
           leagueId, seasonId, weekNumber: week,
@@ -842,6 +855,7 @@ async function generateHybridSeason(
         pointsA = 10; pointsB = 10;
       }
 
+      await throttle();
       const matchup = await prisma.matchup.create({
         data: {
           leagueId, seasonId, weekNumber: week,
@@ -881,6 +895,7 @@ async function generateHybridSeason(
     for (let i = 0; i < sorted.length; i++) {
       const entry = sorted[i];
       const points = scale[Math.min(i, scale.length - 1)];
+      await throttle();
       await prisma.weeklyScore.create({
         data: {
           leagueId, seasonId, weekNumber: week,
@@ -958,6 +973,7 @@ async function createScorecard(
 ) {
   const frontNine = holeScores.slice(0, Math.min(holeScores.length, 9)).reduce((a, b) => a + b, 0);
 
+  await throttle();
   const scorecard = await prisma.scorecard.create({
     data: {
       leagueId,
@@ -976,17 +992,16 @@ async function createScorecard(
     },
   });
 
-  // Create hole scores
-  for (let i = 0; i < holeScores.length; i++) {
-    await prisma.holeScore.create({
-      data: {
-        scorecardId: scorecard.id,
-        holeId: holes[i].id,
-        holeNumber: i + 1,
-        strokes: holeScores[i],
-      },
-    });
-  }
+  // Create hole scores in batch via createMany for fewer round-trips
+  await throttle();
+  await prisma.holeScore.createMany({
+    data: holeScores.map((strokes, i) => ({
+      scorecardId: scorecard.id,
+      holeId: holes[i].id,
+      holeNumber: i + 1,
+      strokes,
+    })),
+  });
 }
 
 // ============================================
