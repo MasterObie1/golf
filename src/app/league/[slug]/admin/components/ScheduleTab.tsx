@@ -13,6 +13,7 @@ import {
   addManualScheduledMatchup,
   type ScheduleWeek,
   type ScheduleStatus,
+  type PreviewResult,
 } from "@/lib/actions/schedule";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { Round } from "@/lib/scheduling/round-robin";
@@ -47,7 +48,7 @@ export default function ScheduleTab({
   const [scheduleType, setScheduleType] = useState<"single_round_robin" | "double_round_robin">("single_round_robin");
   const [totalWeeks, setTotalWeeks] = useState(teams.length > 1 ? teams.length - 1 : 1);
   const [startWeek, setStartWeek] = useState(1);
-  const [previewRounds, setPreviewRounds] = useState<Round[] | null>(null);
+  const [previewData, setPreviewData] = useState<PreviewResult | null>(null);
 
   // Dialogs
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -117,7 +118,7 @@ export default function ScheduleTab({
   function updateScheduleType(type: "single_round_robin" | "double_round_robin") {
     setScheduleType(type);
     setTotalWeeks(type === "single_round_robin" ? singleWeeks : doubleWeeks);
-    setPreviewRounds(null);
+    setPreviewData(null);
   }
 
   async function handlePreview() {
@@ -126,7 +127,7 @@ export default function ScheduleTab({
     try {
       const result = await previewSchedule(slug, leagueId, { type: scheduleType, totalWeeks, startWeek });
       if (result.success) {
-        setPreviewRounds(result.data);
+        setPreviewData(result.data);
       } else {
         setMessage({ type: "error", text: result.error });
       }
@@ -144,7 +145,7 @@ export default function ScheduleTab({
       const result = await generateSchedule(slug, { type: scheduleType, totalWeeks, startWeek });
       if (result.success) {
         setMessage({ type: "success", text: `Schedule generated: ${result.data.weeksGenerated} weeks.` });
-        setPreviewRounds(null);
+        setPreviewData(null);
         await loadScheduleData();
         onDataRefresh();
       } else {
@@ -400,11 +401,16 @@ export default function ScheduleTab({
               </div>
 
               {/* Preview */}
-              {previewRounds && previewRounds.length > 0 && (
+              {previewData && previewData.rounds.length > 0 && (
                 <div className="mt-6 border-t border-scorecard-line/50 pt-6">
-                  <h3 className="text-lg font-display font-semibold uppercase tracking-wider mb-3 text-scorecard-pencil">Preview (<span className="font-mono tabular-nums">{previewRounds.length}</span> weeks)</h3>
+                  <h3 className="text-lg font-display font-semibold uppercase tracking-wider mb-3 text-scorecard-pencil">Preview (<span className="font-mono tabular-nums">{previewData.rounds.length}</span> weeks)</h3>
+                  {previewData.truncated && (
+                    <div className="mb-3 p-3 bg-warning-bg border border-warning-text/30 rounded-lg text-sm text-warning-text font-sans">
+                      Schedule truncated from {previewData.fullRoundsNeeded} to {previewData.rounds.length} weeks. Some team pairings may be missing.
+                    </div>
+                  )}
                   <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {previewRounds.map((round) => (
+                    {previewData.rounds.map((round) => (
                       <div key={round.weekNumber} className="bg-surface rounded-lg p-3">
                         <div className="font-display font-medium text-sm text-text-secondary uppercase tracking-wider mb-2">Week <span className="font-mono tabular-nums">{round.weekNumber}</span></div>
                         <div className="space-y-1">

@@ -146,11 +146,12 @@ describe("previewSchedule", () => {
       type: "single_round_robin",
       totalWeeks: 10,
     });
-    const rounds = unwrap(result);
+    const data = unwrap(result);
 
-    expect(rounds.length).toBeGreaterThan(0);
+    expect(data.rounds.length).toBeGreaterThan(0);
     // 4 teams, single round-robin = 3 rounds
-    expect(rounds.length).toBe(3);
+    expect(data.rounds.length).toBe(3);
+    expect(data.truncated).toBe(false);
   });
 
   it("returns rounds for double round-robin", async () => {
@@ -159,10 +160,11 @@ describe("previewSchedule", () => {
       type: "double_round_robin",
       totalWeeks: 10,
     });
-    const rounds = unwrap(result);
+    const data = unwrap(result);
 
     // 4 teams, double round-robin = 6 rounds
-    expect(rounds.length).toBe(6);
+    expect(data.rounds.length).toBe(6);
+    expect(data.truncated).toBe(false);
   });
 
   it("returns error with fewer than 2 teams", async () => {
@@ -1231,5 +1233,61 @@ describe("cancelled matchups and regeneration", () => {
       where: { leagueId: league.id },
     });
     expect(remaining.length).toBe(0);
+  });
+});
+
+// ==========================================
+// swapTeamsInMatchup conflict detection (Fix 2.1)
+// ==========================================
+
+describe("swapTeamsInMatchup conflict detection", () => {
+  it("returns error when swapping in a team that already plays that week", async () => {
+    const { league, teamIds } = await setupLeagueWithTeams(4);
+    await generateSchedule(league.slug, {
+      type: "single_round_robin",
+      totalWeeks: 10,
+    });
+
+    // Get week 1 matchups — there are 2 matches (4 teams, 2 per round)
+    const week1Matchups = await testPrisma.scheduledMatchup.findMany({
+      where: { leagueId: league.id, weekNumber: 1, status: "scheduled" },
+      orderBy: { id: "asc" },
+    });
+    expect(week1Matchups.length).toBe(2);
+
+    const match1 = week1Matchups[0];
+    const match2 = week1Matchups[1];
+
+    // Try to swap match1's teamA into match2 — should fail since match1's teamA already plays week 1
+    const result = await swapTeamsInMatchup(
+      league.slug,
+      match2.id,
+      match1.teamAId,
+      match2.teamBId
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("already have a matchup");
+  });
+});
+
+// ==========================================
+// removeTeamFromSchedule invalid action (Fix 2.5)
+// ==========================================
+
+describe("removeTeamFromSchedule input validation", () => {
+  it("returns error for invalid action string", async () => {
+    const { league, teamIds } = await setupLeagueWithTeams(4);
+    await generateSchedule(league.slug, {
+      type: "single_round_robin",
+      totalWeeks: 10,
+    });
+
+    const result = await removeTeamFromSchedule(
+      league.slug,
+      teamIds[0],
+      "invalid_action" as any
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("Invalid action");
   });
 });

@@ -7,7 +7,9 @@ import { requireActiveLeague } from "./leagues";
 import { type ActionResult } from "./shared";
 import {
   generateScheduleForWeeks,
+  validateSchedule,
   type Round,
+  type ScheduleResult,
 } from "../scheduling/round-robin";
 
 // --- Types ---
@@ -45,13 +47,19 @@ export interface ScheduleStatus {
   teamCount: number;
 }
 
+export interface PreviewResult {
+  rounds: Round[];
+  truncated: boolean;
+  fullRoundsNeeded: number;
+}
+
 // --- Generation ---
 
 export async function previewSchedule(
   leagueSlug: string,
   leagueId: number,
   options: ScheduleGenerationOptions
-): Promise<ActionResult<Round[]>> {
+): Promise<ActionResult<PreviewResult>> {
   try {
     await requireLeagueAdmin(leagueSlug);
 
@@ -85,9 +93,21 @@ export async function previewSchedule(
     const startWeek = options.startWeek ?? 1;
     const isDouble = options.type === "double_round_robin";
 
-    const rounds = generateScheduleForWeeks(teamIds, schedulableWeeks, isDouble, startWeek);
+    const scheduleResult = generateScheduleForWeeks(teamIds, schedulableWeeks, isDouble, startWeek);
 
-    return { success: true, data: rounds };
+    const validation = validateSchedule(scheduleResult.rounds, teamIds);
+    if (!validation.valid) {
+      logger.warn("Generated preview schedule has validation errors", { errors: validation.errors });
+    }
+
+    return {
+      success: true,
+      data: {
+        rounds: scheduleResult.rounds,
+        truncated: scheduleResult.truncated,
+        fullRoundsNeeded: scheduleResult.fullRoundsNeeded,
+      },
+    };
   } catch (error) {
     logger.error("previewSchedule failed", error);
     return { success: false, error: error instanceof Error ? error.message : "Failed to preview schedule." };
@@ -131,7 +151,13 @@ export async function generateSchedule(
     const startWeek = options.startWeek ?? 1;
     const isDouble = options.type === "double_round_robin";
 
-    const rounds = generateScheduleForWeeks(teamIds, schedulableWeeks, isDouble, startWeek);
+    const scheduleResult = generateScheduleForWeeks(teamIds, schedulableWeeks, isDouble, startWeek);
+    const rounds = scheduleResult.rounds;
+
+    const validation = validateSchedule(rounds, teamIds);
+    if (!validation.valid) {
+      logger.warn("Generated schedule has validation errors", { errors: validation.errors });
+    }
 
     // Build transaction: delete existing scheduled matchups, create new ones, update league
     const operations = [];
@@ -403,9 +429,31 @@ export async function swapTeamsInMatchup(
       return { success: false, error: "Can only modify scheduled (unplayed) matchups." };
     }
 
-    await prisma.scheduledMatchup.update({
-      where: { id: scheduledMatchupId },
-      data: { teamAId: newTeamAId, teamBId: newTeamBId },
+    // Conflict check + update atomically to prevent TOCTOU race
+    const newTeamIds = [newTeamAId, ...(newTeamBId != null ? [newTeamBId] : [])];
+
+    await prisma.$transaction(async (tx) => {
+      const conflicts = await tx.scheduledMatchup.findMany({
+        where: {
+          leagueId: session.leagueId,
+          weekNumber: existing.weekNumber,
+          id: { not: scheduledMatchupId },
+          status: { not: "cancelled" },
+          OR: newTeamIds.flatMap((tid) => [
+            { teamAId: tid },
+            { teamBId: tid },
+          ]),
+        },
+      });
+
+      if (conflicts.length > 0) {
+        throw new Error("One or more teams already have a matchup in that week.");
+      }
+
+      await tx.scheduledMatchup.update({
+        where: { id: scheduledMatchupId },
+        data: { teamAId: newTeamAId, teamBId: newTeamBId },
+      });
     });
 
     return { success: true, data: undefined };
@@ -770,7 +818,7 @@ export async function addTeamToSchedule(
     }
 
     const isDouble = league.scheduleType === "double_round_robin";
-    const rounds = generateScheduleForWeeks(allTeamIds, remainingWeeks, isDouble, currentWeek);
+    const rounds = generateScheduleForWeeks(allTeamIds, remainingWeeks, isDouble, currentWeek).rounds;
 
     // Delete future scheduled/cancelled matchups + insert new schedule atomically
     await prisma.$transaction(async (tx) => {
@@ -821,9 +869,13 @@ export type RemoveTeamAction = "bye_opponents" | "regenerate";
 export async function removeTeamFromSchedule(
   leagueSlug: string,
   teamId: number,
-  action: string
+  action: RemoveTeamAction
 ): Promise<ActionResult> {
   try {
+    if (action !== "bye_opponents" && action !== "regenerate") {
+      return { success: false, error: `Invalid action: ${action}. Must be "bye_opponents" or "regenerate".` };
+    }
+
     const session = await requireLeagueAdmin(leagueSlug);
     const leagueId = session.leagueId;
 
@@ -880,7 +932,7 @@ export async function removeTeamFromSchedule(
             remainingWeeks,
             isDouble,
             currentWeek
-          )
+          ).rounds
         : [];
 
       await prisma.$transaction(async (tx) => {

@@ -6,6 +6,7 @@ import {
   calculateByeDistribution,
   generateScheduleForWeeks,
   type Round,
+  type ScheduleResult,
 } from "@/lib/scheduling/round-robin";
 
 // Helper to get all matchup pairs from a schedule
@@ -154,6 +155,39 @@ describe("generateDoubleRoundRobin", () => {
       expect(rounds[i].weekNumber).toBe(i + 1);
     }
   });
+
+  it.each([
+    { teamCount: 4, label: "4 teams" },
+    { teamCount: 6, label: "6 teams" },
+    { teamCount: 8, label: "8 teams" },
+  ])("no team faces the same opponent at the boundary between halves ($label)", ({ teamCount }) => {
+    const teamIds = Array.from({ length: teamCount }, (_, i) => i + 1);
+    const rounds = generateDoubleRoundRobin(teamIds);
+    const halfLen = teamCount % 2 === 0 ? teamCount - 1 : teamCount;
+    const lastFirstHalf = rounds[halfLen - 1];
+    const firstSecondHalf = rounds[halfLen];
+
+    // Get all opponent pairings (undirected) in the boundary rounds
+    function getPairs(round: Round): Set<string> {
+      const pairs = new Set<string>();
+      for (const m of round.matches) {
+        if (m.teamBId !== null) {
+          const a = Math.min(m.teamAId, m.teamBId);
+          const b = Math.max(m.teamAId, m.teamBId);
+          pairs.add(`${a}-${b}`);
+        }
+      }
+      return pairs;
+    }
+
+    const lastPairs = getPairs(lastFirstHalf);
+    const firstPairs = getPairs(firstSecondHalf);
+
+    // No pairing should appear in both boundary rounds
+    for (const pair of lastPairs) {
+      expect(firstPairs.has(pair)).toBe(false);
+    }
+  });
 });
 
 describe("validateSchedule", () => {
@@ -255,31 +289,44 @@ describe("calculateByeDistribution", () => {
 
 describe("generateScheduleForWeeks", () => {
   it("returns full schedule when totalWeeks >= needed", () => {
-    const rounds = generateScheduleForWeeks([1, 2, 3, 4], 10, false);
-    expect(rounds).toHaveLength(3); // single RR for 4 teams = 3 rounds
+    const result = generateScheduleForWeeks([1, 2, 3, 4], 10, false);
+    expect(result.rounds).toHaveLength(3); // single RR for 4 teams = 3 rounds
+    expect(result.truncated).toBe(false);
+    expect(result.fullRoundsNeeded).toBe(3);
   });
 
   it("truncates when fewer weeks than full schedule", () => {
-    const rounds = generateScheduleForWeeks([1, 2, 3, 4], 2, false);
-    expect(rounds).toHaveLength(2);
+    const result = generateScheduleForWeeks([1, 2, 3, 4], 2, false);
+    expect(result.rounds).toHaveLength(2);
+    expect(result.truncated).toBe(true);
+    expect(result.fullRoundsNeeded).toBe(3);
   });
 
   it("generates double round-robin when flag is set", () => {
-    const rounds = generateScheduleForWeeks([1, 2, 3, 4], 20, true);
-    expect(rounds).toHaveLength(6); // double RR for 4 teams = 6 rounds
+    const result = generateScheduleForWeeks([1, 2, 3, 4], 20, true);
+    expect(result.rounds).toHaveLength(6); // double RR for 4 teams = 6 rounds
+    expect(result.truncated).toBe(false);
   });
 
   it("returns empty for fewer than 2 teams", () => {
-    expect(generateScheduleForWeeks([1], 10, false)).toEqual([]);
-    expect(generateScheduleForWeeks([], 10, false)).toEqual([]);
+    expect(generateScheduleForWeeks([1], 10, false).rounds).toEqual([]);
+    expect(generateScheduleForWeeks([], 10, false).rounds).toEqual([]);
   });
 
   it("returns empty for 0 weeks", () => {
-    expect(generateScheduleForWeeks([1, 2, 3, 4], 0, false)).toEqual([]);
+    expect(generateScheduleForWeeks([1, 2, 3, 4], 0, false).rounds).toEqual([]);
   });
 
   it("uses custom startWeek", () => {
-    const rounds = generateScheduleForWeeks([1, 2, 3, 4], 10, false, 5);
-    expect(rounds[0].weekNumber).toBe(5);
+    const result = generateScheduleForWeeks([1, 2, 3, 4], 10, false, 5);
+    expect(result.rounds[0].weekNumber).toBe(5);
+  });
+
+  it("returns truncated: true with correct fullRoundsNeeded for 6 teams in 3 weeks", () => {
+    // 6 teams, single RR needs 5 rounds, but only 3 weeks available
+    const result = generateScheduleForWeeks([1, 2, 3, 4, 5, 6], 3, false);
+    expect(result.rounds).toHaveLength(3);
+    expect(result.truncated).toBe(true);
+    expect(result.fullRoundsNeeded).toBe(5);
   });
 });

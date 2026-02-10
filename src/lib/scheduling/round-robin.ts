@@ -24,6 +24,12 @@ export interface ValidationResult {
   matchesPerTeam: Map<number, number>;
 }
 
+export interface ScheduleResult {
+  rounds: Round[];
+  truncated: boolean;
+  fullRoundsNeeded: number;
+}
+
 const BYE_SENTINEL = -1;
 
 /**
@@ -122,17 +128,16 @@ export function generateDoubleRoundRobin(
     }),
   }));
 
-  // Shuffle second half to avoid playing same opponent in consecutive weeks
-  // Use a simple approach: reverse the order of the second half
-  // This ensures the last opponent in first half isn't the first in second half
-  const shuffled = [...secondHalfRounds].reverse();
+  // Interleave second half to maximize gap between same-opponent matchups.
+  // Circular shift by half the length ensures the boundary rounds are maximally separated.
+  const halfLen = secondHalfRounds.length;
+  const shift = Math.floor(halfLen / 2);
+  const interleaved = secondHalfRounds.map((_, i) => {
+    const sourceIndex = (i + shift) % halfLen;
+    return { ...secondHalfRounds[sourceIndex], weekNumber: secondHalfStart + i };
+  });
 
-  // Re-assign week numbers after shuffle
-  for (let i = 0; i < shuffled.length; i++) {
-    shuffled[i] = { ...shuffled[i], weekNumber: secondHalfStart + i };
-  }
-
-  return [...firstHalf, ...shuffled];
+  return [...firstHalf, ...interleaved];
 }
 
 /**
@@ -269,17 +274,23 @@ export function generateScheduleForWeeks(
   totalWeeks: number,
   doubleRoundRobin: boolean,
   startWeek: number = 1
-): Round[] {
-  if (teamIds.length < 2 || totalWeeks < 1) return [];
+): ScheduleResult {
+  if (teamIds.length < 2 || totalWeeks < 1) {
+    return { rounds: [], truncated: false, fullRoundsNeeded: 0 };
+  }
 
   const fullSchedule = doubleRoundRobin
     ? generateDoubleRoundRobin(teamIds, startWeek)
     : generateSingleRoundRobin(teamIds, startWeek);
 
   if (fullSchedule.length <= totalWeeks) {
-    return fullSchedule;
+    return { rounds: fullSchedule, truncated: false, fullRoundsNeeded: fullSchedule.length };
   }
 
   // Truncate to fit
-  return fullSchedule.slice(0, totalWeeks);
+  return {
+    rounds: fullSchedule.slice(0, totalWeeks),
+    truncated: true,
+    fullRoundsNeeded: fullSchedule.length,
+  };
 }
