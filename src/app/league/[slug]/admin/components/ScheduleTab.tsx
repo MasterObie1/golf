@@ -327,6 +327,11 @@ export default function ScheduleTab({
                   </span>
                 )}
               </p>
+              {playoffWeeks > 0 && (
+                <div className="mb-4 p-3 bg-warning-bg border border-warning-text/30 rounded-lg text-sm text-warning-text font-sans">
+                  {playoffWeeks} week{playoffWeeks !== 1 ? "s" : ""} reserved for playoffs (not yet implemented — these weeks will be empty).
+                </div>
+              )}
 
               <div className="space-y-4">
                 <div>

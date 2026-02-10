@@ -651,6 +651,49 @@ export async function processByeWeekPoints(
 
     const operations = [];
 
+    // Pre-compute league average once (outside the loop) to avoid N+1 queries
+    let leagueAvgPoints = 0;
+    if (league.byePointsMode === "league_average") {
+      const weekMatchups = await prisma.matchup.findMany({
+        where: { leagueId: session.leagueId, weekNumber },
+        select: { teamAPoints: true, teamBPoints: true },
+      });
+      if (weekMatchups.length > 0) {
+        const totalPts = weekMatchups.reduce(
+          (sum, m) => sum + m.teamAPoints + m.teamBPoints,
+          0
+        );
+        leagueAvgPoints = Math.round((totalPts / (weekMatchups.length * 2)) * 10) / 10;
+      }
+    }
+
+    // Pre-compute team averages in batch (outside the loop) to avoid N+1 queries
+    let teamAvgMap = new Map<number, number>();
+    if (league.byePointsMode === "team_average") {
+      const byeTeamIds = byeEntries.map((b) => b.teamAId);
+      const allTeamMatchups = await prisma.matchup.findMany({
+        where: {
+          leagueId: session.leagueId,
+          OR: byeTeamIds.flatMap((tid) => [
+            { teamAId: tid },
+            { teamBId: tid },
+          ]),
+        },
+        select: { teamAId: true, teamBId: true, teamAPoints: true, teamBPoints: true },
+      });
+      for (const tid of byeTeamIds) {
+        const teamMatchups = allTeamMatchups.filter(
+          (m) => m.teamAId === tid || m.teamBId === tid
+        );
+        if (teamMatchups.length > 0) {
+          const teamPts = teamMatchups.reduce((sum, m) => {
+            return sum + (m.teamAId === tid ? m.teamAPoints : m.teamBPoints);
+          }, 0);
+          teamAvgMap.set(tid, Math.round((teamPts / teamMatchups.length) * 10) / 10);
+        }
+      }
+    }
+
     for (const bye of byeEntries) {
       let points = 0;
 
@@ -661,38 +704,12 @@ export async function processByeWeekPoints(
         case "flat":
           points = league.byePointsFlat;
           break;
-        case "league_average": {
-          // Average of all team points awarded this week from matchups
-          const weekMatchups = await prisma.matchup.findMany({
-            where: { leagueId: session.leagueId, weekNumber },
-            select: { teamAPoints: true, teamBPoints: true },
-          });
-          if (weekMatchups.length > 0) {
-            const totalPts = weekMatchups.reduce(
-              (sum, m) => sum + m.teamAPoints + m.teamBPoints,
-              0
-            );
-            points = Math.round((totalPts / (weekMatchups.length * 2)) * 10) / 10;
-          }
+        case "league_average":
+          points = leagueAvgPoints;
           break;
-        }
-        case "team_average": {
-          // This team's season average points per match
-          const teamMatchups = await prisma.matchup.findMany({
-            where: {
-              leagueId: session.leagueId,
-              OR: [{ teamAId: bye.teamAId }, { teamBId: bye.teamAId }],
-            },
-            select: { teamAId: true, teamAPoints: true, teamBPoints: true },
-          });
-          if (teamMatchups.length > 0) {
-            const teamPts = teamMatchups.reduce((sum, m) => {
-              return sum + (m.teamAId === bye.teamAId ? m.teamAPoints : m.teamBPoints);
-            }, 0);
-            points = Math.round((teamPts / teamMatchups.length) * 10) / 10;
-          }
+        case "team_average":
+          points = teamAvgMap.get(bye.teamAId) ?? 0;
           break;
-        }
       }
 
       if (points > 0) {

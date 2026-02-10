@@ -330,3 +330,51 @@ describe("generateScheduleForWeeks", () => {
     expect(result.fullRoundsNeeded).toBe(5);
   });
 });
+
+// ==========================================
+// Validator integration on generated schedules (Fix 3.3)
+// ==========================================
+
+describe("validateSchedule on generated output", () => {
+  const teamCounts = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+  describe.each(teamCounts)("single round-robin with %i teams", (n) => {
+    it("produces a valid schedule", () => {
+      const teamIds = Array.from({ length: n }, (_, i) => i + 1);
+      const rounds = generateSingleRoundRobin(teamIds);
+      const result = validateSchedule(rounds, teamIds);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+  });
+
+  describe.each(teamCounts)("double round-robin with %i teams", (n) => {
+    it("produces a valid schedule", () => {
+      const teamIds = Array.from({ length: n }, (_, i) => i + 1);
+      const rounds = generateDoubleRoundRobin(teamIds);
+      const result = validateSchedule(rounds, teamIds);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+  });
+
+  describe.each(teamCounts)("generateScheduleForWeeks with %i teams", (n) => {
+    it("produces a valid single RR schedule", () => {
+      const teamIds = Array.from({ length: n }, (_, i) => i + 1);
+      const maxWeeks = n * 2; // plenty of weeks
+      const scheduleResult = generateScheduleForWeeks(teamIds, maxWeeks, false);
+      const result = validateSchedule(scheduleResult.rounds, teamIds);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("produces a valid double RR schedule", () => {
+      const teamIds = Array.from({ length: n }, (_, i) => i + 1);
+      const maxWeeks = n * 4; // plenty of weeks
+      const scheduleResult = generateScheduleForWeeks(teamIds, maxWeeks, true);
+      const result = validateSchedule(scheduleResult.rounds, teamIds);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+  });
+});
