@@ -70,16 +70,32 @@ export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitR
 
 /**
  * Extract client IP from request headers.
- * Works with Vercel, Cloudflare, and standard proxies.
+ * Prefers Vercel's non-spoofable header, falls back to standard proxy headers.
+ * Never returns a shared key — hashes User-Agent as last resort to avoid
+ * one user's rate limit locking out everyone.
  */
 export function getClientIp(request: Request): string {
   const headers = new Headers(request.headers);
-  return (
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    headers.get("x-real-ip") ||
-    headers.get("cf-connecting-ip") ||
-    "unknown"
-  );
+  // x-vercel-forwarded-for is set by Vercel and cannot be spoofed by clients
+  const vercelIp = headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
+  if (vercelIp) return vercelIp;
+
+  const forwardedFor = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (forwardedFor) return forwardedFor;
+
+  const realIp = headers.get("x-real-ip");
+  if (realIp) return realIp;
+
+  const cfIp = headers.get("cf-connecting-ip");
+  if (cfIp) return cfIp;
+
+  // Last resort: hash the user-agent to avoid all unknown clients sharing one bucket
+  const ua = headers.get("user-agent") || "no-ua";
+  let hash = 0;
+  for (let i = 0; i < ua.length; i++) {
+    hash = ((hash << 5) - hash + ua.charCodeAt(i)) | 0;
+  }
+  return `anon-${hash.toString(36)}`;
 }
 
 // Pre-configured rate limit configs
@@ -92,4 +108,6 @@ export const RATE_LIMITS = {
   createLeague: { maxRequests: 3, windowSeconds: 60 * 60 },
   /** Team registration: 10 per hour */
   registerTeam: { maxRequests: 10, windowSeconds: 60 * 60 },
+  /** Scorecard hole saves: 100 per 15 minutes (auto-save) */
+  scorecardSave: { maxRequests: 100, windowSeconds: 15 * 60 },
 } as const;

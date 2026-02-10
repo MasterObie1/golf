@@ -41,7 +41,7 @@ model League {
   handicapMultiplier   Float     @default(0.9)      // Multiplier applied to difference
   handicapRounding     String    @default("floor")  // "floor", "round", "ceil"
   handicapDefault      Float     @default(0)        // Handicap when no scores available
-  handicapMax          Float?    @default(9)        // Maximum handicap cap (null = no limit)
+  handicapMax          Float?    @default(9)        // Maximum handicap cap (default: 9, set to null for no limit)
   handicapMin          Float?                       // Minimum handicap cap (null = no limit, for scratch golfers)
 
   // --- Score Selection ---
@@ -71,6 +71,40 @@ model League {
   // --- Administrative ---
   handicapRequireApproval  Boolean   @default(false)   // Require admin approval for handicap changes
 
+  // ============================================
+  // SCORING CONFIGURATION
+  // ============================================
+  scoringType             String    @default("match_play") // "match_play" | "stroke_play" | "hybrid"
+
+  // Stroke play settings
+  strokePlayPointScale    String?   // JSON array e.g. "[10,8,6,5,4,3,2,1]" — null = use preset
+  strokePlayPointPreset   String    @default("linear") // "linear" | "weighted" | "pga_style" | "custom"
+  strokePlayBonusShow     Float     @default(0)       // Bonus points for showing up (0 = disabled)
+  strokePlayBonusBeat     Float     @default(0)       // Bonus for beating handicap (0 = disabled)
+  strokePlayDnpPoints     Float     @default(0)       // Points for "did not play" weeks
+  strokePlayTieMode       String    @default("split") // "split" | "same"
+  strokePlayDnpPenalty    Float     @default(0)       // Penalty for no-shows (0 = disabled)
+  strokePlayMaxDnp        Int?                        // Max DNPs before excluded (null = unlimited)
+  strokePlayProRate       Boolean   @default(false)   // Use points-per-round for standings
+
+  // Hybrid mode settings
+  hybridFieldWeight       Float     @default(0.5)     // Weight of field points (0-1)
+  hybridFieldPointScale   String?                     // JSON point scale for field component
+
+  // ============================================
+  // SCHEDULE CONFIGURATION
+  // ============================================
+  scheduleType            String?                     // "single_round_robin" | "double_round_robin" | "custom" | null
+  scheduleVisibility      String    @default("full")  // "full" | "current_week" | "hidden"
+  byePointsMode           String    @default("flat")  // "zero" | "flat" | "league_average" | "team_average"
+  byePointsFlat           Float     @default(10)      // Flat bye points amount
+  scheduleExtraWeeks      String    @default("flex")  // "flex" | "continue_round"
+  midSeasonAddDefault     String    @default("start_from_here") // "start_from_here" | "fill_byes" | "pro_rate" | "catch_up"
+  midSeasonRemoveAction   String    @default("bye_opponents") // "bye_opponents" | "regenerate"
+  playoffWeeks            Int       @default(0)       // Weeks reserved for playoffs (0 = disabled)
+  playoffTeams            Int       @default(4)       // Teams qualifying for playoffs
+  playoffFormat           String    @default("single_elimination") // "single_elimination" | "double_elimination" | "round_robin"
+
   // About the League fields (all optional)
   startDate            DateTime?
   endDate              DateTime?
@@ -94,10 +128,18 @@ model League {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Scorecard configuration
+  scorecardMode             String    @default("disabled") // "disabled" | "optional" | "required"
+  scorecardRequireApproval  Boolean   @default(true)
+
   // Relations
-  teams       Team[]
-  matchups    Matchup[]
-  seasons     Season[]
+  teams             Team[]
+  matchups          Matchup[]
+  seasons           Season[]
+  weeklyScores      WeeklyScore[]
+  scheduledMatchups ScheduledMatchup[]
+  scorecards        Scorecard[]
+  courses           Course[]
 }
 
 model Season {
@@ -110,6 +152,8 @@ model Season {
   seasonNumber  Int       // 1, 2, 3... (order within league)
   isActive      Boolean   @default(true)
 
+  scoringType   String?   // Snapshot of league.scoringType at season creation
+
   startDate     DateTime?
   endDate       DateTime?
   numberOfWeeks Int?
@@ -118,8 +162,11 @@ model Season {
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  matchups      Matchup[]
-  teams         Team[]
+  matchups          Matchup[]
+  teams             Team[]
+  weeklyScores      WeeklyScore[]
+  scheduledMatchups ScheduledMatchup[]
+  scorecards        Scorecard[]
 
   @@unique([leagueId, seasonNumber])
   @@index([leagueId])
@@ -157,6 +204,10 @@ model Team {
   // Relations
   matchupsAsTeamA Matchup[] @relation("TeamA")
   matchupsAsTeamB Matchup[] @relation("TeamB")
+  weeklyScores      WeeklyScore[]
+  scheduledAsTeamA  ScheduledMatchup[] @relation("ScheduledTeamA")
+  scheduledAsTeamB  ScheduledMatchup[] @relation("ScheduledTeamB")
+  scorecards        Scorecard[]
 
   // Team name must be unique within a season (allows same team name across seasons)
   @@unique([seasonId, name])
@@ -199,6 +250,12 @@ model Matchup {
   isForfeit       Boolean  @default(false) // True if this was a forfeit match
   forfeitTeamId   Int?     // ID of the team that forfeited (null if not a forfeit)
 
+  // Schedule link
+  scheduledMatchup ScheduledMatchup?
+
+  // Scorecard link
+  scorecards      Scorecard[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -209,4 +266,155 @@ model Matchup {
   @@index([teamAId])
   @@index([teamBId])
   @@index([leagueId, weekNumber])
+}
+
+model WeeklyScore {
+  id          Int       @id @default(autoincrement())
+  weekNumber  Int
+  leagueId    Int
+  seasonId    Int?
+  teamId      Int
+  grossScore  Int
+  handicap    Float
+  netScore    Float
+  points      Float     // Points awarded based on weekly finish position
+  position    Int       // Finish position for this week (1st, 2nd, etc.)
+  isSub       Boolean   @default(false)
+  isDnp       Boolean   @default(false) // Did Not Play
+  playedAt    DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  league  League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season  Season?  @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  team    Team     @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  scorecard Scorecard?
+
+  @@unique([leagueId, weekNumber, teamId])
+  @@index([leagueId])
+  @@index([seasonId])
+  @@index([teamId])
+  @@index([leagueId, weekNumber])
+}
+
+model ScheduledMatchup {
+  id          Int       @id @default(autoincrement())
+  leagueId    Int
+  seasonId    Int?
+  weekNumber  Int
+  teamAId     Int
+  teamBId     Int?      // Null = bye week for teamA
+  status      String    @default("scheduled") // "scheduled" | "completed" | "cancelled"
+  matchupId   Int?      @unique // Links to actual Matchup when completed
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  league  League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season  Season?  @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  teamA   Team     @relation("ScheduledTeamA", fields: [teamAId], references: [id], onDelete: Restrict)
+  teamB   Team?    @relation("ScheduledTeamB", fields: [teamBId], references: [id], onDelete: Restrict)
+  matchup Matchup? @relation(fields: [matchupId], references: [id], onDelete: SetNull)
+
+  @@unique([leagueId, weekNumber, teamAId])
+  @@index([leagueId])
+  @@index([seasonId])
+  @@index([teamAId])
+  @@index([teamBId])
+  @@index([leagueId, weekNumber])
+  @@index([matchupId])
+}
+
+// ============================================
+// SCORECARD MODELS
+// ============================================
+
+model Course {
+  id            Int      @id @default(autoincrement())
+  leagueId      Int
+  league        League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  name          String
+  location      String?
+  numberOfHoles Int      @default(9)    // 9 or 18
+  totalPar      Int?                    // computed sum of hole pars
+  teeColor      String?                // "White", "Blue", etc.
+  courseRating   Float?                 // USGA Course Rating
+  slopeRating   Int?                   // USGA Slope Rating
+  externalId    String?                // for future API import
+  dataSource    String   @default("manual")  // "manual" | "golfcourseapi" | etc.
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  holes         Hole[]
+  scorecards    Scorecard[]
+
+  @@index([leagueId])
+}
+
+model Hole {
+  id            Int    @id @default(autoincrement())
+  courseId       Int
+  course        Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  holeNumber    Int       // 1-9 or 1-18
+  par           Int       // 3, 4, or 5
+  handicapIndex Int       // 1-18 difficulty ranking (1 = hardest)
+  yardage       Int?
+  holeScores    HoleScore[]
+
+  @@unique([courseId, holeNumber])
+  @@index([courseId])
+}
+
+model Scorecard {
+  id            Int       @id @default(autoincrement())
+  leagueId      Int
+  league        League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  courseId       Int
+  course        Course    @relation(fields: [courseId], references: [id])
+  teamId        Int
+  team          Team      @relation(fields: [teamId], references: [id])
+  seasonId      Int?
+  season        Season?   @relation(fields: [seasonId], references: [id])
+  weekNumber    Int
+  matchupId     Int?
+  matchup       Matchup?  @relation(fields: [matchupId], references: [id], onDelete: SetNull)
+  teamSide      String?   // "A" or "B" for match play
+  weeklyScoreId Int?      @unique
+  weeklyScore   WeeklyScore? @relation(fields: [weeklyScoreId], references: [id], onDelete: SetNull)
+  grossTotal    Int?      // sum of hole strokes (null if incomplete)
+  frontNine     Int?
+  backNine      Int?
+  status        String    @default("in_progress")  // in_progress | completed | approved | rejected
+  playerName    String?   // who actually played
+  accessToken   String?   @unique   // JWT for shareable link
+  tokenExpiresAt DateTime?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  holeScores    HoleScore[]
+
+  @@unique([leagueId, weekNumber, teamId])
+  @@index([leagueId, weekNumber])
+  @@index([teamId])
+  @@index([seasonId])
+  @@index([courseId])
+}
+
+model HoleScore {
+  id          Int       @id @default(autoincrement())
+  scorecardId  Int
+  scorecard   Scorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  holeId      Int
+  hole        Hole      @relation(fields: [holeId], references: [id])
+  holeNumber  Int       // denormalized
+  strokes     Int
+  putts       Int?
+  fairwayHit  Boolean?
+  greenInReg  Boolean?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([scorecardId, holeNumber])
+  @@index([scorecardId])
 }

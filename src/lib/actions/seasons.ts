@@ -3,6 +3,9 @@
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireLeagueAdmin } from "../auth";
+import { logger } from "../logger";
+import { requireActiveLeague } from "./leagues";
+import type { ActionResult } from "./shared";
 
 export interface SeasonInfo {
   id: number;
@@ -10,6 +13,7 @@ export interface SeasonInfo {
   year: number;
   seasonNumber: number;
   isActive: boolean;
+  scoringType: string | null;
   startDate: Date | null;
   endDate: Date | null;
   numberOfWeeks: number | null;
@@ -32,39 +36,54 @@ export async function createSeason(
   startDate?: Date | null,
   endDate?: Date | null,
   numberOfWeeks?: number | null
-) {
-  const validated = createSeasonSchema.parse({ name, year, startDate, endDate, numberOfWeeks });
-  const session = await requireLeagueAdmin(leagueSlug);
+): Promise<ActionResult<{ id: number; name: string; seasonNumber: number; isActive: boolean }>> {
+  try {
+    const validated = createSeasonSchema.parse({ name, year, startDate, endDate, numberOfWeeks });
+    const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
 
-  // Get the next season number
-  const lastSeason = await prisma.season.findFirst({
-    where: { leagueId: session.leagueId },
-    orderBy: { seasonNumber: "desc" },
-  });
+    const league = await prisma.league.findUniqueOrThrow({
+      where: { id: session.leagueId },
+      select: { scoringType: true },
+    });
 
-  const seasonNumber = lastSeason ? lastSeason.seasonNumber + 1 : 1;
+    // Interactive transaction: read seasonNumber + deactivate + create are atomic
+    const newSeason = await prisma.$transaction(async (tx) => {
+      const lastSeason = await tx.season.findFirst({
+        where: { leagueId: session.leagueId },
+        orderBy: { seasonNumber: "desc" },
+      });
 
-  // Use transaction to ensure deactivate + create are atomic
-  const [, newSeason] = await prisma.$transaction([
-    prisma.season.updateMany({
-      where: { leagueId: session.leagueId },
-      data: { isActive: false },
-    }),
-    prisma.season.create({
-      data: {
-        leagueId: session.leagueId,
-        name: validated.name,
-        year: validated.year,
-        seasonNumber,
-        isActive: true,
-        startDate: validated.startDate ?? null,
-        endDate: validated.endDate ?? null,
-        numberOfWeeks: validated.numberOfWeeks ?? null,
-      },
-    }),
-  ]);
+      const seasonNumber = lastSeason ? lastSeason.seasonNumber + 1 : 1;
 
-  return newSeason;
+      await tx.season.updateMany({
+        where: { leagueId: session.leagueId },
+        data: { isActive: false },
+      });
+
+      return tx.season.create({
+        data: {
+          leagueId: session.leagueId,
+          name: validated.name,
+          year: validated.year,
+          seasonNumber,
+          isActive: true,
+          scoringType: league.scoringType,
+          startDate: validated.startDate ?? null,
+          endDate: validated.endDate ?? null,
+          numberOfWeeks: validated.numberOfWeeks ?? null,
+        },
+      });
+    });
+
+    return { success: true, data: { id: newSeason.id, name: newSeason.name, seasonNumber: newSeason.seasonNumber, isActive: newSeason.isActive } };
+  } catch (error) {
+    logger.error("createSeason failed", error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.issues[0]?.message || "Invalid input" };
+    }
+    return { success: false, error: error instanceof Error ? error.message : "Failed to create season" };
+  }
 }
 
 export async function getSeasons(leagueId: number): Promise<SeasonInfo[]> {
@@ -84,6 +103,7 @@ export async function getSeasons(leagueId: number): Promise<SeasonInfo[]> {
     year: s.year,
     seasonNumber: s.seasonNumber,
     isActive: s.isActive,
+    scoringType: s.scoringType,
     startDate: s.startDate,
     endDate: s.endDate,
     numberOfWeeks: s.numberOfWeeks,
@@ -98,31 +118,36 @@ export async function getActiveSeason(leagueId: number) {
   });
 }
 
-export async function setActiveSeason(leagueSlug: string, seasonId: number) {
-  const session = await requireLeagueAdmin(leagueSlug);
+export async function setActiveSeason(leagueSlug: string, seasonId: number): Promise<ActionResult> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
 
-  // Verify the season belongs to this league
-  const season = await prisma.season.findUniqueOrThrow({
-    where: { id: seasonId },
-  });
-
-  if (season.leagueId !== session.leagueId) {
-    throw new Error("Unauthorized: Season does not belong to this league");
-  }
-
-  // Use transaction to ensure deactivate + activate are atomic
-  const [, activatedSeason] = await prisma.$transaction([
-    prisma.season.updateMany({
-      where: { leagueId: session.leagueId },
-      data: { isActive: false },
-    }),
-    prisma.season.update({
+    // Verify the season belongs to this league
+    const season = await prisma.season.findUniqueOrThrow({
       where: { id: seasonId },
-      data: { isActive: true },
-    }),
-  ]);
+    });
 
-  return activatedSeason;
+    if (season.leagueId !== session.leagueId) {
+      return { success: false, error: "Unauthorized: Season does not belong to this league" };
+    }
+
+    // Use transaction to ensure deactivate + activate are atomic
+    await prisma.$transaction([
+      prisma.season.updateMany({
+        where: { leagueId: session.leagueId },
+        data: { isActive: false },
+      }),
+      prisma.season.update({
+        where: { id: seasonId },
+        data: { isActive: true },
+      }),
+    ]);
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    logger.error("setActiveSeason failed", error);
+    return { success: false, error: error instanceof Error ? error.message : "Failed to set active season" };
+  }
 }
 
 export async function getSeasonById(seasonId: number) {
@@ -163,6 +188,11 @@ export async function getTeamPreviousScoresForSeason(seasonId: number, teamId: n
     .map((m) => (m.teamAId === teamId ? m.teamAGross : m.teamBGross));
 }
 
+const updateSeasonSchema = z.object({
+  name: z.string().min(2).max(100).trim().optional(),
+  isActive: z.boolean().optional(),
+});
+
 export async function updateSeason(
   leagueSlug: string,
   seasonId: number,
@@ -173,65 +203,90 @@ export async function updateSeason(
     endDate?: Date | null;
     numberOfWeeks?: number | null;
   }
-) {
-  const session = await requireLeagueAdmin(leagueSlug);
+): Promise<ActionResult> {
+  try {
+    const validated = updateSeasonSchema.parse(data);
+    const session = await requireLeagueAdmin(leagueSlug);
 
-  const season = await prisma.season.findUniqueOrThrow({
-    where: { id: seasonId },
-  });
+    const season = await prisma.season.findUniqueOrThrow({
+      where: { id: seasonId },
+    });
 
-  if (season.leagueId !== session.leagueId) {
-    throw new Error("Unauthorized: Season does not belong to this league");
+    if (season.leagueId !== session.leagueId) {
+      return { success: false, error: "Unauthorized: Season does not belong to this league" };
+    }
+
+    await prisma.season.update({
+      where: { id: seasonId },
+      data: validated,
+    });
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    logger.error("updateSeason failed", error);
+    return { success: false, error: error instanceof Error ? error.message : "Failed to update season" };
   }
-
-  return prisma.season.update({
-    where: { id: seasonId },
-    data,
-  });
 }
 
 export async function copyTeamsToSeason(
   leagueSlug: string,
   fromSeasonId: number,
   toSeasonId: number
-) {
-  const session = await requireLeagueAdmin(leagueSlug);
+): Promise<ActionResult> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
 
-  // Verify both seasons belong to this league
-  const [fromSeason, toSeason] = await Promise.all([
-    prisma.season.findUniqueOrThrow({ where: { id: fromSeasonId } }),
-    prisma.season.findUniqueOrThrow({ where: { id: toSeasonId } }),
-  ]);
+    // Verify both seasons belong to this league
+    const [fromSeason, toSeason] = await Promise.all([
+      prisma.season.findUniqueOrThrow({ where: { id: fromSeasonId } }),
+      prisma.season.findUniqueOrThrow({ where: { id: toSeasonId } }),
+    ]);
 
-  if (fromSeason.leagueId !== session.leagueId || toSeason.leagueId !== session.leagueId) {
-    throw new Error("Unauthorized: Season does not belong to this league");
-  }
+    if (fromSeason.leagueId !== session.leagueId || toSeason.leagueId !== session.leagueId) {
+      return { success: false, error: "Unauthorized: Season does not belong to this league" };
+    }
 
-  // Get teams from the source season
-  const sourceTeams = await prisma.team.findMany({
-    where: { seasonId: fromSeasonId, status: "approved" },
-  });
-
-  // Create copies in the target season
-  const createdTeams = [];
-  for (const team of sourceTeams) {
-    const newTeam = await prisma.team.create({
-      data: {
-        name: team.name,
-        leagueId: session.leagueId,
-        seasonId: toSeasonId,
-        captainName: team.captainName,
-        email: team.email,
-        phone: team.phone,
-        status: "approved", // Pre-approved since they were in previous season
-        totalPoints: 0,
-        wins: 0,
-        losses: 0,
-        ties: 0,
-      },
+    // Get teams from the source season
+    const sourceTeams = await prisma.team.findMany({
+      where: { seasonId: fromSeasonId, status: "approved" },
     });
-    createdTeams.push(newTeam);
-  }
 
-  return createdTeams;
+    // Check for existing teams in target season to prevent duplicates
+    const existingTeams = await prisma.team.findMany({
+      where: { seasonId: toSeasonId },
+      select: { name: true },
+    });
+    const existingNames = new Set(existingTeams.map((t) => t.name));
+    const teamsToCreate = sourceTeams.filter((t) => !existingNames.has(t.name));
+
+    if (teamsToCreate.length === 0) {
+      return { success: false, error: "All teams from the source season already exist in the target season." };
+    }
+
+    // Create copies in the target season atomically
+    await prisma.$transaction(
+      teamsToCreate.map((team) =>
+        prisma.team.create({
+          data: {
+            name: team.name,
+            leagueId: session.leagueId,
+            seasonId: toSeasonId,
+            captainName: team.captainName,
+            email: team.email,
+            phone: team.phone,
+            status: "approved", // Pre-approved since they were in previous season
+            totalPoints: 0,
+            wins: 0,
+            losses: 0,
+            ties: 0,
+          },
+        })
+      )
+    );
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    logger.error("copyTeamsToSeason failed", error);
+    return { success: false, error: error instanceof Error ? error.message : "Failed to copy teams to season" };
+  }
 }

@@ -23,29 +23,34 @@ export default function SudoLoginPage() {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || "Login failed");
+        if (response.status === 401) {
+          setError("Invalid credentials");
+        } else if (response.status === 429) {
+          setError("Too many attempts. Try again later.");
+        } else {
+          setError("Login failed");
+        }
+        return;
       }
 
       router.push("/sudo");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+    } catch {
+      setError("Login failed");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-slate-800 rounded-lg shadow-2xl p-8 border border-slate-700">
+    <div className="min-h-screen bg-rough flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-board-green rounded-lg shadow-2xl p-8 border border-board-green/80">
         <div className="text-center mb-6">
-          <div className="text-slate-400 text-xs uppercase tracking-widest mb-2">
+          <div className="text-putting/50 text-xs font-display uppercase tracking-[0.25em] mb-2">
             Restricted Access
           </div>
-          <h1 className="text-xl font-bold text-white">
+          <h1 className="text-xl font-display font-bold text-board-yellow uppercase tracking-wider">
             Platform Administration
           </h1>
         </div>
@@ -54,7 +59,7 @@ export default function SudoLoginPage() {
           <div>
             <label
               htmlFor="username"
-              className="block text-sm font-medium text-slate-300 mb-1"
+              className="block text-sm font-display font-medium text-putting/70 uppercase tracking-wider mb-2"
             >
               Username
             </label>
@@ -63,8 +68,8 @@ export default function SudoLoginPage() {
               id="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              autoComplete="off"
+              className="w-full px-4 py-2 bg-rough border-b-2 border-putting/40 text-white placeholder-putting/30 focus:outline-none focus:border-board-yellow font-sans transition-colors"
+              autoComplete="username"
               required
             />
           </div>
@@ -72,7 +77,7 @@ export default function SudoLoginPage() {
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-slate-300 mb-1"
+              className="block text-sm font-display font-medium text-putting/70 uppercase tracking-wider mb-2"
             >
               Password
             </label>
@@ -81,13 +86,14 @@ export default function SudoLoginPage() {
               id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-full px-4 py-2 bg-rough border-b-2 border-putting/40 text-white placeholder-putting/30 focus:outline-none focus:border-board-yellow font-sans transition-colors"
+              autoComplete="current-password"
               required
             />
           </div>
 
           {error && (
-            <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-board-red/20 border border-board-red/50 text-board-red px-4 py-3 rounded-lg text-sm font-sans">
               {error}
             </div>
           )}
@@ -95,7 +101,7 @@ export default function SudoLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-amber-600 text-white py-3 rounded-lg hover:bg-amber-700 transition-colors font-medium disabled:opacity-50"
+            className="w-full bg-board-yellow text-rough py-3 rounded-lg hover:bg-board-yellow/90 transition-colors font-display font-semibold uppercase tracking-wider disabled:opacity-50"
           >
             {loading ? "Authenticating..." : "Access"}
           </button>

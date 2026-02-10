@@ -2,6 +2,11 @@
 // Creates a fully populated league for Playwright E2E tests
 // Run with: npx tsx scripts/seed-e2e.ts
 
+if (process.env.NODE_ENV === "production") {
+  console.error("ERROR: Seed scripts must not run in production. Aborting.");
+  process.exit(1);
+}
+
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import * as bcrypt from "bcryptjs";
@@ -13,8 +18,13 @@ import {
   DEFAULT_HANDICAP_SETTINGS,
 } from "../src/lib/handicap";
 
+const tursoUrl = process.env.TURSO_DATABASE_URL;
+const tursoToken = process.env.TURSO_AUTH_TOKEN;
+const dbUrl = tursoUrl || process.env.DATABASE_URL || "file:./dev.db";
+
 const adapter = new PrismaLibSql({
-  url: process.env.DATABASE_URL || "file:./dev.db",
+  url: dbUrl,
+  authToken: tursoUrl ? tursoToken : undefined,
 });
 const prisma = new PrismaClient({ adapter });
 
@@ -137,19 +147,36 @@ function generateWeekPairings(teamIds: number[], weekNum: number): [number, numb
 async function seed() {
   console.log("Seeding E2E data: Alex's League\n");
 
-  // Idempotent: delete existing data for this league
-  const existingLeague = await prisma.league.findUnique({
-    where: { slug: LEAGUE_SLUG },
-    select: { id: true },
-  });
-  if (existingLeague) {
-    console.log("  Removing existing Alex's League data...");
-    await prisma.matchup.deleteMany({ where: { leagueId: existingLeague.id } });
-    await prisma.team.deleteMany({ where: { leagueId: existingLeague.id } });
-    await prisma.season.deleteMany({ where: { leagueId: existingLeague.id } });
-    await prisma.league.delete({ where: { id: existingLeague.id } });
-    console.log("  Cleared.\n");
+  // Idempotent: delete existing data for this league (check both slug variants)
+  const slugsToCheck = [LEAGUE_SLUG, "alex-s-league", "alexs-league-1"];
+  for (const slug of slugsToCheck) {
+    const existing = await prisma.league.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (existing) {
+      console.log(`  Removing existing league (slug: ${slug})...`);
+      await prisma.matchup.deleteMany({ where: { leagueId: existing.id } });
+      await prisma.team.deleteMany({ where: { leagueId: existing.id } });
+      await prisma.season.deleteMany({ where: { leagueId: existing.id } });
+      await prisma.league.delete({ where: { id: existing.id } });
+      console.log("  Cleared.");
+    }
   }
+  // Also check by name
+  const byName = await prisma.league.findFirst({
+    where: { name: { in: [LEAGUE_NAME, "Alexs League"] } },
+    select: { id: true, slug: true },
+  });
+  if (byName) {
+    console.log(`  Removing existing league by name (slug: ${byName.slug})...`);
+    await prisma.matchup.deleteMany({ where: { leagueId: byName.id } });
+    await prisma.team.deleteMany({ where: { leagueId: byName.id } });
+    await prisma.season.deleteMany({ where: { leagueId: byName.id } });
+    await prisma.league.delete({ where: { id: byName.id } });
+    console.log("  Cleared.");
+  }
+  console.log();
 
   // Create league
   const hashedPassword = await bcrypt.hash(LEAGUE_PASSWORD, 12);

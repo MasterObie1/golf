@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  getLeagueBySlug,
-  getSeasons,
-  getActiveSeason,
-  getMatchupHistoryForSeason,
-} from "@/lib/actions";
+import { getLeagueBySlug } from "@/lib/actions/leagues";
+import { getSeasons, getActiveSeason } from "@/lib/actions/seasons";
+import { getMatchupHistoryForSeason } from "@/lib/actions/matchups";
+import { getWeeklyScoreHistoryForSeason } from "@/lib/actions/weekly-scores";
+import { getScorecardAvailabilityForSeason } from "@/lib/actions/scorecards";
 import { ScoreCard } from "@/components/ScoreCard";
+import { MatchupWithScorecards } from "@/components/MatchupWithScorecards";
+import { WeeklyScoreCard } from "@/components/WeeklyScoreCard";
 import { SeasonSelector } from "@/components/SeasonSelector";
+import { ContourBackground } from "@/components/grounds/ContourBackground";
 import type { Metadata } from "next";
+
+export const revalidate = 60;
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -19,9 +23,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const league = await getLeagueBySlug(slug);
   if (!league) return { title: "Match History" };
+  const isStrokePlay = league.scoringType === "stroke_play";
   return {
-    title: `Match History - ${league.name}`,
-    description: `Match history and results for ${league.name}`,
+    title: `${isStrokePlay ? "Score" : "Match"} History - ${league.name}`,
+    description: `${isStrokePlay ? "Score" : "Match"} history and results for ${league.name}`,
   };
 }
 
@@ -34,8 +39,10 @@ export default async function LeagueHistoryPage({ params, searchParams }: Props)
     notFound();
   }
 
-  const seasons = await getSeasons(league.id);
-  const activeSeason = await getActiveSeason(league.id);
+  const [seasons, activeSeason] = await Promise.all([
+    getSeasons(league.id),
+    getActiveSeason(league.id),
+  ]);
 
   // Determine which season to show
   let currentSeasonId: number | null = null;
@@ -49,12 +56,33 @@ export default async function LeagueHistoryPage({ params, searchParams }: Props)
     currentSeasonId = seasons[0].id;
   }
 
-  // Get matchups for the current season
-  const matchups = currentSeasonId
-    ? await getMatchupHistoryForSeason(currentSeasonId)
-    : [];
+  // Use season's scoring type for historical accuracy
+  const currentSeason = currentSeasonId ? seasons.find((s) => s.id === currentSeasonId) : null;
+  const scoringType = currentSeason?.scoringType || league.scoringType || "match_play";
+  const isStrokePlay = scoringType === "stroke_play";
+  const isHybrid = scoringType === "hybrid";
 
-  // Group matchups by week and transform to ScoreCard format
+  // Fetch data based on scoring type
+  const hasMatchPlay = scoringType === "match_play" || isHybrid;
+  const hasStrokePlay = isStrokePlay || isHybrid;
+
+  const scorecardsEnabled = league.scorecardMode !== "disabled";
+
+  const [matchupsResult, weeklyScores, scorecardAvailability] = await Promise.all([
+    hasMatchPlay && currentSeasonId
+      ? getMatchupHistoryForSeason(currentSeasonId)
+      : Promise.resolve({ matchups: [], hasMore: false }),
+    hasStrokePlay && currentSeasonId
+      ? getWeeklyScoreHistoryForSeason(currentSeasonId)
+      : Promise.resolve([]),
+    scorecardsEnabled && currentSeasonId
+      ? getScorecardAvailabilityForSeason(league.id, currentSeasonId)
+      : Promise.resolve([]),
+  ]);
+
+  const matchups = matchupsResult.matchups;
+
+  // Group matchups by week
   const matchupsByWeek = matchups.reduce(
     (acc, matchup) => {
       if (!acc[matchup.weekNumber]) {
@@ -96,28 +124,44 @@ export default async function LeagueHistoryPage({ params, searchParams }: Props)
     }[]>
   );
 
-  const weekNumbers = Object.keys(matchupsByWeek)
+  const matchupWeekNumbers = Object.keys(matchupsByWeek)
     .map(Number)
     .sort((a, b) => b - a);
 
-  const currentSeason = currentSeasonId
-    ? seasons.find((s) => s.id === currentSeasonId)
-    : null;
+  // Group weekly scores by week
+  const scoresByWeek: Record<number, typeof weeklyScores> = {};
+  for (const score of weeklyScores) {
+    if (!scoresByWeek[score.weekNumber]) {
+      scoresByWeek[score.weekNumber] = [];
+    }
+    scoresByWeek[score.weekNumber].push(score);
+  }
+
+  const scoreWeekNumbers = Object.keys(scoresByWeek)
+    .map(Number)
+    .sort((a, b) => b - a);
+
+  const hasNoData = matchups.length === 0 && weeklyScores.length === 0;
+  const pageTitle = isStrokePlay ? "Score History" : "Match History";
 
   return (
-    <div className="min-h-screen bg-bg-primary">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-surface relative">
+      <ContourBackground variant="hills" color="text-fairway" opacity="opacity-[0.04]" />
+
+      <div className="relative max-w-4xl mx-auto px-4 py-8">
         <div className="mb-6">
           <Link
             href={`/league/${slug}`}
-            className="text-green-primary hover:text-green-dark"
+            className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider transition-colors"
           >
             &larr; Back to {league.name}
           </Link>
         </div>
 
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-3xl font-bold text-green-dark">Match History</h1>
+          <h1 className="text-3xl font-bold text-scorecard-pencil font-display uppercase tracking-wider">
+            {pageTitle}
+          </h1>
           {seasons.length > 0 && (
             <SeasonSelector
               seasons={seasons}
@@ -126,28 +170,68 @@ export default async function LeagueHistoryPage({ params, searchParams }: Props)
             />
           )}
         </div>
-        <p className="text-gray-600 mb-8">
+        <p className="text-text-secondary mb-8 font-sans">
           {league.name}
-          {currentSeason && ` - ${currentSeason.name}`}
+          {currentSeason && ` \u2014 ${currentSeason.name}`}
         </p>
 
         {seasons.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-gray-500">No seasons have been created yet.</p>
+          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-black/5 p-8 text-center">
+            <p className="text-text-muted font-sans">No seasons have been created yet.</p>
           </div>
-        ) : matchups.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-gray-500">No matches have been played yet.</p>
+        ) : hasNoData ? (
+          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-black/5 p-8 text-center">
+            <p className="text-text-muted font-sans">
+              No {isStrokePlay ? "scores" : "matches"} have been played yet.
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {weekNumbers.map((weekNumber) => (
-              <ScoreCard
-                key={weekNumber}
-                weekNumber={weekNumber}
-                matchups={matchupsByWeek[weekNumber]}
-              />
-            ))}
+            {/* Match play results */}
+            {hasMatchPlay && matchupWeekNumbers.length > 0 && (
+              <>
+                {isHybrid && scoreWeekNumbers.length > 0 && (
+                  <h2 className="text-xl font-semibold text-scorecard-pencil font-display uppercase tracking-wider mb-4">
+                    Match Results
+                  </h2>
+                )}
+                {matchupWeekNumbers.map((weekNumber) =>
+                  scorecardsEnabled && scorecardAvailability.length > 0 ? (
+                    <MatchupWithScorecards
+                      key={`matchup-${weekNumber}`}
+                      weekNumber={weekNumber}
+                      matchups={matchupsByWeek[weekNumber]}
+                      leagueId={league.id}
+                      scorecardAvailabilityRaw={scorecardAvailability}
+                    />
+                  ) : (
+                    <ScoreCard
+                      key={`matchup-${weekNumber}`}
+                      weekNumber={weekNumber}
+                      matchups={matchupsByWeek[weekNumber]}
+                    />
+                  )
+                )}
+              </>
+            )}
+
+            {/* Stroke play / field results */}
+            {hasStrokePlay && scoreWeekNumbers.length > 0 && (
+              <>
+                {isHybrid && matchupWeekNumbers.length > 0 && (
+                  <h2 className="text-xl font-semibold text-scorecard-pencil font-display uppercase tracking-wider mb-4 mt-8">
+                    Field Results
+                  </h2>
+                )}
+                {scoreWeekNumbers.map((weekNumber) => (
+                  <WeeklyScoreCard
+                    key={`score-${weekNumber}`}
+                    weekNumber={weekNumber}
+                    scores={scoresByWeek[weekNumber]}
+                  />
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>

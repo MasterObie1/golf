@@ -28,16 +28,16 @@ export function GolfNews() {
 
   if (loading) {
     return (
-      <div className="bg-white/95 backdrop-blur rounded-lg shadow-lg p-6 w-full max-w-md">
-        <h2 className="text-lg font-bold text-[var(--green-dark)] mb-4 flex items-center gap-2">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full border border-white/80">
+        <h2 className="text-lg font-display font-bold text-scorecard-pencil uppercase tracking-wider mb-4 flex items-center gap-2">
           <NewspaperIcon />
           Golf News
         </h2>
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-              <div className="h-3 bg-gray-100 rounded w-1/4" />
+              <div className="h-4 bg-scorecard-line/30 rounded w-3/4 mb-2" />
+              <div className="h-3 bg-scorecard-line/20 rounded w-1/4" />
             </div>
           ))}
         </div>
@@ -47,12 +47,12 @@ export function GolfNews() {
 
   if (error || news.length === 0) {
     return (
-      <div className="bg-white/95 backdrop-blur rounded-lg shadow-lg p-6 w-full max-w-md">
-        <h2 className="text-lg font-bold text-[var(--green-dark)] mb-4 flex items-center gap-2">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full border border-white/80">
+        <h2 className="text-lg font-display font-bold text-scorecard-pencil uppercase tracking-wider mb-4 flex items-center gap-2">
           <NewspaperIcon />
           Golf News
         </h2>
-        <p className="text-[var(--text-muted)] text-sm">
+        <p className="text-text-muted text-sm font-sans">
           {error || "No news available"}
         </p>
       </div>
@@ -60,8 +60,8 @@ export function GolfNews() {
   }
 
   return (
-    <div className="bg-white/95 backdrop-blur rounded-lg shadow-lg p-6 w-full max-w-md">
-      <h2 className="text-lg font-bold text-[var(--green-dark)] mb-4 flex items-center gap-2">
+    <div className="bg-white rounded-lg shadow-lg p-6 w-full border border-white/80">
+      <h2 className="text-lg font-display font-bold text-scorecard-pencil uppercase tracking-wider mb-4 flex items-center gap-2">
         <NewspaperIcon />
         Golf News
       </h2>
@@ -74,10 +74,10 @@ export function GolfNews() {
             rel="noopener noreferrer"
             className="block group"
           >
-            <h3 className="text-sm font-medium text-[var(--text-primary)] group-hover:text-[var(--green-primary)] transition-colors line-clamp-2">
+            <h3 className="text-sm font-medium font-sans text-scorecard-pencil group-hover:text-fairway transition-colors line-clamp-2">
               {item.title}
             </h3>
-            <p className="text-xs text-[var(--text-muted)] mt-1">
+            <p className="text-xs text-text-secondary mt-1 font-sans">
               {formatRelativeTime(item.pubDate)}
             </p>
           </a>
@@ -87,9 +87,9 @@ export function GolfNews() {
         href="https://www.espn.com/golf/"
         target="_blank"
         rel="noopener noreferrer"
-        className="block mt-4 pt-4 border-t border-[var(--border-light)] text-xs text-[var(--text-muted)] hover:text-[var(--green-primary)] transition-colors"
+        className="block mt-4 pt-4 border-t border-scorecard-line/40 text-xs text-text-secondary hover:text-fairway transition-colors font-sans"
       >
-        More from ESPN Golf →
+        More from ESPN Golf &rarr;
       </a>
     </div>
   );
@@ -98,7 +98,7 @@ export function GolfNews() {
 function NewspaperIcon() {
   return (
     <svg
-      className="w-5 h-5 text-[var(--green-primary)]"
+      className="w-5 h-5 text-fairway"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"

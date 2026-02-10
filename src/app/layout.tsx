@@ -1,22 +1,23 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Inter, Playfair_Display } from "next/font/google";
+import { Oswald, IBM_Plex_Mono, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { NavigationWrapper } from "@/components/NavigationWrapper";
-
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-});
-
-const inter = Inter({
-  variable: "--font-inter",
+import { TimeProvider } from "@/components/grounds/TimeProvider";
+import { MotionProvider } from "@/components/grounds/MotionProvider";
+const oswald = Oswald({
+  variable: "--font-oswald",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: "--font-ibm-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const sourceSans = Source_Sans_3({
+  variable: "--font-source-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -48,18 +49,21 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${jakarta.variable} ${inter.variable} ${playfair.variable} antialiased`}
+        className={`${oswald.variable} ${ibmPlexMono.variable} ${sourceSans.variable} antialiased`}
       >
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-green-800 focus:rounded-lg focus:shadow-lg focus:font-semibold"
-        >
-          Skip to main content
-        </a>
-        <NavigationWrapper />
-        <main id="main-content">
-          {children}
-        </main>
+        <TimeProvider />
+        <MotionProvider>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-fairway focus:rounded-lg focus:shadow-lg focus:font-semibold"
+          >
+            Skip to main content
+          </a>
+          <NavigationWrapper />
+          <main id="main-content">
+            {children}
+          </main>
+        </MotionProvider>
       </body>
     </html>
   );

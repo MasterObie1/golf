@@ -7,6 +7,13 @@ import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    // CSRF: verify Origin header matches our host
+    const origin = request.headers.get("origin");
+    const host = request.headers.get("host");
+    if (origin && host && !origin.endsWith(host)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // Rate limit check — stricter for super-admin
     const ip = getClientIp(request);
     const rateCheck = checkRateLimit(`sudo-login:${ip}`, RATE_LIMITS.sudoLogin);
@@ -52,13 +59,13 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
+      maxAge: 60 * 60 * 4, // 4 hours
       path: "/",
     });
 
     return response;
   } catch (error) {
-    console.error("Super-admin login error:", error);
+    console.error("Super-admin login error:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json({ error: "An error occurred" }, { status: 500 });
   }
 }

@@ -1,25 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   createSeason,
-  getSeasons,
-  getActiveSeason,
   setActiveSeason,
-  getTeamsForSeason,
-  getCurrentWeekNumberForSeason,
-  getMatchupHistoryForSeason,
-} from "@/lib/actions";
-
-interface SeasonInfo {
-  id: number;
-  name: string;
-  year: number;
-  seasonNumber: number;
-  isActive: boolean;
-  teamCount: number;
-  matchupCount: number;
-}
+  type SeasonInfo,
+} from "@/lib/actions/seasons";
 
 interface SeasonsTabProps {
   slug: string;
@@ -43,6 +29,15 @@ export default function SeasonsTab({
   const [seasons, setSeasons] = useState<SeasonInfo[]>(initialSeasons);
   const [activeSeason, setActiveSeasonState] = useState<{ id: number; name: string } | null>(initialActiveSeason);
 
+  // Sync local state when parent passes new seasons
+  useEffect(() => {
+    setSeasons(initialSeasons);
+  }, [initialSeasons]);
+
+  useEffect(() => {
+    setActiveSeasonState(initialActiveSeason);
+  }, [initialActiveSeason]);
+
   async function handleCreateSeason() {
     if (!newSeasonName.trim()) {
       setMessage({ type: "error", text: "Please enter a season name." });
@@ -50,18 +45,25 @@ export default function SeasonsTab({
     }
     setLoading(true);
     try {
-      await createSeason(slug, newSeasonName, newSeasonYear);
-      const [seasonsData, activeSeasonData] = await Promise.all([
-        getSeasons(leagueId),
-        getActiveSeason(leagueId),
+      const result = await createSeason(slug, newSeasonName, newSeasonYear);
+      if (!result.success) {
+        setMessage({ type: "error", text: result.error });
+        setLoading(false);
+        return;
+      }
+      // Update local state from the server action response
+      setActiveSeasonState({ id: result.data.id, name: result.data.name });
+      setSeasons((prev) => [
+        { id: result.data.id, name: result.data.name, year: newSeasonYear, seasonNumber: result.data.seasonNumber, isActive: true, scoringType: null, startDate: null, endDate: null, numberOfWeeks: null, teamCount: 0, matchupCount: 0 },
+        ...prev.map((s) => ({ ...s, isActive: false })),
       ]);
-      setSeasons(seasonsData);
-      setActiveSeasonState(activeSeasonData ? { id: activeSeasonData.id, name: activeSeasonData.name } : null);
       setNewSeasonName("");
       setMessage({ type: "success", text: `Season "${newSeasonName}" created and set as active!` });
+      // Let the parent re-fetch all data (teams, matchups, etc.)
       onSeasonChanged();
     } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to create season." });
+      console.error("handleCreateSeason error:", error);
+      setMessage({ type: "error", text: "Failed to create season." });
     }
     setLoading(false);
   }
@@ -69,17 +71,26 @@ export default function SeasonsTab({
   async function handleSetActiveSeason(seasonId: number) {
     setLoading(true);
     try {
-      await setActiveSeason(slug, seasonId);
-      const [seasonsData, activeSeasonData] = await Promise.all([
-        getSeasons(leagueId),
-        getActiveSeason(leagueId),
-      ]);
-      setSeasons(seasonsData);
-      setActiveSeasonState(activeSeasonData ? { id: activeSeasonData.id, name: activeSeasonData.name } : null);
-      setMessage({ type: "success", text: `Active season changed to "${activeSeasonData?.name}".` });
+      const result = await setActiveSeason(slug, seasonId);
+      if (!result.success) {
+        setMessage({ type: "error", text: result.error });
+        setLoading(false);
+        return;
+      }
+      // Update local state from what we already know
+      const targetSeason = seasons.find((s) => s.id === seasonId);
+      if (targetSeason) {
+        setActiveSeasonState({ id: targetSeason.id, name: targetSeason.name });
+        setSeasons((prev) =>
+          prev.map((s) => ({ ...s, isActive: s.id === seasonId }))
+        );
+        setMessage({ type: "success", text: `Active season changed to "${targetSeason.name}".` });
+      }
+      // Let the parent re-fetch all data (teams, matchups, etc.)
       onSeasonChanged();
     } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to set active season." });
+      console.error("handleSetActiveSeason error:", error);
+      setMessage({ type: "error", text: "Failed to set active season." });
     }
     setLoading(false);
   }
@@ -89,10 +100,10 @@ export default function SeasonsTab({
       {/* Message Banner */}
       {message && (
         <div
-          className={`p-4 rounded-lg ${
+          className={`p-4 rounded-lg font-sans text-sm ${
             message.type === "success"
-              ? "bg-green-100 text-green-800 border border-green-200"
-              : "bg-red-100 text-red-800 border border-red-200"
+              ? "bg-fairway/10 border border-fairway/30 text-fairway"
+              : "bg-error-bg border border-error-border text-error-text"
           }`}
         >
           {message.text}
@@ -101,22 +112,22 @@ export default function SeasonsTab({
 
       {/* Active Season Indicator */}
       {activeSeason && (
-        <div className="bg-green-100 border border-green-300 rounded-lg p-4">
-          <p className="text-green-800">
-            <span className="font-medium">Active Season:</span> {activeSeason.name}
+        <div className="bg-fairway/10 border border-fairway/30 rounded-lg p-4">
+          <p className="text-fairway font-sans">
+            <span className="font-display font-medium uppercase tracking-wider">Active Season:</span> {activeSeason.name}
           </p>
-          <p className="text-sm text-green-600 mt-1">
+          <p className="text-sm text-putting mt-1 font-sans">
             Teams and matchups are being entered for this season.
           </p>
         </div>
       )}
 
       {/* Create New Season */}
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-xl font-semibold mb-4 text-gray-800">Create New Season</h2>
+      <div className="bg-scorecard-paper rounded-lg shadow-lg p-6 border border-scorecard-line/50">
+        <h2 className="text-xl font-display font-semibold uppercase tracking-wider mb-4 text-scorecard-pencil">Create New Season</h2>
         <div className="flex flex-wrap gap-4 items-end">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Season Name
             </label>
             <input
@@ -124,38 +135,38 @@ export default function SeasonsTab({
               value={newSeasonName}
               onChange={(e) => setNewSeasonName(e.target.value)}
               placeholder="e.g., 2025 Spring Season"
-              className="w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-64"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">
               Year
             </label>
             <input
               type="number"
               value={newSeasonYear}
               onChange={(e) => setNewSeasonYear(parseInt(e.target.value) || new Date().getFullYear())}
-              className="w-24 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              className="pencil-input w-24"
             />
           </div>
           <button
             onClick={handleCreateSeason}
             disabled={loading || !newSeasonName.trim()}
-            className="px-6 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough font-display font-semibold uppercase tracking-wider disabled:opacity-50 transition-colors"
           >
             {loading ? "Creating..." : "Create Season"}
           </button>
         </div>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="mt-2 text-sm text-text-muted font-sans">
           Creating a new season will automatically set it as the active season.
         </p>
       </div>
 
       {/* All Seasons */}
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-xl font-semibold mb-4 text-gray-800">All Seasons</h2>
+      <div className="bg-scorecard-paper rounded-lg shadow-lg p-6 border border-scorecard-line/50">
+        <h2 className="text-xl font-display font-semibold uppercase tracking-wider mb-4 text-scorecard-pencil">All Seasons</h2>
         {seasons.length === 0 ? (
-          <p className="text-gray-500">No seasons have been created yet. Create your first season above.</p>
+          <p className="text-text-muted font-sans">No seasons have been created yet. Create your first season above.</p>
         ) : (
           <div className="space-y-3">
             {seasons.map((season) => (
@@ -163,33 +174,33 @@ export default function SeasonsTab({
                 key={season.id}
                 className={`p-4 rounded-lg border ${
                   season.isActive
-                    ? "bg-green-50 border-green-300"
-                    : "bg-gray-50 border-gray-200"
+                    ? "bg-fairway/10 border-fairway/30"
+                    : "bg-surface border-border"
                 }`}
               >
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-gray-800">{season.name}</h3>
+                      <h3 className="font-display font-semibold uppercase tracking-wider text-scorecard-pencil">{season.name}</h3>
                       {season.isActive && (
-                        <span className="px-2 py-0.5 text-xs bg-green-600 text-white rounded-full">
+                        <span className="px-2 py-0.5 text-xs bg-fairway text-white rounded-full font-display uppercase tracking-wider">
                           Active
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Season #{season.seasonNumber} • {season.year}
+                    <p className="text-sm text-text-muted mt-1 font-sans">
+                      Season <span className="font-mono tabular-nums">#{season.seasonNumber}</span> &bull; <span className="font-mono tabular-nums">{season.year}</span>
                     </p>
-                    <div className="flex gap-4 mt-2 text-sm text-gray-600">
-                      <span>{season.teamCount} team{season.teamCount !== 1 ? "s" : ""}</span>
-                      <span>{season.matchupCount} matchup{season.matchupCount !== 1 ? "s" : ""}</span>
+                    <div className="flex gap-4 mt-2 text-sm text-text-secondary font-sans">
+                      <span><span className="font-mono tabular-nums">{season.teamCount}</span> team{season.teamCount !== 1 ? "s" : ""}</span>
+                      <span><span className="font-mono tabular-nums">{season.matchupCount}</span> matchup{season.matchupCount !== 1 ? "s" : ""}</span>
                     </div>
                   </div>
                   {!season.isActive && (
                     <button
                       onClick={() => handleSetActiveSeason(season.id)}
                       disabled={loading}
-                      className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                      className="px-4 py-2 text-sm bg-surface-white text-text-secondary border border-border rounded-lg hover:bg-surface font-display font-medium uppercase tracking-wider disabled:opacity-50 transition-colors"
                     >
                       Set Active
                     </button>
@@ -202,13 +213,13 @@ export default function SeasonsTab({
       </div>
 
       {/* How Seasons Work */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-medium text-blue-800 mb-2">How Seasons Work</h3>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Teams register for the active season only</li>
-          <li>• Matchups are entered for the active season</li>
-          <li>• Previous season stats are preserved for historical viewing</li>
-          <li>• Teams can re-register with the same name in new seasons</li>
+      <div className="bg-info-bg border border-info-border rounded-lg p-4">
+        <h3 className="font-display font-medium uppercase tracking-wider text-info-text mb-2">How Seasons Work</h3>
+        <ul className="text-sm text-info-text space-y-1 font-sans">
+          <li>&bull; Teams register for the active season only</li>
+          <li>&bull; Matchups are entered for the active season</li>
+          <li>&bull; Previous season stats are preserved for historical viewing</li>
+          <li>&bull; Teams can re-register with the same name in new seasons</li>
         </ul>
       </div>
     </div>

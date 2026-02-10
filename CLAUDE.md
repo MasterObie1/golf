@@ -44,7 +44,9 @@ Hardcoded credentials removed. Now uses `SuperAdmin` database model with bcrypt.
 
 - `src/lib/actions.ts` — **1,951-line monolith**. Contains ALL server actions (read + write). Needs to be split into domain modules (`src/lib/actions/leagues.ts`, `src/lib/actions/matchups.ts`, etc.).
 - `src/app/league/[slug]/admin/page.tsx` — **2,068-line client component** with 40+ `useState` calls. Must be decomposed into tab-level components.
-- `src/lib/handicap.ts` — The handicap calculation engine. This is well-designed and is the best code in the project. 605 lines of pure functions.
+- `src/lib/handicap.ts` — The handicap calculation engine. This is well-designed and is the best code in the project. 840 lines of pure functions.
+  - **By design:** `Course.courseRating` and `Course.slopeRating` are NOT used by the handicap engine. This is intentional — the system uses admin-controlled settings (`baseScore`, `multiplier`, etc.) rather than WHS-style differential calculations. The course fields exist for display/reference only.
+  - **By design:** The engine is not WHS-compliant. It's a custom league system with configurable presets. The "USGA-Inspired" preset is a loose approximation, not an implementation of the standard.
 
 ### Data Model
 
@@ -58,7 +60,7 @@ Hardcoded credentials removed. Now uses `SuperAdmin` database model with bcrypt.
 2. **Head-to-head tiebreaker sorts backwards** (`actions.ts:520-524`) — `bVsA - aVsB` should be `aVsB - bVsA`. Duplicated in 3 places.
 3. **Points override passes `""` as number** (`admin/page.tsx:388`) — `as number` cast on `number | ""` doesn't convert at runtime
 4. **`createSeason` has no transaction** (`actions.ts:1530-1548`) — can leave zero active seasons
-5. **Freeze week is a no-op** (`handicap.ts:387-392`) — commented out with "For now, just calculate normally"
+5. **Freeze week is a no-op** — FIXED. Freeze week truncation now implemented in `handicap.ts:441-446`. However, has a semantic issue: invalid scores are filtered before freeze truncation, so freeze means "first N valid scores" not "scores from weeks 1..N".
 
 ### Patterns to Follow
 

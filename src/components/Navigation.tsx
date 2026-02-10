@@ -30,7 +30,7 @@ export function Navigation({ adminSession }: NavigationProps) {
       setMobileMenuOpen(false);
       setLeaguesOpen(false);
     }
-  });
+  }, [pathname]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Click outside to close dropdown
@@ -54,7 +54,6 @@ export function Navigation({ adminSession }: NavigationProps) {
       case "ArrowDown":
         e.preventDefault();
         setLeaguesOpen(true);
-        // Focus first menu item after state update
         setTimeout(() => menuItemsRef.current[0]?.focus(), 0);
         break;
       case "Escape":
@@ -97,20 +96,20 @@ export function Navigation({ adminSession }: NavigationProps) {
   // Global navigation (home page and /leagues pages)
   if (!leagueSlug) {
     return (
-      <nav className="bg-green-primary shadow-md" aria-label="Main navigation">
+      <nav className="wood-grain shadow-lg" aria-label="Main navigation">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="flex items-center justify-between h-20">
+          <div className="flex items-center justify-between h-16">
             {/* Logo/Brand */}
-            <Link
-              href="/"
-              className="flex items-center h-full"
-            >
-              <Logo size="md" variant="image" />
+            <Link href="/" className="flex items-center gap-3 h-full">
+              <Logo size="sm" variant="contour" />
+              <span className="text-board-yellow font-display text-lg font-bold tracking-wider uppercase hidden sm:block">
+                LeagueLinks
+              </span>
             </Link>
 
             {/* Mobile hamburger toggle */}
             <button
-              className="md:hidden p-2 rounded-lg text-white hover:bg-white/10"
+              className="md:hidden p-2 rounded-lg text-white/80 hover:bg-white/10 transition-colors"
               onClick={() => setMobileMenuOpen((prev) => !prev)}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileMenuOpen}
@@ -131,10 +130,10 @@ export function Navigation({ adminSession }: NavigationProps) {
             <div className="hidden md:flex items-center gap-1">
               <Link
                 href="/"
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                className={`px-4 py-1.5 text-sm font-display font-semibold uppercase tracking-wider transition-all rounded ${
                   pathname === "/"
-                    ? "bg-white/20 text-white"
-                    : "text-white/90 hover:bg-white/10 hover:text-white"
+                    ? "bg-white/15 text-board-yellow shadow-sm"
+                    : "text-white/80 hover:text-board-yellow hover:bg-white/5"
                 }`}
               >
                 Home
@@ -149,10 +148,10 @@ export function Navigation({ adminSession }: NavigationProps) {
               >
                 <button
                   ref={dropdownButtonRef}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1 ${
+                  className={`px-4 py-1.5 text-sm font-display font-semibold uppercase tracking-wider transition-all flex items-center gap-1 rounded ${
                     pathname.startsWith("/leagues")
-                      ? "bg-white/20 text-white"
-                      : "text-white/90 hover:bg-white/10 hover:text-white"
+                      ? "bg-white/15 text-board-yellow shadow-sm"
+                      : "text-white/80 hover:text-board-yellow hover:bg-white/5"
                   }`}
                   aria-expanded={leaguesOpen}
                   aria-haspopup="true"
@@ -162,18 +161,13 @@ export function Navigation({ adminSession }: NavigationProps) {
                 >
                   Leagues
                   <svg
-                    className={`w-4 h-4 transition-transform ${leaguesOpen ? "rotate-180" : ""}`}
+                    className={`w-3.5 h-3.5 transition-transform ${leaguesOpen ? "rotate-180" : ""}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
                     aria-hidden="true"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
 
@@ -182,31 +176,31 @@ export function Navigation({ adminSession }: NavigationProps) {
                     <div
                       id="leagues-dropdown-menu"
                       role="menu"
-                      className="w-52 bg-bg-white rounded-lg shadow-lg py-2 border border-border"
+                      className="w-52 bg-surface-white rounded-lg shadow-lg py-2 border border-border"
                     >
                       <Link
                         href="/leagues"
                         role="menuitem"
                         ref={(el) => { menuItemsRef.current[0] = el; }}
                         onKeyDown={(e) => handleMenuItemKeyDown(e, 0)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-text-primary hover:bg-bg-primary transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-text-primary hover:bg-surface transition-colors"
                       >
                         <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
-                        <span className="font-medium">Find a League</span>
+                        <span className="font-medium font-sans">Find a League</span>
                       </Link>
                       <Link
                         href="/leagues/new"
                         role="menuitem"
                         ref={(el) => { menuItemsRef.current[1] = el; }}
                         onKeyDown={(e) => handleMenuItemKeyDown(e, 1)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-text-primary hover:bg-bg-primary transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-text-primary hover:bg-surface transition-colors"
                       >
                         <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
-                        <span className="font-medium">Create a League</span>
+                        <span className="font-medium font-sans">Create a League</span>
                       </Link>
                     </div>
                   </div>
@@ -218,34 +212,34 @@ export function Navigation({ adminSession }: NavigationProps) {
 
         {/* Mobile slide-down menu */}
         {mobileMenuOpen && (
-          <div id="global-mobile-menu" className="md:hidden border-t border-white/20 bg-green-primary">
+          <div id="global-mobile-menu" className="md:hidden border-t border-white/10">
             <div className="px-4 py-3 space-y-1">
               <Link
                 href="/"
-                className={`block px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
+                className={`block px-4 py-3 rounded text-sm font-display font-semibold uppercase tracking-wider transition-all ${
                   pathname === "/"
-                    ? "bg-white/20 text-white"
-                    : "text-white/90 hover:bg-white/10 hover:text-white"
+                    ? "bg-white/15 text-board-yellow"
+                    : "text-white/80 hover:text-board-yellow hover:bg-white/5"
                 }`}
               >
                 Home
               </Link>
               <Link
                 href="/leagues"
-                className={`block px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
+                className={`block px-4 py-3 rounded text-sm font-display font-semibold uppercase tracking-wider transition-all ${
                   pathname === "/leagues"
-                    ? "bg-white/20 text-white"
-                    : "text-white/90 hover:bg-white/10 hover:text-white"
+                    ? "bg-white/15 text-board-yellow"
+                    : "text-white/80 hover:text-board-yellow hover:bg-white/5"
                 }`}
               >
                 Find a League
               </Link>
               <Link
                 href="/leagues/new"
-                className={`block px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
+                className={`block px-4 py-3 rounded text-sm font-display font-semibold uppercase tracking-wider transition-all ${
                   pathname === "/leagues/new"
-                    ? "bg-white/20 text-white"
-                    : "text-white/90 hover:bg-white/10 hover:text-white"
+                    ? "bg-white/15 text-board-yellow"
+                    : "text-white/80 hover:text-board-yellow hover:bg-white/5"
                 }`}
               >
                 Create a League
@@ -260,30 +254,28 @@ export function Navigation({ adminSession }: NavigationProps) {
   // Check if user is admin for this specific league
   const isAdminForThisLeague = adminSession?.leagueSlug === leagueSlug;
 
-  // League-specific navigation - only show admin link if logged in as admin for this league
+  // League-specific navigation
   const leagueLinks = [
-    { href: `/league/${leagueSlug}`, label: "Home", icon: null },
-    { href: `/league/${leagueSlug}/leaderboard`, label: "Leaderboard", icon: null },
-    { href: `/league/${leagueSlug}/history`, label: "History", icon: null },
-    { href: `/league/${leagueSlug}/signup`, label: "Sign Up", icon: null },
-    ...(isAdminForThisLeague ? [{ href: `/league/${leagueSlug}/admin`, label: "Admin", icon: null }] : []),
+    { href: `/league/${leagueSlug}`, label: "Home" },
+    { href: `/league/${leagueSlug}/leaderboard`, label: "Leaderboard" },
+    { href: `/league/${leagueSlug}/history`, label: "History" },
+    { href: `/league/${leagueSlug}/schedule`, label: "Schedule" },
+    { href: `/league/${leagueSlug}/signup`, label: "Sign Up" },
+    ...(isAdminForThisLeague ? [{ href: `/league/${leagueSlug}/admin`, label: "Admin" }] : []),
   ];
 
   return (
-    <nav className="bg-green-primary shadow-md" aria-label="League navigation">
+    <nav className="wood-grain shadow-lg" aria-label="League navigation">
       <div className="max-w-6xl mx-auto px-4">
-        <div className="flex items-center justify-between h-20">
-          {/* Logo/Brand - consistent with global nav */}
-          <Link
-            href={`/league/${leagueSlug}`}
-            className="flex items-center h-full"
-          >
-            <Logo size="md" variant="image" />
+        <div className="flex items-center justify-between h-16">
+          {/* Logo/Brand — always goes to site home */}
+          <Link href="/" className="flex items-center gap-3 h-full" title="LeagueLinks Home">
+            <Logo size="sm" variant="contour" />
           </Link>
 
           {/* Mobile hamburger toggle */}
           <button
-            className="md:hidden p-2 rounded-lg text-white hover:bg-white/10"
+            className="md:hidden p-2 rounded-lg text-white/80 hover:bg-white/10 transition-colors"
             onClick={() => setMobileMenuOpen((prev) => !prev)}
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileMenuOpen}
@@ -300,30 +292,20 @@ export function Navigation({ adminSession }: NavigationProps) {
             )}
           </button>
 
-          {/* Desktop Navigation Links */}
-          <div className="hidden md:flex items-center gap-1">
+          {/* Desktop Navigation Links — tab dividers */}
+          <div className="hidden md:flex items-center">
             {/* All Leagues link */}
             <Link
               href="/leagues"
-              className="px-4 py-2 rounded-lg text-sm font-semibold transition-all text-white/90 hover:bg-white/10 hover:text-white flex items-center gap-1"
+              className="px-3 py-1.5 text-xs font-display font-semibold uppercase tracking-wider text-white/70 hover:text-board-yellow transition-colors flex items-center gap-1"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              All Leagues
+              Leagues
             </Link>
-            <div className="w-px h-6 bg-white/30" aria-hidden="true" />
+            <div className="w-px h-5 bg-white/15 mx-1" aria-hidden="true" />
+
             {leagueLinks.map((link) => {
               const isActive =
                 pathname === link.href ||
@@ -334,16 +316,21 @@ export function Navigation({ adminSession }: NavigationProps) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  className={`px-3 py-1.5 text-sm font-display font-semibold uppercase tracking-wider transition-all relative rounded ${
                     isActive
                       ? isAdmin
-                        ? "bg-gold-primary text-green-primary"
-                        : "bg-white/20 text-white"
+                        ? "bg-board-yellow/20 text-board-yellow"
+                        : "bg-white/15 text-board-yellow shadow-sm -translate-y-px"
                       : isAdmin
-                      ? "bg-gold-primary/80 text-green-primary hover:bg-gold-primary"
-                      : "text-white/90 hover:bg-white/10 hover:text-white"
+                      ? "text-board-yellow/70 hover:text-board-yellow hover:bg-board-yellow/10"
+                      : "text-white/80 hover:text-board-yellow hover:bg-white/5"
                   }`}
                 >
+                  {isAdmin && (
+                    <svg className="w-3 h-3 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  )}
                   {link.label}
                 </Link>
               );
@@ -354,15 +341,15 @@ export function Navigation({ adminSession }: NavigationProps) {
 
       {/* Mobile slide-down menu */}
       {mobileMenuOpen && (
-        <div id="league-mobile-menu" className="md:hidden border-t border-white/20 bg-green-primary">
+        <div id="league-mobile-menu" className="md:hidden border-t border-white/10">
           <div className="px-4 py-3 space-y-1">
             <Link
               href="/leagues"
-              className="block px-4 py-3 rounded-lg text-sm font-semibold transition-all text-white/90 hover:bg-white/10 hover:text-white"
+              className="block px-4 py-3 rounded text-sm font-display font-semibold uppercase tracking-wider text-white/70 hover:text-board-yellow transition-colors"
             >
               &larr; All Leagues
             </Link>
-            <div className="border-t border-white/20 my-1" />
+            <div className="border-t border-white/10 my-1" />
             {leagueLinks.map((link) => {
               const isActive =
                 pathname === link.href ||
@@ -373,14 +360,14 @@ export function Navigation({ adminSession }: NavigationProps) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`block px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
+                  className={`block px-4 py-3 rounded text-sm font-display font-semibold uppercase tracking-wider transition-all ${
                     isActive
                       ? isAdmin
-                        ? "bg-gold-primary text-green-primary"
-                        : "bg-white/20 text-white"
+                        ? "bg-board-yellow/20 text-board-yellow"
+                        : "bg-white/15 text-board-yellow"
                       : isAdmin
-                      ? "bg-gold-primary/80 text-green-primary hover:bg-gold-primary"
-                      : "text-white/90 hover:bg-white/10 hover:text-white"
+                      ? "text-board-yellow/70 hover:text-board-yellow"
+                      : "text-white/80 hover:text-board-yellow hover:bg-white/5"
                   }`}
                 >
                   {link.label}

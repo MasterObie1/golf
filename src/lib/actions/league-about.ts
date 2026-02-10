@@ -3,6 +3,9 @@
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireLeagueAdmin } from "../auth";
+import { logger } from "../logger";
+import { requireActiveLeague } from "./leagues";
+import type { ActionResult } from "./shared";
 
 export interface LeagueAbout {
   leagueName: string;
@@ -25,6 +28,23 @@ export interface LeagueAbout {
 export async function getLeagueAbout(leagueId: number): Promise<LeagueAbout> {
   const league = await prisma.league.findUniqueOrThrow({
     where: { id: leagueId },
+    select: {
+      name: true,
+      startDate: true,
+      endDate: true,
+      numberOfWeeks: true,
+      courseName: true,
+      courseLocation: true,
+      playDay: true,
+      playTime: true,
+      entryFee: true,
+      prizeInfo: true,
+      description: true,
+      contactEmail: true,
+      contactPhone: true,
+      registrationOpen: true,
+      maxTeams: true,
+    },
   });
 
   return {
@@ -64,32 +84,43 @@ const updateLeagueAboutSchema = z.object({
 
 export type UpdateLeagueAboutInput = z.infer<typeof updateLeagueAboutSchema>;
 
-export async function updateLeagueAbout(leagueSlug: string, data: UpdateLeagueAboutInput) {
-  const session = await requireLeagueAdmin(leagueSlug);
+export async function updateLeagueAbout(leagueSlug: string, data: UpdateLeagueAboutInput): Promise<ActionResult> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
 
-  const sanitizedData = {
-    ...data,
-    contactEmail: data.contactEmail === "" ? null : data.contactEmail,
-  };
+    const sanitizedData = {
+      ...data,
+      contactEmail: data.contactEmail === "" ? null : data.contactEmail,
+    };
 
-  const validated = updateLeagueAboutSchema.parse(sanitizedData);
+    const validated = updateLeagueAboutSchema.parse(sanitizedData);
 
-  return prisma.league.update({
-    where: { id: session.leagueId },
-    data: {
-      name: validated.leagueName,
-      startDate: validated.startDate,
-      endDate: validated.endDate,
-      numberOfWeeks: validated.numberOfWeeks,
-      courseName: validated.courseName,
-      courseLocation: validated.courseLocation,
-      playDay: validated.playDay,
-      playTime: validated.playTime,
-      entryFee: validated.entryFee,
-      prizeInfo: validated.prizeInfo,
-      description: validated.description,
-      contactEmail: validated.contactEmail,
-      contactPhone: validated.contactPhone,
-    },
-  });
+    await prisma.league.update({
+      where: { id: session.leagueId },
+      data: {
+        name: validated.leagueName,
+        startDate: validated.startDate,
+        endDate: validated.endDate,
+        numberOfWeeks: validated.numberOfWeeks,
+        courseName: validated.courseName,
+        courseLocation: validated.courseLocation,
+        playDay: validated.playDay,
+        playTime: validated.playTime,
+        entryFee: validated.entryFee,
+        prizeInfo: validated.prizeInfo,
+        description: validated.description,
+        contactEmail: validated.contactEmail,
+        contactPhone: validated.contactPhone,
+      },
+    });
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    logger.error("updateLeagueAbout failed", error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.issues[0]?.message || "Invalid input" };
+    }
+    return { success: false, error: error instanceof Error ? error.message : "Failed to update league info" };
+  }
 }
