@@ -8,12 +8,22 @@ export const revalidate = 60;
 
 async function getStats() {
   try {
-    const [leagueCount, teamCount, matchupCount] = await Promise.all([
+    // Count teams only in active seasons to avoid double-counting across years
+    const [leagueCount, teamCount, matchupCount, weeklyScoreWeeks] = await Promise.all([
       prisma.league.count({ where: { status: "active" } }),
-      prisma.team.count({ where: { status: "approved" } }),
+      prisma.team.count({
+        where: {
+          status: "approved",
+          season: { isActive: true },
+        },
+      }),
       prisma.matchup.count(),
+      // Count distinct weeks of stroke play (each week = 1 round for counting purposes)
+      prisma.weeklyScore.groupBy({
+        by: ["leagueId", "weekNumber"],
+      }),
     ]);
-    return { leagueCount, teamCount, matchupCount };
+    return { leagueCount, teamCount, matchupCount: matchupCount + weeklyScoreWeeks.length };
   } catch (error) {
     console.error("Error fetching stats:", error);
     return { leagueCount: 0, teamCount: 0, matchupCount: 0 };
@@ -31,13 +41,29 @@ async function getFeaturedLeagues() {
         courseName: true,
         registrationOpen: true,
         _count: {
-          select: { teams: true, matchups: true },
+          select: {
+            // Only count teams in the active season
+            teams: { where: { status: "approved", season: { isActive: true } } },
+            matchups: true,
+          },
+        },
+        // Count distinct weekly score weeks for stroke play leagues
+        weeklyScores: {
+          select: { weekNumber: true },
+          distinct: ["weekNumber"],
         },
       },
       orderBy: { createdAt: "desc" },
       take: 5,
     });
-    return leagues;
+    // Combine matchup count + distinct weekly score weeks for total "rounds"
+    return leagues.map(({ weeklyScores, ...league }) => ({
+      ...league,
+      _count: {
+        teams: league._count.teams,
+        rounds: league._count.matchups + weeklyScores.length,
+      },
+    }));
   } catch (error) {
     console.error("Error fetching featured leagues:", error);
     return [];
@@ -314,7 +340,7 @@ export default async function Home() {
                         {league._count.teams}
                       </span>
                       <span className="w-16 text-center text-white font-mono font-semibold tabular-nums hidden sm:block">
-                        {league._count.matchups}
+                        {league._count.rounds}
                       </span>
                       <span
                         className={`w-20 text-center text-xs font-display font-semibold uppercase px-2 py-1 rounded ${

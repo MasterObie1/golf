@@ -44,10 +44,8 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
     const parsed = parseInt(seasonId, 10);
     if (!isNaN(parsed)) currentSeasonId = parsed;
   }
-  if (currentSeasonId === null && activeSeason) {
-    currentSeasonId = activeSeason.id;
-  } else if (seasons.length > 0) {
-    currentSeasonId = seasons[0].id;
+  if (currentSeasonId === null) {
+    currentSeasonId = activeSeason?.id ?? seasons[0]?.id ?? null;
   }
 
   // Get handicap history for the current season
