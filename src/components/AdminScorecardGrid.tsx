@@ -84,21 +84,21 @@ export default function AdminScorecardGrid({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>, holeNumber: number) {
     if (e.key === "Enter" || e.key === "Tab") {
-      // Save current, advance to next
+      e.preventDefault();
+      // Save current value
       const target = e.target as HTMLInputElement;
       if (target.value) {
         handleSave(holeNumber, target.value);
       }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        // Find next hole
-        const allHoleNumbers = holes.map((h) => h.holeNumber).sort((a, b) => a - b);
-        const idx = allHoleNumbers.indexOf(holeNumber);
-        if (idx < allHoleNumbers.length - 1) {
-          const nextHole = allHoleNumbers[idx + 1];
-          inputRefs.current.get(nextHole)?.focus();
-          inputRefs.current.get(nextHole)?.select();
-        }
+      // Advance to next/previous hole
+      const allHoleNumbers = holes.map((h) => h.holeNumber).sort((a, b) => a - b);
+      const idx = allHoleNumbers.indexOf(holeNumber);
+      const direction = e.shiftKey ? -1 : 1;
+      const nextIdx = idx + direction;
+      if (nextIdx >= 0 && nextIdx < allHoleNumbers.length) {
+        const nextHole = allHoleNumbers[nextIdx];
+        inputRefs.current.get(nextHole)?.focus();
+        inputRefs.current.get(nextHole)?.select();
       }
     }
   }
