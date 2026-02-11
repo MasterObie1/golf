@@ -104,12 +104,24 @@ export async function previewMatchup(
   let teamAHandicap: number;
   let teamBHandicap: number;
 
+  // Helper to clamp manual handicap entries within league min/max caps
+  function capManualHandicap(value: number): number {
+    let result = value;
+    if (handicapSettings.maxHandicap !== null && result > handicapSettings.maxHandicap) {
+      result = handicapSettings.maxHandicap;
+    }
+    if (handicapSettings.minHandicap !== null && result < handicapSettings.minHandicap) {
+      result = handicapSettings.minHandicap;
+    }
+    return result;
+  }
+
   if (isWeekOne) {
-    teamAHandicap = teamAHandicapManual ?? handicapSettings.defaultHandicap;
-    teamBHandicap = teamBHandicapManual ?? handicapSettings.defaultHandicap;
+    teamAHandicap = capManualHandicap(teamAHandicapManual ?? handicapSettings.defaultHandicap);
+    teamBHandicap = capManualHandicap(teamBHandicapManual ?? handicapSettings.defaultHandicap);
   } else {
     if (teamAIsSub && teamAHandicapManual !== null) {
-      teamAHandicap = teamAHandicapManual;
+      teamAHandicap = capManualHandicap(teamAHandicapManual);
     } else {
       // Only use scores from weeks before the current week
       const teamAScores = league.scoringType === "hybrid"
@@ -119,7 +131,7 @@ export async function previewMatchup(
     }
 
     if (teamBIsSub && teamBHandicapManual !== null) {
-      teamBHandicap = teamBHandicapManual;
+      teamBHandicap = capManualHandicap(teamBHandicapManual);
     } else {
       // Only use scores from weeks before the current week
       const teamBScores = league.scoringType === "hybrid"

@@ -125,8 +125,10 @@ function buildHandicapHistory(
       }
     }
 
+    // Calculate what the handicap would be for the next week
+    const nextWeek = weekNumbers[weekNumbers.length - 1] + 1;
     const currentHandicap = allGrossScores.length > 0
-      ? calculateHandicap(allGrossScores, settings)
+      ? calculateHandicap(allGrossScores, settings, nextWeek)
       : null;
 
     result.push({
@@ -275,8 +277,9 @@ async function buildHandicapHistoryFromWeeklyScores(
       }
     }
 
+    const nextWeek = weekNumbers[weekNumbers.length - 1] + 1;
     const currentHandicap = allGrossScores.length > 0
-      ? calculateHandicap(allGrossScores, settings)
+      ? calculateHandicap(allGrossScores, settings, nextWeek)
       : null;
 
     result.push({
