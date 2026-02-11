@@ -28,7 +28,7 @@ interface MatchupWithScorecardsProps {
   weekNumber: number;
   matchups: Matchup[];
   leagueId: number;
-  scorecardAvailabilityRaw: { weekNumber: number; teamId: number }[];
+  scorecardAvailabilityRaw: { weekNumber: number; teamId: number; grossTotal: number | null }[];
 }
 
 export function MatchupWithScorecards({
@@ -37,13 +37,13 @@ export function MatchupWithScorecards({
   leagueId,
   scorecardAvailabilityRaw,
 }: MatchupWithScorecardsProps) {
-  // Convert raw availability to a Set for O(1) lookups
-  const availableSet = useMemo(() => {
-    const set = new Set<string>();
+  // Convert raw availability to a Map for O(1) lookups (key → grossTotal)
+  const availableMap = useMemo(() => {
+    const map = new Map<string, number | null>();
     for (const item of scorecardAvailabilityRaw) {
-      set.add(`${item.weekNumber}-${item.teamId}`);
+      map.set(`${item.weekNumber}-${item.teamId}`, item.grossTotal);
     }
-    return set;
+    return map;
   }, [scorecardAvailabilityRaw]);
 
   // Track which team row is expanded: "matchupId-teamAId" or "matchupId-teamBId"
@@ -55,9 +55,17 @@ export function MatchupWithScorecards({
   const hasScorecard = useCallback(
     (teamId: number | undefined) => {
       if (!teamId) return false;
-      return availableSet.has(`${weekNumber}-${teamId}`);
+      return availableMap.has(`${weekNumber}-${teamId}`);
     },
-    [availableSet, weekNumber]
+    [availableMap, weekNumber]
+  );
+
+  const getScorecardGross = useCallback(
+    (teamId: number | undefined): number | null => {
+      if (!teamId) return null;
+      return availableMap.get(`${weekNumber}-${teamId}`) ?? null;
+    },
+    [availableMap, weekNumber]
   );
 
   const handleToggle = useCallback(
@@ -94,6 +102,8 @@ export function MatchupWithScorecards({
   ) {
     const isTop = side === "A";
     const teamHasScorecard = hasScorecard(teamId);
+    const scorecardGross = getScorecardGross(teamId);
+    const hasMismatch = scorecardGross != null && scorecardGross !== team.gross;
     const key = teamId ? `${matchup.id}-${teamId}` : null;
     const isExpanded = key !== null && expandedKey === key;
     const isLoading = key !== null && loading === key;
@@ -136,11 +146,17 @@ export function MatchupWithScorecards({
                 Sub
               </span>
             )}
+            {hasMismatch && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-warning-bg text-warning-text rounded font-sans font-medium" title={`Matchup gross (${team.gross}) differs from scorecard (${scorecardGross})`}>
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Scorecard: {scorecardGross}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-6 text-sm">
             <div className="text-center">
               <div className="text-text-light text-xs font-display uppercase tracking-wider">Gross</div>
-              <div className="font-mono font-medium tabular-nums">{team.gross}</div>
+              <div className={`font-mono font-medium tabular-nums ${hasMismatch ? "text-warning-text" : ""}`}>{team.gross}</div>
             </div>
             <div className="text-center">
               <div className="text-text-light text-xs font-display uppercase tracking-wider">Hcp</div>

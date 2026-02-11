@@ -6,6 +6,7 @@ import { requireLeagueAdmin } from "../auth";
 import { logger } from "../logger";
 import { createScorecardToken, verifyScorecardToken } from "../scorecard-auth";
 import { sendScorecardEmail, isEmailConfigured } from "../email";
+import { revalidatePath } from "next/cache";
 import { requireActiveLeague } from "./leagues";
 import type { ActionResult } from "./shared";
 import { filterHolesByCourseSide, isHoleInPlay, getExpectedHoleCount } from "../scheduling/course-side";
@@ -424,6 +425,7 @@ export async function approveScorecard(
     },
   });
 
+  revalidatePath(`/league/${leagueSlug}/history`);
   return { success: true, data: undefined };
 }
 
@@ -734,10 +736,10 @@ export async function emailScorecardLink(
 export async function getScorecardAvailabilityForSeason(
   leagueId: number,
   seasonId: number
-): Promise<{ weekNumber: number; teamId: number }[]> {
+): Promise<{ weekNumber: number; teamId: number; grossTotal: number | null }[]> {
   const scorecards = await prisma.scorecard.findMany({
     where: { leagueId, seasonId, status: "approved" },
-    select: { weekNumber: true, teamId: true },
+    select: { weekNumber: true, teamId: true, grossTotal: true },
   });
   return scorecards;
 }

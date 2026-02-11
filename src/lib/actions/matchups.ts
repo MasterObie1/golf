@@ -7,6 +7,7 @@ import {
   calculateNetScore,
   suggestPoints,
 } from "../handicap";
+import { revalidatePath } from "next/cache";
 import { requireLeagueAdmin } from "../auth";
 import { logger } from "../logger";
 import { getTeamPreviousScores, getTeamPreviousScoresForScoring } from "./teams";
@@ -338,6 +339,7 @@ export async function submitMatchup(
     });
 
     void newMatchup; // result used for schedule linking inside transaction
+    revalidatePath(`/league/${leagueSlug}/history`);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("submitMatchup failed", error);
