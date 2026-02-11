@@ -1285,6 +1285,7 @@ describe("removeTeamFromSchedule input validation", () => {
     const result = await removeTeamFromSchedule(
       league.slug,
       teamIds[0],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       "invalid_action" as any
     );
     expect(result.success).toBe(false);

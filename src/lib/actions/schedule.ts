@@ -683,7 +683,7 @@ export async function processByeWeekPoints(
     }
 
     // Pre-compute team averages in batch (outside the loop) to avoid N+1 queries
-    let teamAvgMap = new Map<number, number>();
+    const teamAvgMap = new Map<number, number>();
     if (league.byePointsMode === "team_average") {
       const byeTeamIds = byeEntries.map((b) => b.teamAId);
       const allTeamMatchups = await prisma.matchup.findMany({
