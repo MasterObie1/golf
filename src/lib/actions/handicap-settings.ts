@@ -63,6 +63,8 @@ type MatchupForHistory = {
   weekNumber: number;
   teamAId: number;
   teamBId: number;
+  teamAGross: number;
+  teamBGross: number;
   teamAHandicap: number;
   teamBHandicap: number;
   teamAIsSub: boolean;
@@ -75,7 +77,8 @@ type MatchupForHistory = {
  */
 function buildHandicapHistory(
   teams: TeamForHistory[],
-  matchups: MatchupForHistory[]
+  matchups: MatchupForHistory[],
+  settings: HandicapSettings
 ): HandicapHistoryEntry[] {
   if (matchups.length === 0) {
     return teams.map((team) => ({
@@ -92,7 +95,7 @@ function buildHandicapHistory(
 
   for (const team of teams) {
     const weeklyHandicaps: { week: number; handicap: number }[] = [];
-    const allHandicaps: number[] = [];
+    const allGrossScores: number[] = [];
 
     for (const week of weekNumbers) {
       const weekMatchup = matchups.find(
@@ -101,26 +104,29 @@ function buildHandicapHistory(
 
       if (weekMatchup) {
         let handicap: number;
+        let gross: number;
         let isSub: boolean;
 
         if (weekMatchup.teamAId === team.id) {
           handicap = weekMatchup.teamAHandicap;
+          gross = weekMatchup.teamAGross;
           isSub = weekMatchup.teamAIsSub;
         } else {
           handicap = weekMatchup.teamBHandicap;
+          gross = weekMatchup.teamBGross;
           isSub = weekMatchup.teamBIsSub;
         }
 
         weeklyHandicaps.push({ week, handicap });
 
         if (!isSub) {
-          allHandicaps.push(handicap);
+          allGrossScores.push(gross);
         }
       }
     }
 
-    const currentHandicap = allHandicaps.length > 0
-      ? allHandicaps[allHandicaps.length - 1]
+    const currentHandicap = allGrossScores.length > 0
+      ? calculateHandicap(allGrossScores, settings)
       : null;
 
     result.push({
@@ -135,17 +141,19 @@ function buildHandicapHistory(
 }
 
 export async function getHandicapHistory(leagueId: number): Promise<HandicapHistoryEntry[]> {
-  const teams = await prisma.team.findMany({
-    where: { leagueId, status: "approved" },
-    orderBy: { name: "asc" },
-  });
+  const [teams, matchups, settings] = await Promise.all([
+    prisma.team.findMany({
+      where: { leagueId, status: "approved" },
+      orderBy: { name: "asc" },
+    }),
+    prisma.matchup.findMany({
+      where: { leagueId },
+      orderBy: { weekNumber: "asc" },
+    }),
+    getHandicapSettings(leagueId),
+  ]);
 
-  const matchups = await prisma.matchup.findMany({
-    where: { leagueId },
-    orderBy: { weekNumber: "asc" },
-  });
-
-  return buildHandicapHistory(teams, matchups);
+  return buildHandicapHistory(teams, matchups, settings);
 }
 
 export async function getHandicapHistoryForSeason(seasonId: number): Promise<HandicapHistoryEntry[]> {
@@ -154,10 +162,13 @@ export async function getHandicapHistoryForSeason(seasonId: number): Promise<Han
     where: { id: seasonId },
     select: { leagueId: true },
   });
-  const league = await prisma.league.findUniqueOrThrow({
-    where: { id: season.leagueId },
-    select: { scoringType: true },
-  });
+  const [league, settings] = await Promise.all([
+    prisma.league.findUniqueOrThrow({
+      where: { id: season.leagueId },
+      select: { scoringType: true },
+    }),
+    getHandicapSettings(season.leagueId),
+  ]);
 
   const teams = await prisma.team.findMany({
     where: { seasonId, status: "approved" },
@@ -165,13 +176,13 @@ export async function getHandicapHistoryForSeason(seasonId: number): Promise<Han
   });
 
   if (league.scoringType === "stroke_play") {
-    return buildHandicapHistoryFromWeeklyScores(teams, { seasonId });
+    return buildHandicapHistoryFromWeeklyScores(teams, { seasonId }, settings);
   }
 
   if (league.scoringType === "hybrid") {
     // Use both sources, preferring weekly scores for handicap data
-    const matchupHistory = await buildHandicapHistoryFromMatchups(teams, { seasonId });
-    const weeklyHistory = await buildHandicapHistoryFromWeeklyScores(teams, { seasonId });
+    const matchupHistory = await buildHandicapHistoryFromMatchups(teams, { seasonId }, settings);
+    const weeklyHistory = await buildHandicapHistoryFromWeeklyScores(teams, { seasonId }, settings);
 
     // Merge: use weekly score handicaps where available, fall back to matchup handicaps
     return teams.map((team) => {
@@ -201,23 +212,25 @@ export async function getHandicapHistoryForSeason(seasonId: number): Promise<Han
   }
 
   // Match play
-  return buildHandicapHistoryFromMatchups(teams, { seasonId });
+  return buildHandicapHistoryFromMatchups(teams, { seasonId }, settings);
 }
 
 async function buildHandicapHistoryFromMatchups(
   teams: TeamForHistory[],
-  where: { seasonId?: number; leagueId?: number }
+  where: { seasonId?: number; leagueId?: number },
+  settings: HandicapSettings
 ): Promise<HandicapHistoryEntry[]> {
   const matchups = await prisma.matchup.findMany({
     where,
     orderBy: { weekNumber: "asc" },
   });
-  return buildHandicapHistory(teams, matchups);
+  return buildHandicapHistory(teams, matchups, settings);
 }
 
 async function buildHandicapHistoryFromWeeklyScores(
   teams: TeamForHistory[],
-  where: { seasonId?: number; leagueId?: number }
+  where: { seasonId?: number; leagueId?: number },
+  settings: HandicapSettings
 ): Promise<HandicapHistoryEntry[]> {
   const weeklyScores = await prisma.weeklyScore.findMany({
     where,
@@ -226,6 +239,7 @@ async function buildHandicapHistoryFromWeeklyScores(
       teamId: true,
       weekNumber: true,
       handicap: true,
+      grossScore: true,
       isSub: true,
       isDnp: true,
     },
@@ -246,7 +260,7 @@ async function buildHandicapHistoryFromWeeklyScores(
 
   for (const team of teams) {
     const weeklyHandicaps: { week: number; handicap: number }[] = [];
-    const allHandicaps: number[] = [];
+    const allGrossScores: number[] = [];
 
     for (const week of weekNumbers) {
       const score = weeklyScores.find(
@@ -256,13 +270,13 @@ async function buildHandicapHistoryFromWeeklyScores(
       if (score) {
         weeklyHandicaps.push({ week, handicap: score.handicap });
         if (!score.isSub) {
-          allHandicaps.push(score.handicap);
+          allGrossScores.push(score.grossScore);
         }
       }
     }
 
-    const currentHandicap = allHandicaps.length > 0
-      ? allHandicaps[allHandicaps.length - 1]
+    const currentHandicap = allGrossScores.length > 0
+      ? calculateHandicap(allGrossScores, settings)
       : null;
 
     result.push({
