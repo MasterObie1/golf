@@ -236,7 +236,7 @@ export default function ScorecardEntry({
   }
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
+    <div className="h-[100dvh] overflow-hidden bg-surface flex flex-col">
       {/* Header */}
       <div className="bg-rough text-white px-4 py-3">
         <div className="flex items-center justify-between max-w-lg mx-auto">
@@ -258,7 +258,7 @@ export default function ScorecardEntry({
       </div>
 
       {/* Running Total Bar */}
-      <div className="bg-surface-white border-b border-border px-4 py-2">
+      <div className="bg-surface-white border-b border-border px-4 py-1.5">
         <div className="flex items-center justify-between max-w-lg mx-auto">
           <div className="flex items-center gap-4">
             <div>
@@ -281,15 +281,15 @@ export default function ScorecardEntry({
       </div>
 
       {/* Hole Card */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 max-w-lg mx-auto w-full">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-3 max-w-lg mx-auto w-full">
         {currentHole && (
           <div className="w-full">
             {/* Hole Info */}
-            <div className="text-center mb-6">
-              <div className="text-6xl font-display font-bold text-scorecard-pencil">
+            <div className="text-center mb-3">
+              <div className="text-5xl font-display font-bold text-scorecard-pencil">
                 {currentHole.holeNumber}
               </div>
-              <div className="flex items-center justify-center gap-4 mt-2">
+              <div className="flex items-center justify-center gap-4 mt-1">
                 <span className="px-3 py-1 bg-fairway/10 rounded-full text-fairway font-display font-semibold text-sm uppercase tracking-wider">
                   Par {currentHole.par}
                 </span>
@@ -305,17 +305,17 @@ export default function ScorecardEntry({
             </div>
 
             {/* Score Input */}
-            <div className="flex items-center justify-center gap-4 mb-6">
+            <div className="flex items-center justify-center gap-4 mb-3">
               <button
                 onClick={() => setStrokesForHole((currentScore?.strokes ?? currentHole.par) - 1)}
                 disabled={(currentScore?.strokes ?? currentHole.par) <= 1}
-                className="w-16 h-16 rounded-full bg-surface-white border-2 border-border text-2xl font-bold text-text-secondary hover:border-fairway hover:text-fairway disabled:opacity-30 transition-colors flex items-center justify-center"
+                className="w-14 h-14 rounded-full bg-surface-white border-2 border-border text-xl font-bold text-text-secondary hover:border-fairway hover:text-fairway disabled:opacity-30 transition-colors flex items-center justify-center"
                 aria-label="Decrease strokes"
               >
                 &minus;
               </button>
-              <div className="w-24 h-24 rounded-full bg-scorecard-paper border-2 border-scorecard-line flex items-center justify-center shadow-sm">
-                <span className={`text-4xl font-mono tabular-nums font-bold ${
+              <div className="w-20 h-20 rounded-full bg-scorecard-paper border-2 border-scorecard-line flex items-center justify-center shadow-sm">
+                <span className={`text-3xl font-mono tabular-nums font-bold ${
                   currentScore
                     ? currentScore.strokes - currentHole.par <= -2
                       ? "text-board-yellow"
@@ -334,7 +334,7 @@ export default function ScorecardEntry({
               <button
                 onClick={() => setStrokesForHole((currentScore?.strokes ?? currentHole.par) + 1)}
                 disabled={(currentScore?.strokes ?? currentHole.par) >= 20}
-                className="w-16 h-16 rounded-full bg-surface-white border-2 border-border text-2xl font-bold text-text-secondary hover:border-fairway hover:text-fairway disabled:opacity-30 transition-colors flex items-center justify-center"
+                className="w-14 h-14 rounded-full bg-surface-white border-2 border-border text-xl font-bold text-text-secondary hover:border-fairway hover:text-fairway disabled:opacity-30 transition-colors flex items-center justify-center"
                 aria-label="Increase strokes"
               >
                 +
@@ -342,7 +342,7 @@ export default function ScorecardEntry({
             </div>
 
             {/* Quick Score Buttons */}
-            <div className="flex justify-center gap-2 mb-6">
+            <div className="flex justify-center gap-2 mb-3">
               {Array.from({ length: 5 }, (_, i) => currentHole.par - 1 + i).filter(v => v >= 1 && v <= 12).map((val) => (
                 <button
                   key={val}
@@ -360,7 +360,7 @@ export default function ScorecardEntry({
 
             {/* Optional Stats */}
             {currentScore && (
-              <div className="mb-6">
+              <div className="mb-2">
                 <button
                   onClick={() => setShowStats(!showStats)}
                   className="text-sm font-display uppercase tracking-wider text-text-muted hover:text-text-secondary transition-colors"
@@ -440,10 +440,10 @@ export default function ScorecardEntry({
       </div>
 
       {/* Navigation */}
-      <div className="border-t border-border bg-surface-white px-4 py-4">
+      <div className="border-t border-border bg-surface-white px-4 py-3">
         <div className="max-w-lg mx-auto">
           {/* Hole Dots */}
-          <div className="flex justify-center gap-1.5 mb-4">
+          <div className="flex justify-center gap-1.5 mb-3">
             {holes.map((h, i) => (
               <button
                 key={h.holeNumber}
@@ -465,21 +465,21 @@ export default function ScorecardEntry({
             <button
               onClick={() => goToHole(currentHoleIndex - 1)}
               disabled={currentHoleIndex === 0}
-              className="flex-1 py-3 bg-surface border border-border text-text-secondary font-display font-semibold uppercase tracking-wider rounded-lg disabled:opacity-30 transition-colors"
+              className="flex-1 py-2.5 bg-surface border border-border text-text-secondary font-display font-semibold uppercase tracking-wider rounded-lg disabled:opacity-30 transition-colors"
             >
               Prev
             </button>
             {currentHoleIndex === holes.length - 1 ? (
               <button
                 onClick={() => setShowReview(true)}
-                className="flex-1 py-3 bg-fairway text-white font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-rough transition-colors"
+                className="flex-1 py-2.5 bg-fairway text-white font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-rough transition-colors"
               >
                 Review
               </button>
             ) : (
               <button
                 onClick={() => goToHole(currentHoleIndex + 1)}
-                className="flex-1 py-3 bg-fairway text-white font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-rough transition-colors"
+                className="flex-1 py-2.5 bg-fairway text-white font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-rough transition-colors"
               >
                 Next
               </button>
