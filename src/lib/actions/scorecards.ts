@@ -327,12 +327,12 @@ export async function generateScorecardLink(
     return { success: false, error: "Team not found in this league." };
   }
 
-  // Look up scheduled matchup to get courseSide
+  // Look up scheduled matchup to get courseSide (any status — completed matchups still have a side)
   const scheduledMatchup = await prisma.scheduledMatchup.findFirst({
     where: {
       leagueId: session.leagueId,
       weekNumber,
-      status: "scheduled",
+      status: { not: "cancelled" },
       OR: [{ teamAId: teamId }, { teamBId: teamId }],
     },
     select: { courseSide: true },
@@ -387,6 +387,7 @@ export async function generateScorecardLink(
     },
     update: {
       courseId: course.id,
+      courseSide,
       // Also auto-link if not already linked
       ...(autoMatchupId ? { matchupId: autoMatchupId, teamSide: autoTeamSide } : {}),
     },
