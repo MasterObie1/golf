@@ -12,6 +12,7 @@ import {
 interface CourseTabProps {
   slug: string;
   leagueId: number;
+  playMode: string;
 }
 
 const PAR_PRESETS: { label: string; pars: number[] }[] = [
@@ -30,7 +31,7 @@ function defaultHoles(count: number): HoleInput[] {
   }));
 }
 
-export default function CourseTab({ slug, leagueId }: CourseTabProps) {
+export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -213,30 +214,50 @@ export default function CourseTab({ slug, leagueId }: CourseTabProps) {
           <label className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">
             Number of Holes
           </label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => handleHoleCountChange(9)}
-              className={`px-4 py-2 rounded-lg font-display font-semibold uppercase tracking-wider text-sm transition-colors ${
-                numberOfHoles === 9
-                  ? "bg-fairway text-white"
-                  : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
-              }`}
-            >
-              9 Holes
-            </button>
-            <button
-              type="button"
-              onClick={() => handleHoleCountChange(18)}
-              className={`px-4 py-2 rounded-lg font-display font-semibold uppercase tracking-wider text-sm transition-colors ${
-                numberOfHoles === 18
-                  ? "bg-fairway text-white"
-                  : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
-              }`}
-            >
-              18 Holes
-            </button>
-          </div>
+          {(() => {
+            const requires18 = playMode === "nine_hole_alternating" || playMode === "nine_hole_back";
+            return (
+              <>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => !requires18 && handleHoleCountChange(9)}
+                    disabled={requires18}
+                    className={`px-4 py-2 rounded-lg font-display font-semibold uppercase tracking-wider text-sm transition-colors ${
+                      numberOfHoles === 9
+                        ? "bg-fairway text-white"
+                        : requires18
+                        ? "bg-bunker/10 text-text-light cursor-not-allowed"
+                        : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
+                    }`}
+                  >
+                    9 Holes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleHoleCountChange(18)}
+                    className={`px-4 py-2 rounded-lg font-display font-semibold uppercase tracking-wider text-sm transition-colors ${
+                      numberOfHoles === 18
+                        ? "bg-fairway text-white"
+                        : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
+                    }`}
+                  >
+                    18 Holes
+                  </button>
+                </div>
+                {requires18 && numberOfHoles < 18 && (
+                  <p className="text-xs font-sans text-board-red mt-1">
+                    Your play mode requires an 18-hole course. Update the course to 18 holes or change the play mode in Settings.
+                  </p>
+                )}
+                {requires18 && numberOfHoles >= 18 && (
+                  <p className="text-xs font-sans text-text-muted mt-1">
+                    18 holes required by your current play mode ({playMode === "nine_hole_alternating" ? "9-Hole Alternating" : "Back 9 Only"}).
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 

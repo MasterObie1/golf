@@ -325,6 +325,7 @@ export default function AdminDashboard({
             <CourseTab
               slug={slug}
               leagueId={league.id}
+              playMode={league.playMode}
             />
           )}
 

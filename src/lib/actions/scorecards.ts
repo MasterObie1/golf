@@ -337,6 +337,16 @@ export async function generateScorecardLink(
     select: { courseSide: true },
   });
 
+  // Validate course has enough holes for the assigned side
+  // Front 9 works on any course (holes 1-9), but Back 9 requires 18 holes (holes 10-18)
+  const courseSide = scheduledMatchup?.courseSide ?? null;
+  if (courseSide === "back" && course.numberOfHoles < 18) {
+    return {
+      success: false,
+      error: `This week is set to play the Back 9, but the course only has ${course.numberOfHoles} holes. Update the course to 18 holes or change the play mode.`,
+    };
+  }
+
   // Upsert scorecard atomically (eliminates TOCTOU race condition)
   // Update courseId on existing scorecards so they use the current active course
   const scorecard = await prisma.scorecard.upsert({
@@ -354,7 +364,7 @@ export async function generateScorecardLink(
       seasonId: seasonId ?? null,
       weekNumber,
       status: "in_progress",
-      courseSide: scheduledMatchup?.courseSide ?? null,
+      courseSide,
     },
     update: { courseId: course.id },
   });

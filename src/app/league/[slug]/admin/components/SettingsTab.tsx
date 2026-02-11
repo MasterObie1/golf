@@ -609,54 +609,83 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
             <div className="p-4 border-t border-scorecard-line/50 space-y-6">
               {/* Course Play Mode */}
               <div>
-                <label id="settings-play-mode-label" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">Course Play Mode</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <label id="settings-play-mode-label" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">Holes Per Week</label>
+                <div className="grid grid-cols-2 gap-2">
                   {([
-                    { value: "full_18", label: "Full 18", desc: "Play all 18 holes every week" },
-                    { value: "nine_hole_alternating", label: "9-Hole Alternating", desc: "Front/back alternate each week" },
-                    { value: "nine_hole_front", label: "Front 9 Only", desc: "Always play holes 1-9" },
-                    { value: "nine_hole_back", label: "Back 9 Only", desc: "Always play holes 10-18" },
-                  ] as const).map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setPlayMode(opt.value)}
-                      className={`p-3 rounded-lg border-2 text-left transition-colors ${
-                        playMode === opt.value
-                          ? "border-fairway bg-fairway/10"
-                          : "border-scorecard-line/50 hover:border-putting/50"
-                      }`}
-                    >
-                      <div className={`text-xs font-display font-semibold uppercase tracking-wider ${playMode === opt.value ? "text-fairway" : "text-scorecard-pencil"}`}>
-                        {opt.label}
-                      </div>
-                      <div className="text-xs font-sans text-text-muted mt-1">{opt.desc}</div>
-                    </button>
-                  ))}
+                    { value: "full", label: "Full Course", desc: "Play all holes every week" },
+                    { value: "nine", label: "9 Holes Per Week", desc: "Play 9 holes each week" },
+                  ] as const).map((opt) => {
+                    const isSelected = opt.value === "full" ? playMode === "full_18" : playMode !== "full_18";
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setPlayMode(opt.value === "full" ? "full_18" : "nine_hole_alternating")}
+                        className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                          isSelected
+                            ? "border-fairway bg-fairway/10"
+                            : "border-scorecard-line/50 hover:border-putting/50"
+                        }`}
+                      >
+                        <div className={`text-xs font-display font-semibold uppercase tracking-wider ${isSelected ? "text-fairway" : "text-scorecard-pencil"}`}>
+                          {opt.label}
+                        </div>
+                        <div className="text-xs font-sans text-text-muted mt-1">{opt.desc}</div>
+                      </button>
+                    );
+                  })}
                 </div>
-                {playMode === "nine_hole_alternating" && (
+                {playMode !== "full_18" && (
                   <div className="mt-3">
-                    <label className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">Week 1 Plays</label>
-                    <div className="flex gap-3">
+                    <label className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">Which 9?</label>
+                    <div className="grid grid-cols-3 gap-2">
                       {([
-                        { value: "front", label: "Front 9 First" },
-                        { value: "back", label: "Back 9 First" },
+                        { value: "nine_hole_alternating", label: "Alternating", desc: "Front one week, back the next" },
+                        { value: "nine_hole_front", label: "Front 9 Always", desc: "Always play holes 1\u20139" },
+                        { value: "nine_hole_back", label: "Back 9 Always", desc: "Always play holes 10\u201318" },
                       ] as const).map((opt) => (
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setPlayModeFirstWeekSide(opt.value)}
-                          className={`px-4 py-2 rounded-lg border-2 text-sm font-display font-semibold uppercase tracking-wider transition-colors ${
-                            playModeFirstWeekSide === opt.value
-                              ? "border-fairway bg-fairway/10 text-fairway"
-                              : "border-scorecard-line/50 text-text-secondary hover:border-putting/50"
+                          onClick={() => setPlayMode(opt.value)}
+                          className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                            playMode === opt.value
+                              ? "border-fairway bg-fairway/10"
+                              : "border-scorecard-line/50 hover:border-putting/50"
                           }`}
                         >
-                          {opt.label}
+                          <div className={`text-xs font-display font-semibold uppercase tracking-wider ${playMode === opt.value ? "text-fairway" : "text-scorecard-pencil"}`}>
+                            {opt.label}
+                          </div>
+                          <div className="text-xs font-sans text-text-muted mt-1">{opt.desc}</div>
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs font-sans text-text-muted mt-1">Odd weeks play this side, even weeks play the other</p>
+                    {playMode === "nine_hole_alternating" && (
+                      <div className="mt-3">
+                        <label className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">Week 1 Plays</label>
+                        <div className="flex gap-3">
+                          {([
+                            { value: "front", label: "Front 9 First" },
+                            { value: "back", label: "Back 9 First" },
+                          ] as const).map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setPlayModeFirstWeekSide(opt.value)}
+                              className={`px-4 py-2 rounded-lg border-2 text-sm font-display font-semibold uppercase tracking-wider transition-colors ${
+                                playModeFirstWeekSide === opt.value
+                                  ? "border-fairway bg-fairway/10 text-fairway"
+                                  : "border-scorecard-line/50 text-text-secondary hover:border-putting/50"
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs font-sans text-text-muted mt-1">Odd weeks play this side, even weeks play the other</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
