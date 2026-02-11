@@ -451,7 +451,8 @@ describe("getSeasonLeaderboard (stroke play)", () => {
       { teamId: t3.id, grossScore: 43, handicap: 6, netScore: 37, points: 6, bonusPoints: 0, isSub: false, isDnp: false, position: 3 },
     ]));
 
-    const leaderboard = await getSeasonLeaderboard(season.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const leaderboard: any[] = await getSeasonLeaderboard(season.id);
     expect(leaderboard).toHaveLength(3);
 
     // Alpha: 20 total points, Bravo: 16, Charlie: 12
@@ -556,7 +557,8 @@ describe("getAllTimeLeaderboard (stroke play)", () => {
       { teamId: t2.id, grossScore: 43, handicap: 6, netScore: 37, points: 8, bonusPoints: 0, isSub: false, isDnp: false, position: 2 },
     ]));
 
-    const leaderboard = await getAllTimeLeaderboard(league.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const leaderboard: any[] = await getAllTimeLeaderboard(league.id);
     expect(leaderboard.length).toBe(2);
 
     // Alpha: 20 total points across weeks, Bravo: 16
@@ -778,7 +780,8 @@ describe("getSeasonLeaderboard (hybrid)", () => {
       { teamId: t3.id, grossScore: 43, handicap: 5, netScore: 38, points: 6, bonusPoints: 0, isSub: false, isDnp: false, position: 3 },
     ]));
 
-    const leaderboard = await getSeasonLeaderboard(season.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const leaderboard: any[] = await getSeasonLeaderboard(season.id);
     expect(leaderboard).toHaveLength(3);
 
     // MatchKing: matchPoints=40, fieldPoints=20 => 40*0.6 + 20*0.4 = 24+8 = 32

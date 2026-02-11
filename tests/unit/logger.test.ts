@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // We need to re-import the module for each test group to pick up env changes
 // Use dynamic import to reset module state
 
+// Helper to set NODE_ENV in tests (typed as read-only in @types/node)
+const env = process.env as Record<string, string | undefined>;
+
 let originalNodeEnv: string | undefined;
 let originalLogLevel: string | undefined;
 
@@ -12,7 +15,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  process.env.NODE_ENV = originalNodeEnv;
+  env.NODE_ENV =originalNodeEnv;
   if (originalLogLevel === undefined) {
     delete process.env.LOG_LEVEL;
   } else {
@@ -34,7 +37,7 @@ describe("logger", () => {
   describe("debug", () => {
     it("outputs when LOG_LEVEL=debug", () => {
       process.env.LOG_LEVEL = "debug";
-      process.env.NODE_ENV = "development";
+      env.NODE_ENV ="development";
       const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
       logger.debug("test message");
       expect(spy).toHaveBeenCalledOnce();
@@ -104,7 +107,7 @@ describe("logger", () => {
 
     it("includes Error message and stack in output", () => {
       process.env.LOG_LEVEL = "debug";
-      process.env.NODE_ENV = "development";
+      env.NODE_ENV ="development";
       const spy = vi.spyOn(console, "error").mockImplementation(() => {});
       const err = new Error("something broke");
       logger.error("operation failed", err);
@@ -115,7 +118,7 @@ describe("logger", () => {
 
     it("handles non-Error values", () => {
       process.env.LOG_LEVEL = "debug";
-      process.env.NODE_ENV = "development";
+      env.NODE_ENV ="development";
       const spy = vi.spyOn(console, "error").mockImplementation(() => {});
       logger.error("operation failed", "string error");
       const output = spy.mock.calls[0][0] as string;
@@ -132,7 +135,7 @@ describe("logger", () => {
 
   describe("format", () => {
     it("uses pretty format in development", () => {
-      process.env.NODE_ENV = "development";
+      env.NODE_ENV ="development";
       process.env.LOG_LEVEL = "debug";
       const spy = vi.spyOn(console, "info").mockImplementation(() => {});
       logger.info("hello world");
@@ -141,7 +144,7 @@ describe("logger", () => {
     });
 
     it("includes meta in pretty format", () => {
-      process.env.NODE_ENV = "development";
+      env.NODE_ENV ="development";
       process.env.LOG_LEVEL = "debug";
       const spy = vi.spyOn(console, "info").mockImplementation(() => {});
       logger.info("hello", { userId: 42 });
@@ -152,7 +155,7 @@ describe("logger", () => {
     });
 
     it("uses JSON format in production", () => {
-      process.env.NODE_ENV = "production";
+      env.NODE_ENV ="production";
       process.env.LOG_LEVEL = "info";
       const spy = vi.spyOn(console, "info").mockImplementation(() => {});
       logger.info("hello world");
@@ -167,7 +170,7 @@ describe("logger", () => {
   describe("level filtering defaults", () => {
     it("defaults to debug in non-production", () => {
       delete process.env.LOG_LEVEL;
-      process.env.NODE_ENV = "development";
+      env.NODE_ENV ="development";
       const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
       logger.debug("test");
       expect(spy).toHaveBeenCalledOnce();
@@ -175,7 +178,7 @@ describe("logger", () => {
 
     it("defaults to info in production", () => {
       delete process.env.LOG_LEVEL;
-      process.env.NODE_ENV = "production";
+      env.NODE_ENV ="production";
       const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
       logger.debug("test");
       expect(spy).not.toHaveBeenCalled();

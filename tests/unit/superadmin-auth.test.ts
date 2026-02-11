@@ -38,7 +38,8 @@ import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 
 const mockedCookies = vi.mocked(cookies);
-const mockedPrisma = vi.mocked(prisma);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockedPrisma = vi.mocked(prisma) as any;
 const mockedBcrypt = vi.mocked(bcrypt);
 
 beforeEach(() => {
