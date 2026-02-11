@@ -160,7 +160,7 @@ export default function MatchupsTab({
   }, [leagueId]);
 
   // Derived: total weeks and completed weeks for pill selector
-  const totalWeeks = fullSchedule.length > 0 ? fullSchedule.length : weekNumber;
+  const totalWeeks = Math.max(fullSchedule.length, weekNumber);
   const completedWeeks = new Set(
     fullSchedule
       .filter((w) => {
