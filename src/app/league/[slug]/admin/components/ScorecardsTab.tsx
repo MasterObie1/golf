@@ -198,26 +198,56 @@ export default function ScorecardsTab({
     setLoading(false);
   }
 
+  async function copyToClipboard(text: string): Promise<boolean> {
+    // Try modern API first
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fall through to fallback
+      }
+    }
+    // Fallback: textarea + execCommand
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
   async function handleGenerateLink(teamId: number) {
     setMessage(null);
+    setLinkCopied(-1); // Use -1 as a "generating..." sentinel
     try {
       const result = await generateScorecardLink(slug, teamId, weekNumber, activeSeason?.id);
       if (result.success) {
         const fullUrl = `${window.location.origin}${result.data.url}`;
-        try {
-          await navigator.clipboard.writeText(fullUrl);
+        const copied = await copyToClipboard(fullUrl);
+        if (copied) {
           setLinkCopied(teamId);
           linkTimerRef.current = setTimeout(() => setLinkCopied(null), 3000);
           setMessage({ type: "success", text: "Scorecard link copied to clipboard!" });
-        } catch {
-          setMessage({ type: "error", text: "Copy failed — please select and copy the link manually: " + fullUrl });
+        } else {
+          setLinkCopied(null);
+          setMessage({ type: "success", text: fullUrl });
         }
         await loadScorecards();
       } else {
+        setLinkCopied(null);
         setMessage({ type: "error", text: result.error });
       }
     } catch (error) {
       console.error("handleGenerateLink error:", error);
+      setLinkCopied(null);
       setMessage({ type: "error", text: "Failed to generate link." });
     }
   }
@@ -592,13 +622,16 @@ export default function ScorecardsTab({
                   <div key={team.id} className="flex items-center gap-1">
                     <button
                       onClick={() => handleGenerateLink(team.id)}
+                      disabled={linkCopied === -1}
                       className={`px-3 py-1.5 text-sm font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
                         linkCopied === team.id
                           ? "bg-fairway text-white"
-                          : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
+                          : linkCopied === -1
+                            ? "bg-bunker/20 text-text-muted animate-pulse"
+                            : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
                       }`}
                     >
-                      {linkCopied === team.id ? "Copied!" : team.name}
+                      {linkCopied === team.id ? "Copied!" : linkCopied === -1 ? "..." : team.name}
                     </button>
                     {emailEnabled && team.email && (
                       <button
@@ -913,9 +946,16 @@ export default function ScorecardsTab({
                     {editingId !== sc.id && (
                       <button
                         onClick={() => handleGenerateLink(sc.teamId)}
-                        className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider bg-bunker/20 text-text-secondary rounded-lg hover:bg-bunker/30 transition-colors"
+                        disabled={linkCopied === -1}
+                        className={`px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
+                          linkCopied === sc.teamId
+                            ? "bg-fairway text-white"
+                            : linkCopied === -1
+                              ? "bg-bunker/20 text-text-muted animate-pulse"
+                              : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
+                        }`}
                       >
-                        {linkCopied === sc.teamId ? "Copied!" : "Copy Link"}
+                        {linkCopied === sc.teamId ? "Copied!" : linkCopied === -1 ? "Generating..." : "Copy Link"}
                       </button>
                     )}
 
