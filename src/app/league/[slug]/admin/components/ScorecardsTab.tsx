@@ -563,15 +563,11 @@ export default function ScorecardsTab({
       {/* Generate Links for Teams */}
       <div className="mb-6 p-4 bg-surface rounded-lg border border-border">
         <h3 className="text-sm font-display font-semibold uppercase tracking-wider text-text-secondary mb-3">
-          Generate Scorecard Links
+          Scorecard Links
         </h3>
         {teams.length === 0 ? (
           <p className="text-sm font-sans text-text-muted">
             No approved teams yet. Add teams in the Teams tab first.
-          </p>
-        ) : teamsWithoutScorecard.length === 0 && !bulkResults ? (
-          <p className="text-sm font-sans text-text-muted">
-            All teams have scorecards for this week. Expand a scorecard below to copy its link.
           </p>
         ) : (
           <div className="space-y-3">
@@ -636,10 +632,11 @@ export default function ScorecardsTab({
               </div>
             )}
 
-            {/* Per-team buttons */}
-            {teamsWithoutScorecard.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {teamsWithoutScorecard.map((team) => (
+            {/* Per-team buttons — always visible for all teams */}
+            <div className="flex flex-wrap gap-2">
+              {teams.map((team) => {
+                const hasScorecard = teamsWithScorecard.has(team.id);
+                return (
                   <div key={team.id} className="flex items-center gap-1">
                     <button
                       onClick={() => handleGenerateLink(team.id)}
@@ -649,7 +646,9 @@ export default function ScorecardsTab({
                           ? "bg-fairway text-white"
                           : linkCopied === -1
                             ? "bg-bunker/20 text-text-muted animate-pulse"
-                            : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
+                            : hasScorecard
+                              ? "bg-fairway/10 border border-fairway/30 text-fairway hover:bg-fairway/20"
+                              : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
                       }`}
                     >
                       {linkCopied === team.id ? "Copied!" : linkCopied === -1 ? "..." : team.name}
@@ -679,9 +678,9 @@ export default function ScorecardsTab({
                       </button>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

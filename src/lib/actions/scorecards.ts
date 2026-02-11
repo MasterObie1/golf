@@ -9,7 +9,7 @@ import { sendScorecardEmail, isEmailConfigured } from "../email";
 import { revalidatePath } from "next/cache";
 import { requireActiveLeague } from "./leagues";
 import type { ActionResult } from "./shared";
-import { filterHolesByCourseSide, isHoleInPlay, getExpectedHoleCount } from "../scheduling/course-side";
+import { filterHolesByCourseSide, isHoleInPlay, getExpectedHoleCount, getCourseSideForWeek } from "../scheduling/course-side";
 
 // ── Types ───────────────────────────────────────────────
 
@@ -327,7 +327,7 @@ export async function generateScorecardLink(
     return { success: false, error: "Team not found in this league." };
   }
 
-  // Look up scheduled matchup to get courseSide (any status — completed matchups still have a side)
+  // Determine courseSide: prefer scheduled matchup value, fall back to league play mode
   const scheduledMatchup = await prisma.scheduledMatchup.findFirst({
     where: {
       leagueId: session.leagueId,
@@ -338,9 +338,19 @@ export async function generateScorecardLink(
     select: { courseSide: true },
   });
 
+  let courseSide = scheduledMatchup?.courseSide ?? null;
+
+  // If the scheduled matchup has no courseSide, compute from the league's play mode
+  if (!courseSide) {
+    const leaguePlayMode = await prisma.league.findUniqueOrThrow({
+      where: { id: session.leagueId },
+      select: { playMode: true, playModeFirstWeekSide: true },
+    });
+    courseSide = getCourseSideForWeek(weekNumber, leaguePlayMode.playMode, leaguePlayMode.playModeFirstWeekSide);
+  }
+
   // Validate course has enough holes for the assigned side
   // Front 9 works on any course (holes 1-9), but Back 9 requires 18 holes (holes 10-18)
-  const courseSide = scheduledMatchup?.courseSide ?? null;
   if (courseSide === "back" && course.numberOfHoles < 18) {
     return {
       success: false,
