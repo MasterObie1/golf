@@ -785,6 +785,91 @@ export async function getPublicScorecardForTeamWeek(
   };
 }
 
+export interface BulkScorecardResult {
+  teamId: number;
+  teamName: string;
+  url: string;
+  email: string | null;
+  phone: string | null;
+}
+
+export async function generateAllScorecardLinks(
+  leagueSlug: string,
+  weekNumber: number,
+  seasonId?: number | null
+): Promise<ActionResult<BulkScorecardResult[]>> {
+  const session = await requireLeagueAdmin(leagueSlug);
+  await requireActiveLeague(session.leagueId);
+
+  // Fetch all approved teams with contact info
+  const teams = await prisma.team.findMany({
+    where: { leagueId: session.leagueId, status: "approved" },
+    select: { id: true, name: true, email: true, phone: true },
+    orderBy: { name: "asc" },
+  });
+
+  if (teams.length === 0) {
+    return { success: false, error: "No approved teams in this league." };
+  }
+
+  // Check which teams already have scorecards for this week
+  const existingScorecards = await prisma.scorecard.findMany({
+    where: { leagueId: session.leagueId, weekNumber },
+    select: { teamId: true, accessToken: true },
+  });
+  const existingMap = new Map(existingScorecards.map((sc) => [sc.teamId, sc.accessToken]));
+
+  // Generate links for teams that don't have one yet, using Promise.allSettled
+  const teamsNeedingLinks = teams.filter((t) => !existingMap.has(t.id));
+  const results = await Promise.allSettled(
+    teamsNeedingLinks.map((team) =>
+      generateScorecardLink(leagueSlug, team.id, weekNumber, seasonId)
+    )
+  );
+
+  // Build the result array for all teams
+  const allResults: BulkScorecardResult[] = [];
+
+  for (const team of teams) {
+    if (existingMap.has(team.id)) {
+      // Existing scorecard — reconstruct URL from stored token
+      const token = existingMap.get(team.id);
+      const url = token ? `/league/${leagueSlug}/scorecard/${token}` : "";
+      allResults.push({
+        teamId: team.id,
+        teamName: team.name,
+        url,
+        email: team.email,
+        phone: team.phone,
+      });
+    } else {
+      // Find the result from Promise.allSettled
+      const idx = teamsNeedingLinks.findIndex((t) => t.id === team.id);
+      const settled = results[idx];
+      if (settled?.status === "fulfilled" && settled.value.success) {
+        allResults.push({
+          teamId: team.id,
+          teamName: team.name,
+          url: settled.value.data.url,
+          email: team.email,
+          phone: team.phone,
+        });
+      } else {
+        // Include the team with empty URL so the admin knows it failed
+        allResults.push({
+          teamId: team.id,
+          teamName: team.name,
+          url: "",
+          email: team.email,
+          phone: team.phone,
+        });
+      }
+    }
+  }
+
+  return { success: true, data: allResults };
+}
+
 export async function adminCreateScorecard(
   leagueSlug: string,
   teamId: number,

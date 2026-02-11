@@ -8,6 +8,7 @@ import {
   getTeams,
   getAllTeamsWithStatus,
   adminQuickAddTeam,
+  updateTeamContact,
 } from "@/lib/actions/teams";
 import {
   addTeamToSchedule,
@@ -64,7 +65,15 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
   // Quick-add team state
   const [quickAddName, setQuickAddName] = useState("");
   const [quickAddCaptain, setQuickAddCaptain] = useState("");
+  const [quickAddEmail, setQuickAddEmail] = useState("");
+  const [quickAddPhone, setQuickAddPhone] = useState("");
   const [quickAddLoading, setQuickAddLoading] = useState(false);
+
+  // Contact editing state
+  const [editingContactId, setEditingContactId] = useState<number | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [contactSaving, setContactSaving] = useState(false);
 
   const pendingTeams = allTeams.filter((t) => t.status === "pending");
   const approvedTeams = allTeams.filter((t) => t.status === "approved");
@@ -178,11 +187,13 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
     setQuickAddLoading(true);
     setMessage(null);
     try {
-      const result = await adminQuickAddTeam(slug, quickAddName, quickAddCaptain || undefined);
+      const result = await adminQuickAddTeam(slug, quickAddName, quickAddCaptain || undefined, quickAddEmail || undefined, quickAddPhone || undefined);
       if (result.success) {
         setMessage({ type: "success", text: `Team "${result.data.name}" added!` });
         setQuickAddName("");
         setQuickAddCaptain("");
+        setQuickAddEmail("");
+        setQuickAddPhone("");
         const [teamsData, allTeamsData] = await Promise.all([
           getTeams(leagueId),
           getAllTeamsWithStatus(slug),
@@ -196,6 +207,35 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
       setMessage({ type: "error", text: "Failed to add team." });
     }
     setQuickAddLoading(false);
+  }
+
+  function handleStartEditContact(team: AdminTeam) {
+    setEditingContactId(team.id);
+    setEditEmail(team.email || "");
+    setEditPhone(team.phone || "");
+  }
+
+  async function handleSaveContact(teamId: number) {
+    setContactSaving(true);
+    setMessage(null);
+    try {
+      const result = await updateTeamContact(slug, teamId, editEmail || null, editPhone || null);
+      if (result.success) {
+        setMessage({ type: "success", text: "Contact info updated." });
+        setEditingContactId(null);
+        const [teamsData, allTeamsData] = await Promise.all([
+          getTeams(leagueId),
+          getAllTeamsWithStatus(slug),
+        ]);
+        onTeamsChanged(teamsData, allTeamsData);
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch (error) {
+      console.error("handleSaveContact error:", error);
+      setMessage({ type: "error", text: "Failed to update contact info." });
+    }
+    setContactSaving(false);
   }
 
   return (
@@ -334,6 +374,32 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
               maxLength={100}
             />
           </div>
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-xs font-display font-medium uppercase tracking-wider text-text-secondary mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              value={quickAddEmail}
+              onChange={(e) => setQuickAddEmail(e.target.value)}
+              placeholder="Optional"
+              className="pencil-input w-full"
+              maxLength={255}
+            />
+          </div>
+          <div className="flex-1 min-w-[140px]">
+            <label className="block text-xs font-display font-medium uppercase tracking-wider text-text-secondary mb-1">
+              Phone
+            </label>
+            <input
+              type="tel"
+              value={quickAddPhone}
+              onChange={(e) => setQuickAddPhone(e.target.value)}
+              placeholder="Optional"
+              className="pencil-input w-full"
+              maxLength={20}
+            />
+          </div>
           <button
             type="submit"
             disabled={quickAddLoading || !quickAddName.trim()}
@@ -391,18 +457,73 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
         ) : (
           <div className="space-y-2">
             {approvedTeams.map((team) => (
-              <div key={team.id} className="flex justify-between items-center p-3 bg-surface rounded-lg">
-                <div>
-                  <span className="font-display font-medium text-text-primary">{team.name}</span>
-                  {team.captainName && <span className="ml-2 text-sm font-sans text-text-muted">({team.captainName})</span>}
+              <div key={team.id} className="p-3 bg-surface rounded-lg">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="font-display font-medium text-text-primary">{team.name}</span>
+                    {team.captainName && <span className="ml-2 text-sm font-sans text-text-muted">({team.captainName})</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => editingContactId === team.id ? setEditingContactId(null) : handleStartEditContact(team)}
+                      className="text-text-muted hover:text-fairway text-xs font-display font-semibold uppercase tracking-wider transition-colors"
+                    >
+                      {editingContactId === team.id ? "Cancel" : "Edit Contact"}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTeam(team.id, team.name)}
+                      disabled={loading}
+                      className="text-board-red hover:text-board-red/90 text-sm font-display font-semibold uppercase tracking-wider disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => handleDeleteTeam(team.id, team.name)}
-                  disabled={loading}
-                  className="text-board-red hover:text-board-red/90 text-sm font-display font-semibold uppercase tracking-wider disabled:opacity-50"
-                >
-                  Delete
-                </button>
+                {/* Contact info display */}
+                {editingContactId !== team.id && (team.email || team.phone) && (
+                  <div className="mt-1 flex flex-wrap gap-3 text-xs font-sans text-text-muted">
+                    {team.email && <span>{team.email}</span>}
+                    {team.phone && <span>{team.phone}</span>}
+                  </div>
+                )}
+                {/* Inline contact edit form */}
+                {editingContactId === team.id && (
+                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                    <div className="flex-1 min-w-[160px]">
+                      <label className="block text-xs font-display font-medium uppercase tracking-wider text-text-secondary mb-1">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        placeholder="team@example.com"
+                        className="pencil-input w-full text-sm"
+                        maxLength={255}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[120px]">
+                      <label className="block text-xs font-display font-medium uppercase tracking-wider text-text-secondary mb-1">
+                        Phone
+                      </label>
+                      <input
+                        type="tel"
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        placeholder="(555) 555-5555"
+                        className="pencil-input w-full text-sm"
+                        maxLength={20}
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleSaveContact(team.id)}
+                      disabled={contactSaving}
+                      className="px-3 py-2 text-xs font-display font-semibold uppercase tracking-wider bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 transition-colors"
+                    >
+                      {contactSaving ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -401,10 +401,58 @@ export async function rejectTeam(leagueSlug: string, teamId: number): Promise<Ac
   }
 }
 
+export async function updateTeamContact(
+  leagueSlug: string,
+  teamId: number,
+  email?: string | null,
+  phone?: string | null
+): Promise<ActionResult> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
+
+    const team = await prisma.team.findFirst({
+      where: { id: teamId, leagueId: session.leagueId },
+    });
+    if (!team) {
+      return { success: false, error: "Team not found in this league." };
+    }
+
+    // Validate email if provided
+    const trimmedEmail = email?.trim() || null;
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      return { success: false, error: "Invalid email format." };
+    }
+
+    // Validate phone if provided: strip non-digits and check 10+ digits
+    const trimmedPhone = phone?.trim() || null;
+    if (trimmedPhone) {
+      const digits = trimmedPhone.replace(/\D/g, "");
+      if (digits.length < 10) {
+        return { success: false, error: "Phone number must have at least 10 digits." };
+      }
+    }
+
+    await prisma.team.update({
+      where: { id: teamId },
+      data: {
+        email: trimmedEmail,
+        phone: trimmedPhone,
+      },
+    });
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    logger.error("updateTeamContact failed", error);
+    return { success: false, error: "Failed to update contact info. Please try again." };
+  }
+}
+
 export async function adminQuickAddTeam(
   leagueSlug: string,
   name: string,
-  captainName?: string
+  captainName?: string,
+  email?: string,
+  phone?: string
 ): Promise<ActionResult<{ id: number; name: string }>> {
   try {
     const session = await requireLeagueAdmin(leagueSlug);
@@ -456,6 +504,8 @@ export async function adminQuickAddTeam(
         leagueId: session.leagueId,
         seasonId: activeSeason.id,
         captainName: captainName?.trim() || null,
+        email: email?.trim() || null,
+        phone: phone?.trim() || null,
         status: "approved",
       },
     });

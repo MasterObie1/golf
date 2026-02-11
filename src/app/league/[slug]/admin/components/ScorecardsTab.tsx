@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   generateScorecardLink,
+  generateAllScorecardLinks,
   getScorecardsForWeek,
   getScorecardDetail,
   approveScorecard,
@@ -15,6 +16,7 @@ import {
   adminLinkScorecardToMatchup,
   type ScorecardSummary as ScorecardSummaryType,
   type ScorecardDetail,
+  type BulkScorecardResult,
 } from "@/lib/actions/scorecards";
 import { getMatchupsForWeek } from "@/lib/actions/matchups";
 import { getCourseWithHoles, type CourseWithHoles } from "@/lib/actions/courses";
@@ -58,6 +60,12 @@ export default function ScorecardsTab({
   const [emailSent, setEmailSent] = useState<number | null>(null);
   const [emailEnabled, setEmailEnabled] = useState(false);
 
+  // Bulk generation state
+  const [bulkGenerating, setBulkGenerating] = useState(false);
+  const [bulkResults, setBulkResults] = useState<BulkScorecardResult[] | null>(null);
+  const [bulkLinksCopied, setBulkLinksCopied] = useState(false);
+  const bulkTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
   // Manual entry state
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualTeamId, setManualTeamId] = useState<number | "">("");
@@ -81,6 +89,7 @@ export default function ScorecardsTab({
   useEffect(() => () => {
     clearTimeout(linkTimerRef.current);
     clearTimeout(emailTimerRef.current);
+    clearTimeout(bulkTimerRef.current);
   }, []);
 
   // Load email config
@@ -187,6 +196,41 @@ export default function ScorecardsTab({
       setMessage({ type: "error", text: "Failed to send email." });
     }
     setEmailSending(null);
+  }
+
+  async function handleGenerateAllLinks() {
+    setMessage(null);
+    setBulkGenerating(true);
+    setBulkResults(null);
+    try {
+      const result = await generateAllScorecardLinks(slug, weekNumber, activeSeason?.id);
+      if (result.success) {
+        setBulkResults(result.data);
+        setMessage({ type: "success", text: `Generated scorecard links for ${result.data.filter((r) => r.url).length} teams.` });
+        await loadScorecards();
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch (error) {
+      console.error("handleGenerateAllLinks error:", error);
+      setMessage({ type: "error", text: "Failed to generate links." });
+    }
+    setBulkGenerating(false);
+  }
+
+  async function handleCopyAllLinks() {
+    if (!bulkResults) return;
+    const lines = bulkResults
+      .filter((r) => r.url)
+      .map((r) => `${r.teamName}: ${window.location.origin}${r.url}`)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(lines);
+      setBulkLinksCopied(true);
+      bulkTimerRef.current = setTimeout(() => setBulkLinksCopied(false), 3000);
+    } catch {
+      setMessage({ type: "error", text: "Copy failed — please select and copy manually." });
+    }
   }
 
   async function handleExpand(scorecardId: number) {
@@ -434,50 +478,116 @@ export default function ScorecardsTab({
           <p className="text-sm font-sans text-text-muted">
             No approved teams yet. Add teams in the Teams tab first.
           </p>
-        ) : teamsWithoutScorecard.length === 0 ? (
+        ) : teamsWithoutScorecard.length === 0 && !bulkResults ? (
           <p className="text-sm font-sans text-text-muted">
             All teams have scorecards for this week. Expand a scorecard below to copy its link.
           </p>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {teamsWithoutScorecard.map((team) => (
-              <div key={team.id} className="flex items-center gap-1">
+          <div className="space-y-3">
+            {/* Generate All Links button */}
+            {teamsWithoutScorecard.length > 0 && (
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleGenerateLink(team.id)}
-                  className={`px-3 py-1.5 text-sm font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
-                    linkCopied === team.id
-                      ? "bg-fairway text-white"
-                      : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
-                  }`}
+                  onClick={handleGenerateAllLinks}
+                  disabled={bulkGenerating}
+                  className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider bg-fairway text-white rounded-lg hover:bg-rough transition-colors disabled:opacity-50"
                 >
-                  {linkCopied === team.id ? "Copied!" : team.name}
+                  {bulkGenerating ? "Generating..." : "Generate All Links"}
                 </button>
-                {emailEnabled && team.email && (
+                <span className="text-xs font-sans text-text-muted">
+                  {teamsWithoutScorecard.length} team{teamsWithoutScorecard.length !== 1 ? "s" : ""} remaining
+                </span>
+              </div>
+            )}
+
+            {/* Bulk results panel */}
+            {bulkResults && (
+              <div className="p-3 bg-fairway/5 border border-fairway/20 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-display font-semibold uppercase tracking-wider text-text-secondary">
+                    Generated Links
+                  </span>
                   <button
-                    onClick={() => handleEmailLink(team.id)}
-                    disabled={emailSending === team.id}
-                    title={`Email scorecard link to ${team.email}`}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      emailSent === team.id
-                        ? "text-fairway"
-                        : emailSending === team.id
-                          ? "text-text-muted animate-pulse"
-                          : "text-text-muted hover:text-fairway hover:bg-fairway/10"
+                    onClick={handleCopyAllLinks}
+                    className={`px-3 py-1 text-xs font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
+                      bulkLinksCopied
+                        ? "bg-fairway text-white"
+                        : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
                     }`}
                   >
-                    {emailSent === team.id ? (
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                      </svg>
-                    )}
+                    {bulkLinksCopied ? "Copied!" : "Copy All Links"}
                   </button>
-                )}
+                </div>
+                <div className="space-y-1">
+                  {bulkResults.map((r) => (
+                    <div key={r.teamId} className="flex items-center gap-2 text-sm font-sans">
+                      <span className="font-display font-medium text-text-primary min-w-[120px]">{r.teamName}</span>
+                      {r.url ? (
+                        <span className="text-fairway text-xs truncate">Link ready</span>
+                      ) : (
+                        <span className="text-error-text text-xs">Failed</span>
+                      )}
+                      {r.email && (
+                        <span className="text-text-muted text-xs truncate">{r.email}</span>
+                      )}
+                      {r.phone && (
+                        <span className="text-text-muted text-xs">{r.phone}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setBulkResults(null)}
+                  className="text-xs font-display text-text-muted hover:text-text-secondary uppercase tracking-wider"
+                >
+                  Dismiss
+                </button>
               </div>
-            ))}
+            )}
+
+            {/* Per-team buttons */}
+            {teamsWithoutScorecard.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {teamsWithoutScorecard.map((team) => (
+                  <div key={team.id} className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleGenerateLink(team.id)}
+                      className={`px-3 py-1.5 text-sm font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
+                        linkCopied === team.id
+                          ? "bg-fairway text-white"
+                          : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
+                      }`}
+                    >
+                      {linkCopied === team.id ? "Copied!" : team.name}
+                    </button>
+                    {emailEnabled && team.email && (
+                      <button
+                        onClick={() => handleEmailLink(team.id)}
+                        disabled={emailSending === team.id}
+                        title={`Email scorecard link to ${team.email}`}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          emailSent === team.id
+                            ? "text-fairway"
+                            : emailSending === team.id
+                              ? "text-text-muted animate-pulse"
+                              : "text-text-muted hover:text-fairway hover:bg-fairway/10"
+                        }`}
+                      >
+                        {emailSent === team.id ? (
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                          </svg>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
