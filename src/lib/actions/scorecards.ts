@@ -348,6 +348,22 @@ export async function generateScorecardLink(
     };
   }
 
+  // Auto-detect matchup for this team+week
+  let autoMatchupId: number | null = null;
+  let autoTeamSide: string | null = null;
+  const existingMatchup = await prisma.matchup.findFirst({
+    where: {
+      leagueId: session.leagueId,
+      weekNumber,
+      OR: [{ teamAId: teamId }, { teamBId: teamId }],
+    },
+    select: { id: true, teamAId: true },
+  });
+  if (existingMatchup) {
+    autoMatchupId = existingMatchup.id;
+    autoTeamSide = existingMatchup.teamAId === teamId ? "A" : "B";
+  }
+
   // Upsert scorecard atomically (eliminates TOCTOU race condition)
   // Update courseId on existing scorecards so they use the current active course
   const scorecard = await prisma.scorecard.upsert({
@@ -366,8 +382,14 @@ export async function generateScorecardLink(
       weekNumber,
       status: "in_progress",
       courseSide,
+      matchupId: autoMatchupId,
+      teamSide: autoTeamSide,
     },
-    update: { courseId: course.id },
+    update: {
+      courseId: course.id,
+      // Also auto-link if not already linked
+      ...(autoMatchupId ? { matchupId: autoMatchupId, teamSide: autoTeamSide } : {}),
+    },
   });
   const scorecardId = scorecard.id;
 
@@ -968,11 +990,25 @@ export async function adminCreateScorecard(
       await prisma.scorecard.update({ where: { id: scorecardId }, data: updateData });
     }
   } else {
-    // Auto-detect teamSide if matchupId provided but teamSide not specified
+    // Auto-detect matchup if not explicitly provided
+    let resolvedMatchupId = matchupId ?? null;
     let resolvedTeamSide = teamSide ?? null;
-    if (matchupId && !teamSide) {
+    if (!resolvedMatchupId) {
       const matchup = await prisma.matchup.findFirst({
-        where: { id: matchupId, leagueId: session.leagueId },
+        where: {
+          leagueId: session.leagueId,
+          weekNumber,
+          OR: [{ teamAId: teamId }, { teamBId: teamId }],
+        },
+        select: { id: true, teamAId: true },
+      });
+      if (matchup) {
+        resolvedMatchupId = matchup.id;
+        resolvedTeamSide = matchup.teamAId === teamId ? "A" : "B";
+      }
+    } else if (resolvedMatchupId && !teamSide) {
+      const matchup = await prisma.matchup.findFirst({
+        where: { id: resolvedMatchupId, leagueId: session.leagueId },
       });
       if (matchup) {
         resolvedTeamSide = matchup.teamAId === teamId ? "A" : matchup.teamBId === teamId ? "B" : null;
@@ -988,7 +1024,7 @@ export async function adminCreateScorecard(
           teamId,
           seasonId: seasonId ?? null,
           weekNumber,
-          matchupId: matchupId ?? null,
+          matchupId: resolvedMatchupId,
           teamSide: resolvedTeamSide,
           playerName: playerName ?? null,
           status: "in_progress",
