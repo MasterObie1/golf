@@ -44,8 +44,8 @@ export async function getHandicapSettings(leagueId: number): Promise<HandicapSet
 export async function getTeamHandicap(leagueId: number, teamId: number, weekNumber?: number, scoringType?: string): Promise<number> {
   const [scores, handicapSettings] = await Promise.all([
     scoringType && scoringType !== "match_play"
-      ? getTeamPreviousScoresForScoring(leagueId, teamId, scoringType)
-      : getTeamPreviousScores(leagueId, teamId),
+      ? getTeamPreviousScoresForScoring(leagueId, teamId, scoringType, weekNumber)
+      : getTeamPreviousScores(leagueId, teamId, weekNumber),
     getHandicapSettings(leagueId),
   ]);
   return calculateHandicap(scores, handicapSettings, weekNumber);

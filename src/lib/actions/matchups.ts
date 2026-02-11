@@ -111,20 +111,20 @@ export async function previewMatchup(
     if (teamAIsSub && teamAHandicapManual !== null) {
       teamAHandicap = teamAHandicapManual;
     } else {
-      // For hybrid leagues, include weekly score data in handicap calculation
+      // Only use scores from weeks before the current week
       const teamAScores = league.scoringType === "hybrid"
-        ? await getTeamPreviousScoresForScoring(leagueId, teamAId, league.scoringType)
-        : await getTeamPreviousScores(leagueId, teamAId);
+        ? await getTeamPreviousScoresForScoring(leagueId, teamAId, league.scoringType, weekNumber)
+        : await getTeamPreviousScores(leagueId, teamAId, weekNumber);
       teamAHandicap = calculateHandicap(teamAScores, handicapSettings, weekNumber);
     }
 
     if (teamBIsSub && teamBHandicapManual !== null) {
       teamBHandicap = teamBHandicapManual;
     } else {
-      // For hybrid leagues, include weekly score data in handicap calculation
+      // Only use scores from weeks before the current week
       const teamBScores = league.scoringType === "hybrid"
-        ? await getTeamPreviousScoresForScoring(leagueId, teamBId, league.scoringType)
-        : await getTeamPreviousScores(leagueId, teamBId);
+        ? await getTeamPreviousScoresForScoring(leagueId, teamBId, league.scoringType, weekNumber)
+        : await getTeamPreviousScores(leagueId, teamBId, weekNumber);
       teamBHandicap = calculateHandicap(teamBScores, handicapSettings, weekNumber);
     }
   }

@@ -78,11 +78,12 @@ export async function createTeam(leagueId: number, name: string): Promise<Action
   }
 }
 
-export async function getTeamPreviousScores(leagueId: number, teamId: number): Promise<number[]> {
+export async function getTeamPreviousScores(leagueId: number, teamId: number, beforeWeek?: number): Promise<number[]> {
   const matchups = await prisma.matchup.findMany({
     where: {
       leagueId,
       OR: [{ teamAId: teamId }, { teamBId: teamId }],
+      ...(beforeWeek ? { weekNumber: { lt: beforeWeek } } : {}),
     },
     orderBy: { weekNumber: "asc" },
   });
@@ -103,7 +104,8 @@ export async function getTeamPreviousScores(leagueId: number, teamId: number): P
 export async function getTeamPreviousScoresForScoring(
   leagueId: number,
   teamId: number,
-  scoringType: string
+  scoringType: string,
+  beforeWeek?: number
 ): Promise<number[]> {
   const validScoringTypes = ["match_play", "stroke_play", "hybrid"];
   if (!validScoringTypes.includes(scoringType)) {
@@ -111,7 +113,7 @@ export async function getTeamPreviousScoresForScoring(
   }
 
   if (scoringType === "match_play") {
-    return getTeamPreviousScores(leagueId, teamId);
+    return getTeamPreviousScores(leagueId, teamId, beforeWeek);
   }
 
   // Stroke play / hybrid: pull from WeeklyScore
@@ -121,6 +123,7 @@ export async function getTeamPreviousScoresForScoring(
       teamId,
       isDnp: false,
       isSub: false,
+      ...(beforeWeek ? { weekNumber: { lt: beforeWeek } } : {}),
     },
     orderBy: { weekNumber: "asc" },
     select: { grossScore: true },
