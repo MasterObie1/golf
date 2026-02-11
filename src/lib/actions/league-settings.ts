@@ -33,6 +33,7 @@ export async function updateLeagueSettings(
     await prisma.league.update({
       where: { id: session.leagueId },
       data: { maxTeams: validated.maxTeams, registrationOpen: validated.registrationOpen },
+      select: { id: true },
     });
 
     return { success: true, data: { maxTeams: validated.maxTeams, registrationOpen: validated.registrationOpen } };
@@ -58,6 +59,7 @@ export async function updateScorecardSettings(
     await prisma.league.update({
       where: { id: session.leagueId },
       data: { scorecardMode, scorecardRequireApproval },
+      select: { id: true },
     });
 
     return { success: true, data: undefined };
@@ -213,6 +215,7 @@ export async function updateHandicapSettings(
         // Administrative
         handicapRequireApproval: validated.requireApproval,
       },
+      select: { id: true },
     });
 
     // Recalculate all matchups and team stats with new settings

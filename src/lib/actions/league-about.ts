@@ -113,6 +113,7 @@ export async function updateLeagueAbout(leagueSlug: string, data: UpdateLeagueAb
         contactEmail: validated.contactEmail,
         contactPhone: validated.contactPhone,
       },
+      select: { id: true },
     });
 
     return { success: true, data: undefined };

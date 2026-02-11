@@ -57,7 +57,7 @@ Hardcoded credentials removed. Now uses `SuperAdmin` database model with bcrypt.
 ### Known Bugs (Must Fix)
 
 1. **`submitMatchup` has no transaction** (`actions.ts:406-462`) — partial failures corrupt team stats
-2. **Head-to-head tiebreaker sorts backwards** (`actions.ts:520-524`) — `bVsA - aVsB` should be `aVsB - bVsA`. Duplicated in 3 places.
+2. **Head-to-head tiebreaker sorts backwards** — FIXED. Changed `aVsB - bVsA` → `bVsA - aVsB` in all 3 locations in `standings.ts`.
 3. **Points override passes `""` as number** (`admin/page.tsx:388`) — `as number` cast on `number | ""` doesn't convert at runtime
 4. **`createSeason` has no transaction** (`actions.ts:1530-1548`) — can leave zero active seasons
 5. **Freeze week is a no-op** — FIXED. Freeze week truncation now implemented in `handicap.ts:441-446`. However, has a semantic issue: invalid scores are filtered before freeze truncation, so freeze means "first N valid scores" not "scores from weeks 1..N".

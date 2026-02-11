@@ -2,7 +2,7 @@
 // Creates a fully populated league for Playwright E2E tests
 // Run with: npx tsx scripts/seed-e2e.ts
 
-if (process.env.NODE_ENV === "production") {
+if (process.env.NODE_ENV === "production" || process.env.TURSO_DATABASE_URL) {
   console.error("ERROR: Seed scripts must not run in production. Aborting.");
   process.exit(1);
 }

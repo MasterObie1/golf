@@ -110,7 +110,7 @@ function rankTeams<T extends TeamWithStats>(teams: T[], matchups: MatchupForRank
     const aVsB = headToHead[a.id]?.[b.id] || 0;
     const bVsA = headToHead[b.id]?.[a.id] || 0;
     if (aVsB !== 0 || bVsA !== 0) {
-      if (aVsB !== bVsA) return aVsB - bVsA;
+      if (aVsB !== bVsA) return bVsA - aVsB;
     }
 
     const aDiff = netDifferential[a.id] || 0;
@@ -311,7 +311,7 @@ function rankTeamsHybrid<T extends TeamWithStats>(
     const aVsB = headToHead[a.id]?.[b.id] || 0;
     const bVsA = headToHead[b.id]?.[a.id] || 0;
     if (aVsB !== 0 || bVsA !== 0) {
-      if (aVsB !== bVsA) return aVsB - bVsA;
+      if (aVsB !== bVsA) return bVsA - aVsB;
     }
     // Tiebreaker: counting method
     const countingResult = compareCountingMethod(aStroke.positionCounts, bStroke.positionCounts);
@@ -400,7 +400,7 @@ function calculateStandingsAtWeek(
     const aVsB = headToHead[a.id]?.[b.id] || 0;
     const bVsA = headToHead[b.id]?.[a.id] || 0;
     if (aVsB !== 0 || bVsA !== 0) {
-      if (aVsB !== bVsA) return aVsB - bVsA;
+      if (aVsB !== bVsA) return bVsA - aVsB;
     }
 
     return (netDifferential[b.id] || 0) - (netDifferential[a.id] || 0);
