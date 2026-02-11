@@ -34,6 +34,8 @@ export interface ScheduleConfig {
   playoffWeeks: number;
   playoffTeams: number;
   playoffFormat: string;
+  playMode: string;
+  playModeFirstWeekSide: string;
 }
 
 // Point scale utilities are in @/lib/scoring-utils (shared client/server)
@@ -107,6 +109,8 @@ export async function getScheduleConfig(leagueId: number): Promise<ScheduleConfi
       playoffWeeks: true,
       playoffTeams: true,
       playoffFormat: true,
+      playMode: true,
+      playModeFirstWeekSide: true,
     },
   });
 }
@@ -190,6 +194,8 @@ const scheduleConfigSchema = z.object({
   playoffWeeks: z.number().int().min(0).max(4),
   playoffTeams: z.number().int().min(2).max(8),
   playoffFormat: z.enum(["single_elimination", "double_elimination", "round_robin"]),
+  playMode: z.enum(["full_18", "nine_hole_alternating", "nine_hole_front", "nine_hole_back"]),
+  playModeFirstWeekSide: z.enum(["front", "back"]),
 });
 
 export type ScheduleConfigInput = z.infer<typeof scheduleConfigSchema>;

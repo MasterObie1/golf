@@ -11,6 +11,9 @@ import {
   cancelScheduledMatchup,
   rescheduleMatchup,
   addManualScheduledMatchup,
+  updateMatchupStartingHole,
+  updateWeekCourseSide,
+  assignShotgunStartingHoles,
   type ScheduleWeek,
   type ScheduleStatus,
   type PreviewResult,
@@ -69,6 +72,10 @@ export default function ScheduleTab({
   const [addMatchupWeek, setAddMatchupWeek] = useState<number | null>(null);
   const [addTeamAId, setAddTeamAId] = useState<number | "">("");
   const [addTeamBId, setAddTeamBId] = useState<number | "" | "bye">("");
+
+  // Shotgun start / course side editing
+  const [editingStartingHole, setEditingStartingHole] = useState<{ matchupId: number; value: string } | null>(null);
+  const [overrideSideWeek, setOverrideSideWeek] = useState<number | null>(null);
 
   async function loadScheduleData() {
     try {
@@ -274,6 +281,82 @@ export default function ScheduleTab({
     } catch (error) {
       console.error("handleAddMatchup error:", error);
       setMessage({ type: "error", text: "Failed to add matchup." });
+    }
+    setLoading(false);
+  }
+
+  async function handleSaveStartingHole(matchupId: number, value: string) {
+    setLoading(true);
+    try {
+      const hole = value === "" ? null : parseInt(value);
+      if (hole !== null && isNaN(hole)) {
+        setMessage({ type: "error", text: "Invalid hole number." });
+        setLoading(false);
+        return;
+      }
+      const result = await updateMatchupStartingHole(slug, matchupId, hole);
+      if (result.success) {
+        setEditingStartingHole(null);
+        await loadScheduleData();
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch (error) {
+      console.error("handleSaveStartingHole error:", error);
+      setMessage({ type: "error", text: "Failed to update starting hole." });
+    }
+    setLoading(false);
+  }
+
+  async function handleOverrideSide(weekNumber: number, side: string | null) {
+    setLoading(true);
+    try {
+      const result = await updateWeekCourseSide(slug, weekNumber, side);
+      if (result.success) {
+        setOverrideSideWeek(null);
+        setMessage({ type: "success", text: `Week ${weekNumber} course side updated.` });
+        await loadScheduleData();
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch (error) {
+      console.error("handleOverrideSide error:", error);
+      setMessage({ type: "error", text: "Failed to override course side." });
+    }
+    setLoading(false);
+  }
+
+  async function handleShotgunAssign(weekNumber: number) {
+    const weekMatches = schedule.find((w) => w.weekNumber === weekNumber)?.matches;
+    if (!weekMatches) return;
+
+    const scheduledMatches = weekMatches.filter((m) => m.status === "scheduled" && m.teamB);
+    if (scheduledMatches.length === 0) {
+      setMessage({ type: "error", text: "No scheduled matchups to assign." });
+      return;
+    }
+
+    // Determine starting hole range based on courseSide
+    const side = scheduledMatches[0].courseSide;
+    const startHole = side === "back" ? 10 : 1;
+
+    const assignments = scheduledMatches.map((m, i) => ({
+      matchupId: m.id,
+      startingHole: startHole + i,
+    }));
+
+    setLoading(true);
+    try {
+      const result = await assignShotgunStartingHoles(slug, assignments);
+      if (result.success) {
+        setMessage({ type: "success", text: `Shotgun start assigned for Week ${weekNumber}.` });
+        await loadScheduleData();
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch (error) {
+      console.error("handleShotgunAssign error:", error);
+      setMessage({ type: "error", text: "Failed to assign shotgun starting holes." });
     }
     setLoading(false);
   }
@@ -513,6 +596,15 @@ export default function ScheduleTab({
                     <span className="text-xs text-text-muted font-sans normal-case tracking-normal">
                       <span className="font-mono tabular-nums">{week.matches.length}</span> matchup{week.matches.length !== 1 ? "s" : ""}
                     </span>
+                    {week.matches[0]?.courseSide && (
+                      <span className={`px-2 py-0.5 rounded text-xs font-display font-medium uppercase tracking-wider ${
+                        week.matches[0].courseSide === "front"
+                          ? "bg-info-bg text-info-text"
+                          : "bg-bunker/30 text-wood"
+                      }`}>
+                        {week.matches[0].courseSide === "front" ? "Front 9" : "Back 9"}
+                      </span>
+                    )}
                     {allCompleted && (
                       <span className="px-2 py-0.5 bg-fairway/20 text-fairway rounded text-xs font-display font-medium uppercase tracking-wider">Complete</span>
                     )}
@@ -522,6 +614,43 @@ export default function ScheduleTab({
 
                 {isExpanded && (
                   <div className="border-t border-scorecard-line/50 px-6 py-4">
+                    {/* Week-level actions */}
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      {overrideSideWeek === week.weekNumber ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-display uppercase tracking-wider text-text-secondary">Side:</span>
+                          {(["front", "back", null] as const).map((side) => (
+                            <button
+                              key={side ?? "none"}
+                              onClick={() => handleOverrideSide(week.weekNumber, side)}
+                              disabled={loading}
+                              className={`text-xs px-2 py-1 rounded border transition-colors font-display uppercase tracking-wider ${
+                                week.matches[0]?.courseSide === side
+                                  ? "bg-fairway text-white border-fairway"
+                                  : "bg-scorecard-paper text-text-secondary border-scorecard-line/50 hover:border-fairway"
+                              }`}
+                            >
+                              {side === "front" ? "Front 9" : side === "back" ? "Back 9" : "Full 18"}
+                            </button>
+                          ))}
+                          <button onClick={() => setOverrideSideWeek(null)} className="text-xs text-text-muted hover:underline font-display uppercase tracking-wider">Cancel</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setOverrideSideWeek(week.weekNumber)}
+                          className="text-xs text-water hover:underline font-display uppercase tracking-wider"
+                        >
+                          Override Side
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleShotgunAssign(week.weekNumber)}
+                        disabled={loading}
+                        className="text-xs text-warning-text hover:underline font-display uppercase tracking-wider disabled:opacity-50"
+                      >
+                        Shotgun Assign
+                      </button>
+                    </div>
                     <table className="w-full text-sm">
                       <tbody className="divide-y divide-scorecard-line/40">
                         {week.matches.map((match) => (
@@ -535,6 +664,11 @@ export default function ScheduleTab({
                               {match.teamA.name}
                               {!match.teamB && (
                                 <span className="ml-2 px-2 py-0.5 bg-board-yellow/20 text-warning-text rounded text-xs font-display font-medium uppercase tracking-wider">BYE</span>
+                              )}
+                              {match.startingHole && (
+                                <span className="ml-2 px-2 py-0.5 bg-putting/20 text-putting rounded text-xs font-mono tabular-nums">
+                                  Hole {match.startingHole}
+                                </span>
                               )}
                             </td>
                             <td className="py-3 text-text-light text-center w-12 font-sans">
@@ -613,6 +747,28 @@ export default function ScheduleTab({
                                     </div>
                                   ) : (
                                     <>
+                                      {editingStartingHole?.matchupId === match.id ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            value={editingStartingHole.value}
+                                            onChange={(e) => setEditingStartingHole({ matchupId: match.id, value: e.target.value })}
+                                            min={1}
+                                            max={18}
+                                            className="w-12 text-xs px-1 py-1 border-b border-scorecard-line rounded-none bg-transparent text-center font-mono tabular-nums focus:outline-none focus:border-fairway"
+                                            placeholder="#"
+                                          />
+                                          <button onClick={() => handleSaveStartingHole(match.id, editingStartingHole.value)} className="text-xs text-fairway hover:underline font-display uppercase tracking-wider">Save</button>
+                                          <button onClick={() => setEditingStartingHole(null)} className="text-xs text-text-muted hover:underline font-display uppercase tracking-wider">X</button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => setEditingStartingHole({ matchupId: match.id, value: match.startingHole?.toString() ?? "" })}
+                                          className="text-xs text-putting hover:underline font-display uppercase tracking-wider"
+                                        >
+                                          Hole
+                                        </button>
+                                      )}
                                       <button
                                         onClick={() =>
                                           setEditingMatchup({

@@ -29,6 +29,7 @@ interface ScorecardEntryProps {
   holes: HoleData[];
   initialScores: HoleScoreData[];
   status: string;
+  courseSide?: string | null;
 }
 
 export default function ScorecardEntry({
@@ -40,6 +41,7 @@ export default function ScorecardEntry({
   holes,
   initialScores,
   status: initialStatus,
+  courseSide,
 }: ScorecardEntryProps) {
   const [currentHoleIndex, setCurrentHoleIndex] = useState(() => {
     // Start at first hole without a score, or first hole
@@ -240,7 +242,14 @@ export default function ScorecardEntry({
         <div className="flex items-center justify-between max-w-lg mx-auto">
           <div>
             <div className="font-display font-bold uppercase tracking-wider text-sm">{teamName}</div>
-            <div className="text-putting/70 text-xs font-sans">{courseName} &mdash; Week {weekNumber}</div>
+            <div className="text-putting/70 text-xs font-sans">
+              {courseName} &mdash; Week {weekNumber}
+              {courseSide && (
+                <span className="ml-2 px-1.5 py-0.5 bg-white/15 rounded text-xs font-display uppercase tracking-wider">
+                  {courseSide === "front" ? "Front 9" : "Back 9"}
+                </span>
+              )}
+            </div>
           </div>
           <div className="text-right">
             {saving && <div className="text-xs text-putting/50 font-sans">Saving...</div>}

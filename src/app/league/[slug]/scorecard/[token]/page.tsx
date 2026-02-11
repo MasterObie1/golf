@@ -47,6 +47,7 @@ export default async function ScorecardPage({ params }: Props) {
       holes={data.course.holes}
       initialScores={data.holeScores}
       status={data.status}
+      courseSide={data.courseSide}
     />
   );
 }

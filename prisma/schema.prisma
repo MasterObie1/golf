@@ -105,6 +105,12 @@ model League {
   playoffTeams            Int       @default(4)       // Teams qualifying for playoffs
   playoffFormat           String    @default("single_elimination") // "single_elimination" | "double_elimination" | "round_robin"
 
+  // ============================================
+  // PLAY MODE (9-Hole / Shotgun)
+  // ============================================
+  playMode              String @default("full_18")   // "full_18" | "nine_hole_alternating" | "nine_hole_front" | "nine_hole_back"
+  playModeFirstWeekSide String @default("front")     // "front" | "back" — which side week 1 plays (alternating mode)
+
   // About the League fields (all optional)
   startDate            DateTime?
   endDate              DateTime?
@@ -305,6 +311,8 @@ model ScheduledMatchup {
   teamAId     Int
   teamBId     Int?      // Null = bye week for teamA
   status      String    @default("scheduled") // "scheduled" | "completed" | "cancelled"
+  startingHole Int?     // Shotgun: which hole this group starts on (1-18)
+  courseSide   String?  // "front" | "back" | null — which 9 are in play
   matchupId   Int?      @unique // Links to actual Matchup when completed
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -378,6 +386,7 @@ model Scorecard {
   matchupId     Int?
   matchup       Matchup?  @relation(fields: [matchupId], references: [id], onDelete: SetNull)
   teamSide      String?   // "A" or "B" for match play
+  courseSide    String?   // "front" | "back" | null — snapshot from ScheduledMatchup at creation
   weeklyScoreId Int?      @unique
   weeklyScore   WeeklyScore? @relation(fields: [weeklyScoreId], references: [id], onDelete: SetNull)
   grossTotal    Int?      // sum of hole strokes (null if incomplete)

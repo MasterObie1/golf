@@ -8,6 +8,7 @@ import { createScorecardToken, verifyScorecardToken } from "../scorecard-auth";
 import { sendScorecardEmail, isEmailConfigured } from "../email";
 import { requireActiveLeague } from "./leagues";
 import type { ActionResult } from "./shared";
+import { filterHolesByCourseSide, isHoleInPlay, getExpectedHoleCount } from "../scheduling/course-side";
 
 // ── Types ───────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ export interface ScorecardDetail {
   weekNumber: number;
   matchupId: number | null;
   teamSide: string | null;
+  courseSide: string | null;
   weeklyScoreId: number | null;
   grossTotal: number | null;
   frontNine: number | null;
@@ -111,6 +113,13 @@ export async function getScorecardByToken(token: string): Promise<ActionResult<S
     return { success: false, error: "This scorecard has already been approved and cannot be edited." };
   }
 
+  // Filter holes by courseSide if set
+  const filteredHoles = filterHolesByCourseSide(scorecard.course.holes, scorecard.courseSide);
+  const adjustedNumberOfHoles = getExpectedHoleCount(scorecard.course.numberOfHoles, scorecard.courseSide);
+  const adjustedTotalPar = scorecard.courseSide
+    ? filteredHoles.reduce((sum, h) => sum + h.par, 0)
+    : scorecard.course.totalPar;
+
   return {
     success: true,
     data: {
@@ -123,6 +132,7 @@ export async function getScorecardByToken(token: string): Promise<ActionResult<S
       weekNumber: scorecard.weekNumber,
       matchupId: scorecard.matchupId,
       teamSide: scorecard.teamSide,
+      courseSide: scorecard.courseSide,
       weeklyScoreId: scorecard.weeklyScoreId,
       grossTotal: scorecard.grossTotal,
       frontNine: scorecard.frontNine,
@@ -135,9 +145,9 @@ export async function getScorecardByToken(token: string): Promise<ActionResult<S
       course: {
         id: scorecard.course.id,
         name: scorecard.course.name,
-        numberOfHoles: scorecard.course.numberOfHoles,
-        totalPar: scorecard.course.totalPar,
-        holes: scorecard.course.holes,
+        numberOfHoles: adjustedNumberOfHoles,
+        totalPar: adjustedTotalPar,
+        holes: filteredHoles,
       },
       holeScores: scorecard.holeScores,
     },
@@ -178,6 +188,11 @@ export async function saveHoleScore(
   }
   if (scorecard.status === "approved") {
     return { success: false, error: "This scorecard is already approved." };
+  }
+
+  // Validate hole is in play for this scorecard's courseSide
+  if (!isHoleInPlay(holeNumber, scorecard.courseSide)) {
+    return { success: false, error: `Hole ${holeNumber} is not in play for this scorecard.` };
   }
 
   const hole = scorecard.course.holes[0];
@@ -251,20 +266,23 @@ export async function submitScorecard(token: string): Promise<ActionResult<{ gro
     return { success: false, error: "This scorecard is already approved." };
   }
 
-  // Must have scores for all holes
-  if (scorecard.holeScores.length < scorecard.course.numberOfHoles) {
+  // Must have scores for all expected holes
+  const expectedHoles = getExpectedHoleCount(scorecard.course.numberOfHoles, scorecard.courseSide);
+  if (scorecard.holeScores.length < expectedHoles) {
     return {
       success: false,
-      error: `Please enter scores for all ${scorecard.course.numberOfHoles} holes. You have ${scorecard.holeScores.length} entered.`,
+      error: `Please enter scores for all ${expectedHoles} holes. You have ${scorecard.holeScores.length} entered.`,
     };
   }
 
   const grossTotal = scorecard.holeScores.reduce((sum, hs) => sum + hs.strokes, 0);
-  const frontNine = scorecard.holeScores
-    .filter((hs) => hs.holeNumber <= 9)
-    .reduce((sum, hs) => sum + hs.strokes, 0);
-  const backNine = scorecard.course.numberOfHoles > 9
-    ? scorecard.holeScores.filter((hs) => hs.holeNumber > 9).reduce((sum, hs) => sum + hs.strokes, 0)
+  const frontNineScores = scorecard.holeScores.filter((hs) => hs.holeNumber <= 9);
+  const backNineScores = scorecard.holeScores.filter((hs) => hs.holeNumber > 9);
+  const frontNine = frontNineScores.length > 0
+    ? frontNineScores.reduce((sum, hs) => sum + hs.strokes, 0)
+    : null;
+  const backNine = backNineScores.length > 0
+    ? backNineScores.reduce((sum, hs) => sum + hs.strokes, 0)
     : null;
 
   await prisma.scorecard.update({
@@ -308,6 +326,17 @@ export async function generateScorecardLink(
     return { success: false, error: "Team not found in this league." };
   }
 
+  // Look up scheduled matchup to get courseSide
+  const scheduledMatchup = await prisma.scheduledMatchup.findFirst({
+    where: {
+      leagueId: session.leagueId,
+      weekNumber,
+      status: "scheduled",
+      OR: [{ teamAId: teamId }, { teamBId: teamId }],
+    },
+    select: { courseSide: true },
+  });
+
   // Upsert scorecard atomically (eliminates TOCTOU race condition)
   // Update courseId on existing scorecards so they use the current active course
   const scorecard = await prisma.scorecard.upsert({
@@ -325,6 +354,7 @@ export async function generateScorecardLink(
       seasonId: seasonId ?? null,
       weekNumber,
       status: "in_progress",
+      courseSide: scheduledMatchup?.courseSide ?? null,
     },
     update: { courseId: course.id },
   });
@@ -490,6 +520,7 @@ export async function getScorecardDetail(
       weekNumber: scorecard.weekNumber,
       matchupId: scorecard.matchupId,
       teamSide: scorecard.teamSide,
+      courseSide: scorecard.courseSide,
       weeklyScoreId: scorecard.weeklyScoreId,
       grossTotal: scorecard.grossTotal,
       frontNine: scorecard.frontNine,
@@ -723,6 +754,7 @@ export async function getPublicScorecardForTeamWeek(
     weekNumber: scorecard.weekNumber,
     matchupId: scorecard.matchupId,
     teamSide: scorecard.teamSide,
+    courseSide: scorecard.courseSide,
     weeklyScoreId: scorecard.weeklyScoreId,
     grossTotal: scorecard.grossTotal,
     frontNine: scorecard.frontNine,
@@ -858,19 +890,22 @@ export async function adminCompleteAndApproveScorecard(
   if (scorecard.status === "approved") {
     return { success: false, error: "Scorecard is already approved." };
   }
-  if (scorecard.holeScores.length < scorecard.course.numberOfHoles) {
+  const expectedHoles = getExpectedHoleCount(scorecard.course.numberOfHoles, scorecard.courseSide);
+  if (scorecard.holeScores.length < expectedHoles) {
     return {
       success: false,
-      error: `All ${scorecard.course.numberOfHoles} holes must have scores. Currently ${scorecard.holeScores.length} entered.`,
+      error: `All ${expectedHoles} holes must have scores. Currently ${scorecard.holeScores.length} entered.`,
     };
   }
 
   const grossTotal = scorecard.holeScores.reduce((sum, hs) => sum + hs.strokes, 0);
-  const frontNine = scorecard.holeScores
-    .filter((hs) => hs.holeNumber <= 9)
-    .reduce((sum, hs) => sum + hs.strokes, 0);
-  const backNine = scorecard.course.numberOfHoles > 9
-    ? scorecard.holeScores.filter((hs) => hs.holeNumber > 9).reduce((sum, hs) => sum + hs.strokes, 0)
+  const frontNineScores = scorecard.holeScores.filter((hs) => hs.holeNumber <= 9);
+  const backNineScores = scorecard.holeScores.filter((hs) => hs.holeNumber > 9);
+  const frontNine = frontNineScores.length > 0
+    ? frontNineScores.reduce((sum, hs) => sum + hs.strokes, 0)
+    : null;
+  const backNine = backNineScores.length > 0
+    ? backNineScores.reduce((sum, hs) => sum + hs.strokes, 0)
     : null;
 
   await prisma.scorecard.update({
@@ -962,6 +997,7 @@ export async function getPublicScorecardsForWeek(
     weekNumber: sc.weekNumber,
     matchupId: sc.matchupId,
     teamSide: sc.teamSide,
+    courseSide: sc.courseSide,
     weeklyScoreId: sc.weeklyScoreId,
     grossTotal: sc.grossTotal,
     frontNine: sc.frontNine,

@@ -156,6 +156,17 @@ export default async function LeagueSchedulePage({ params, searchParams }: Props
                       <span className="font-display font-semibold uppercase tracking-wider text-sm">
                         Round {week.weekNumber}
                       </span>
+                      {week.matches[0]?.courseSide && (
+                        <span className={`text-xs px-2 py-0.5 rounded font-display font-medium uppercase tracking-wider ${
+                          isCurrentWeekRow
+                            ? "bg-white/20"
+                            : week.matches[0].courseSide === "front"
+                              ? "bg-info-bg text-info-text"
+                              : "bg-bunker/30 text-wood"
+                        }`}>
+                          {week.matches[0].courseSide === "front" ? "Front 9" : "Back 9"}
+                        </span>
+                      )}
                       {isCurrentWeekRow && (
                         <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-sans">
                           Current
@@ -253,6 +264,11 @@ export default async function LeagueSchedulePage({ params, searchParams }: Props
                               >
                                 {match.teamB!.name}
                               </Link>
+                              {match.startingHole && (
+                                <span className="text-xs text-text-muted font-mono tabular-nums">
+                                  Starts: Hole {match.startingHole}
+                                </span>
+                              )}
                             </div>
                             <span className="text-xs text-text-light font-display uppercase tracking-wider">Pending</span>
                           </div>

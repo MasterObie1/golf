@@ -125,6 +125,8 @@ const DEFAULT_SCHEDULE_INPUT: ScheduleConfigInput = {
   playoffWeeks: 0,
   playoffTeams: 4,
   playoffFormat: "single_elimination",
+  playMode: "full_18",
+  playModeFirstWeekSide: "front",
 };
 
 // ==========================================

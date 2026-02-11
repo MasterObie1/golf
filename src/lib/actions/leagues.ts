@@ -281,6 +281,9 @@ export async function getLeagueBySlug(slug: string) {
       playoffWeeks: true,
       playoffTeams: true,
       playoffFormat: true,
+      // Play mode
+      playMode: true,
+      playModeFirstWeekSide: true,
       // Scorecard config
       scorecardMode: true,
       scorecardRequireApproval: true,

@@ -507,7 +507,7 @@ export async function deleteTeam(leagueSlug: string, teamId: number): Promise<Ac
     if (scheduledCount > 0) {
       // Convert future scheduled matchups to byes for opponents, then delete team
       const { removeTeamFromSchedule } = await import("./schedule");
-      await removeTeamFromSchedule(leagueSlug, teamId, league.midSeasonRemoveAction);
+      await removeTeamFromSchedule(leagueSlug, teamId, league.midSeasonRemoveAction as "bye_opponents" | "regenerate");
     }
 
     // Delete related records and team in a transaction

@@ -11,6 +11,7 @@ import {
   type Round,
   type ScheduleResult,
 } from "../scheduling/round-robin";
+import { getCourseSideForWeek } from "../scheduling/course-side";
 
 // --- Types ---
 
@@ -25,6 +26,8 @@ export interface ScheduleMatchDetail {
   teamA: { id: number; name: string };
   teamB: { id: number; name: string } | null;
   status: string;
+  startingHole: number | null;
+  courseSide: string | null;
   matchup?: {
     teamAPoints: number;
     teamBPoints: number;
@@ -145,7 +148,7 @@ export async function generateSchedule(
 
     const league = await prisma.league.findUniqueOrThrow({
       where: { id: leagueId },
-      select: { playoffWeeks: true },
+      select: { playoffWeeks: true, playMode: true, playModeFirstWeekSide: true },
     });
     const schedulableWeeks = Math.max(1, options.totalWeeks - league.playoffWeeks);
     const startWeek = options.startWeek ?? 1;
@@ -174,6 +177,11 @@ export async function generateSchedule(
     );
 
     for (const round of rounds) {
+      const courseSide = getCourseSideForWeek(
+        round.weekNumber,
+        league.playMode,
+        league.playModeFirstWeekSide
+      );
       for (const match of round.matches) {
         operations.push(
           prisma.scheduledMatchup.create({
@@ -184,6 +192,7 @@ export async function generateSchedule(
               teamAId: match.teamAId,
               teamBId: match.teamBId,
               status: "scheduled",
+              courseSide,
             },
           })
         );
@@ -273,6 +282,8 @@ export async function getSchedule(
       teamA: m.teamA,
       teamB: m.teamB,
       status: m.status,
+      startingHole: m.startingHole,
+      courseSide: m.courseSide,
       matchup: m.matchup ?? undefined,
     });
     weekMap.set(m.weekNumber, week);
@@ -309,6 +320,8 @@ export async function getScheduleForWeek(
     teamA: m.teamA,
     teamB: m.teamB,
     status: m.status,
+    startingHole: m.startingHole,
+    courseSide: m.courseSide,
     matchup: m.matchup ?? undefined,
   }));
 }
@@ -345,6 +358,8 @@ export async function getTeamSchedule(
       teamA: m.teamA,
       teamB: m.teamB,
       status: m.status,
+      startingHole: m.startingHole,
+      courseSide: m.courseSide,
       matchup: m.matchup ?? undefined,
     });
     weekMap.set(m.weekNumber, week);
@@ -760,7 +775,7 @@ export async function addTeamToSchedule(
 
     const league = await prisma.league.findUniqueOrThrow({
       where: { id: leagueId },
-      select: { playoffWeeks: true, scheduleType: true },
+      select: { playoffWeeks: true, scheduleType: true, playMode: true, playModeFirstWeekSide: true },
     });
 
     // Get current week (latest completed matchup week + 1, or latest scheduled week)
@@ -849,6 +864,11 @@ export async function addTeamToSchedule(
       });
 
       for (const round of rounds) {
+        const roundCourseSide = getCourseSideForWeek(
+          round.weekNumber,
+          league.playMode,
+          league.playModeFirstWeekSide
+        );
         for (const match of round.matches) {
           await tx.scheduledMatchup.create({
             data: {
@@ -858,6 +878,7 @@ export async function addTeamToSchedule(
               teamAId: match.teamAId,
               teamBId: match.teamBId,
               status: "scheduled",
+              courseSide: roundCourseSide,
             },
           });
         }
@@ -923,7 +944,7 @@ export async function removeTeamFromSchedule(
 
       const league = await prisma.league.findUniqueOrThrow({
         where: { id: leagueId },
-        select: { scheduleType: true },
+        select: { scheduleType: true, playMode: true, playModeFirstWeekSide: true },
       });
 
       const totalScheduledWeeks = await prisma.scheduledMatchup.findMany({
@@ -963,6 +984,11 @@ export async function removeTeamFromSchedule(
         });
 
         for (const round of rounds) {
+          const roundCourseSide = getCourseSideForWeek(
+            round.weekNumber,
+            league.playMode,
+            league.playModeFirstWeekSide
+          );
           for (const match of round.matches) {
             await tx.scheduledMatchup.create({
               data: {
@@ -972,6 +998,7 @@ export async function removeTeamFromSchedule(
                 teamAId: match.teamAId,
                 teamBId: match.teamBId,
                 status: "scheduled",
+                courseSide: roundCourseSide,
               },
             });
           }
@@ -1026,5 +1053,142 @@ export async function removeTeamFromSchedule(
   } catch (error) {
     logger.error("removeTeamFromSchedule failed", error);
     return { success: false, error: error instanceof Error ? error.message : "Failed to remove team from schedule." };
+  }
+}
+
+// --- Shotgun Start & Course Side ---
+
+export async function updateMatchupStartingHole(
+  leagueSlug: string,
+  scheduledMatchupId: number,
+  startingHole: number | null
+): Promise<ActionResult> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
+
+    const matchup = await prisma.scheduledMatchup.findUnique({
+      where: { id: scheduledMatchupId },
+    });
+
+    if (!matchup || matchup.leagueId !== session.leagueId) {
+      return { success: false, error: "Scheduled matchup not found." };
+    }
+    if (matchup.status !== "scheduled") {
+      return { success: false, error: "Can only modify scheduled (unplayed) matchups." };
+    }
+
+    if (startingHole !== null) {
+      // Validate hole range based on courseSide
+      if (matchup.courseSide === "front" && (startingHole < 1 || startingHole > 9)) {
+        return { success: false, error: "Starting hole must be 1-9 for front nine." };
+      }
+      if (matchup.courseSide === "back" && (startingHole < 10 || startingHole > 18)) {
+        return { success: false, error: "Starting hole must be 10-18 for back nine." };
+      }
+      if (!matchup.courseSide && (startingHole < 1 || startingHole > 18)) {
+        return { success: false, error: "Starting hole must be 1-18." };
+      }
+    }
+
+    await prisma.scheduledMatchup.update({
+      where: { id: scheduledMatchupId },
+      data: { startingHole },
+    });
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    logger.error("updateMatchupStartingHole failed", error);
+    return { success: false, error: error instanceof Error ? error.message : "Failed to update starting hole." };
+  }
+}
+
+export async function updateWeekCourseSide(
+  leagueSlug: string,
+  weekNumber: number,
+  courseSide: string | null
+): Promise<ActionResult> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
+
+    if (courseSide !== null && courseSide !== "front" && courseSide !== "back") {
+      return { success: false, error: "Course side must be 'front', 'back', or null." };
+    }
+
+    const result = await prisma.scheduledMatchup.updateMany({
+      where: {
+        leagueId: session.leagueId,
+        weekNumber,
+        status: "scheduled",
+      },
+      data: { courseSide },
+    });
+
+    if (result.count === 0) {
+      return { success: false, error: "No scheduled matchups found for that week." };
+    }
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    logger.error("updateWeekCourseSide failed", error);
+    return { success: false, error: error instanceof Error ? error.message : "Failed to update course side." };
+  }
+}
+
+export async function assignShotgunStartingHoles(
+  leagueSlug: string,
+  assignments: Array<{ matchupId: number; startingHole: number }>
+): Promise<ActionResult> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
+
+    if (assignments.length === 0) {
+      return { success: false, error: "No assignments provided." };
+    }
+
+    // Validate all matchups exist and belong to this league
+    const matchupIds = assignments.map((a) => a.matchupId);
+    const matchups = await prisma.scheduledMatchup.findMany({
+      where: { id: { in: matchupIds }, leagueId: session.leagueId },
+    });
+
+    if (matchups.length !== assignments.length) {
+      return { success: false, error: "One or more matchups not found in this league." };
+    }
+
+    for (const m of matchups) {
+      if (m.status !== "scheduled") {
+        return { success: false, error: "Can only assign starting holes to scheduled matchups." };
+      }
+    }
+
+    // Validate hole ranges
+    const matchupMap = new Map(matchups.map((m) => [m.id, m]));
+    for (const a of assignments) {
+      const m = matchupMap.get(a.matchupId)!;
+      if (m.courseSide === "front" && (a.startingHole < 1 || a.startingHole > 9)) {
+        return { success: false, error: `Starting hole ${a.startingHole} is out of range for front nine (1-9).` };
+      }
+      if (m.courseSide === "back" && (a.startingHole < 10 || a.startingHole > 18)) {
+        return { success: false, error: `Starting hole ${a.startingHole} is out of range for back nine (10-18).` };
+      }
+      if (!m.courseSide && (a.startingHole < 1 || a.startingHole > 18)) {
+        return { success: false, error: `Starting hole ${a.startingHole} is out of range (1-18).` };
+      }
+    }
+
+    // Update all in a single transaction
+    await prisma.$transaction(
+      assignments.map((a) =>
+        prisma.scheduledMatchup.update({
+          where: { id: a.matchupId },
+          data: { startingHole: a.startingHole },
+        })
+      )
+    );
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    logger.error("assignShotgunStartingHoles failed", error);
+    return { success: false, error: error instanceof Error ? error.message : "Failed to assign starting holes." };
   }
 }
