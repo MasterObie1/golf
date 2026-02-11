@@ -808,12 +808,33 @@ export default function MatchupsTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-scorecard-line/40">
-                {matchups.slice(0, 10).map((matchup) => (
+                {matchups.slice(0, 10).map((matchup) => {
+                  const teamAScorecard = matchup.weekNumber === weekNumber ? scorecardScores[matchup.teamAId] : undefined;
+                  const teamBScorecard = matchup.weekNumber === weekNumber ? scorecardScores[matchup.teamBId] : undefined;
+                  const teamAMismatch = teamAScorecard != null && teamAScorecard !== matchup.teamAGross;
+                  const teamBMismatch = teamBScorecard != null && teamBScorecard !== matchup.teamBGross;
+                  return (
                   <tr key={matchup.id} className="hover:bg-surface">
                     <td className="py-2 px-3 font-mono tabular-nums text-text-secondary">{matchup.weekNumber}</td>
-                    <td className="py-2 px-3 font-sans font-medium text-text-primary">{matchup.teamA.name}</td>
+                    <td className="py-2 px-3 font-sans font-medium text-text-primary">
+                      {matchup.teamA.name}
+                      {teamAMismatch && (
+                        <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-sans font-medium text-warning-text bg-warning-bg rounded" title={`Matchup gross (${matchup.teamAGross}) differs from scorecard (${teamAScorecard})`}>
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          Card: {teamAScorecard}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 px-3 text-center font-mono tabular-nums font-semibold text-fairway">{matchup.teamAPoints}</td>
-                    <td className="py-2 px-3 font-sans font-medium text-text-primary">{matchup.teamB.name}</td>
+                    <td className="py-2 px-3 font-sans font-medium text-text-primary">
+                      {matchup.teamB.name}
+                      {teamBMismatch && (
+                        <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-sans font-medium text-warning-text bg-warning-bg rounded" title={`Matchup gross (${matchup.teamBGross}) differs from scorecard (${teamBScorecard})`}>
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          Card: {teamBScorecard}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 px-3 text-center font-mono tabular-nums font-semibold text-fairway">{matchup.teamBPoints}</td>
                     <td className="py-2 px-3">
                       <button
@@ -825,7 +846,8 @@ export default function MatchupsTab({
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

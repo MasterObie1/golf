@@ -736,10 +736,10 @@ export async function emailScorecardLink(
 export async function getScorecardAvailabilityForSeason(
   leagueId: number,
   seasonId: number
-): Promise<{ weekNumber: number; teamId: number; grossTotal: number | null }[]> {
+): Promise<{ weekNumber: number; teamId: number }[]> {
   const scorecards = await prisma.scorecard.findMany({
     where: { leagueId, seasonId, status: "approved" },
-    select: { weekNumber: true, teamId: true, grossTotal: true },
+    select: { weekNumber: true, teamId: true },
   });
   return scorecards;
 }

@@ -726,6 +726,31 @@ export default function ScorecardsTab({
                       Matchup
                     </span>
                   )}
+                  {/* Scorecard vs matchup mismatch badge (visible on collapsed row) */}
+                  {sc.grossTotal != null && (() => {
+                    const matchup = weekMatchups.find(
+                      (m) => m.teamAId === sc.teamId || m.teamBId === sc.teamId
+                    );
+                    if (!matchup) return null;
+                    const matchupGross = matchup.teamAId === sc.teamId
+                      ? matchup.teamAGross
+                      : matchup.teamBGross;
+                    if (matchupGross == null) return null;
+                    if (sc.grossTotal === matchupGross) {
+                      return (
+                        <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-sans font-medium text-fairway bg-fairway/10 rounded-full border border-fairway/20">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          Matchup {matchupGross}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-sans font-medium text-warning-text bg-warning-bg rounded-full border border-warning-text/20">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Matchup has {matchupGross}
+                      </span>
+                    );
+                  })()}
                 </div>
               </button>
 
