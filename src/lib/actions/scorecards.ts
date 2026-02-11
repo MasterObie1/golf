@@ -540,7 +540,7 @@ export async function getScorecardsForWeek(
     completedAt: sc.completedAt,
     approvedAt: sc.approvedAt,
     holesCompleted: sc._count.holeScores,
-    totalHoles: sc.course.numberOfHoles,
+    totalHoles: getExpectedHoleCount(sc.course.numberOfHoles, sc.courseSide),
     totalPar: sc.course.totalPar,
     matchupId: sc.matchupId,
   }));
@@ -575,6 +575,13 @@ export async function getScorecardDetail(
     return { success: false, error: "Scorecard not found." };
   }
 
+  // Filter holes by courseSide (same as player-facing view)
+  const filteredHoles = filterHolesByCourseSide(scorecard.course.holes, scorecard.courseSide);
+  const adjustedNumberOfHoles = getExpectedHoleCount(scorecard.course.numberOfHoles, scorecard.courseSide);
+  const adjustedTotalPar = scorecard.courseSide
+    ? filteredHoles.reduce((sum, h) => sum + h.par, 0)
+    : scorecard.course.totalPar;
+
   return {
     success: true,
     data: {
@@ -600,9 +607,9 @@ export async function getScorecardDetail(
       course: {
         id: scorecard.course.id,
         name: scorecard.course.name,
-        numberOfHoles: scorecard.course.numberOfHoles,
-        totalPar: scorecard.course.totalPar,
-        holes: scorecard.course.holes,
+        numberOfHoles: adjustedNumberOfHoles,
+        totalPar: adjustedTotalPar,
+        holes: filteredHoles,
       },
       holeScores: scorecard.holeScores,
     },
