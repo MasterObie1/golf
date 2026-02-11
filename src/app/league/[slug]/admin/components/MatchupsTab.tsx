@@ -9,7 +9,6 @@ import {
   getMatchupHistory,
   type MatchupPreview,
 } from "@/lib/actions/matchups";
-import { getCurrentWeekNumber } from "@/lib/actions/teams";
 import {
   getScheduleForWeek,
   type ScheduleMatchDetail,
@@ -181,15 +180,11 @@ export default function MatchupsTab({
   }
 
   async function refreshData() {
-    const [currentWeek, matchupsResult] = await Promise.all([
-      getCurrentWeekNumber(leagueId),
-      getMatchupHistory(leagueId),
-    ]);
-    changeWeek(currentWeek);
-    onDataRefresh({ weekNumber: currentWeek, matchups: matchupsResult.matchups });
-    // Refresh schedule for this week
+    const matchupsResult = await getMatchupHistory(leagueId);
+    onDataRefresh({ matchups: matchupsResult.matchups });
+    // Refresh schedule for the current week (stay on same week)
     try {
-      const scheduleData = await getScheduleForWeek(leagueId, currentWeek);
+      const scheduleData = await getScheduleForWeek(leagueId, weekNumber);
       setScheduleMatches(scheduleData);
     } catch (error) {
       console.error("refreshData schedule error:", error);
