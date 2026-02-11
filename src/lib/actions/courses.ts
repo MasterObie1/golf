@@ -6,6 +6,13 @@ import { requireLeagueAdmin } from "../auth";
 import { requireActiveLeague } from "./leagues";
 import type { ActionResult } from "./shared";
 
+class UserError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UserError";
+  }
+}
+
 const courseInputSchema = z.object({
   name: z.string().min(1).max(200),
   holeCount: z.union([z.literal(9), z.literal(18)]),
@@ -150,18 +157,27 @@ export async function updateCourse(
   // Verify course belongs to this league
   const existing = await prisma.course.findFirst({
     where: { id: courseId, leagueId: session.leagueId },
+    include: { holes: { select: { id: true, holeNumber: true } } },
   });
   if (!existing) {
     return { success: false, error: "Course not found" };
   }
 
-  const validated = courseInputSchema.parse({
-    name: data.name,
-    holeCount: data.numberOfHoles,
-    courseRating: data.courseRating,
-    slopeRating: data.slopeRating,
-    holes: data.holes,
-  });
+  let validated;
+  try {
+    validated = courseInputSchema.parse({
+      name: data.name,
+      holeCount: data.numberOfHoles,
+      courseRating: data.courseRating,
+      slopeRating: data.slopeRating,
+      holes: data.holes,
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return { success: false, error: err.issues.map((i) => i.message).join("; ") };
+    }
+    throw err;
+  }
 
   if (validated.holes.length !== validated.holeCount) {
     return { success: false, error: `Expected ${validated.holeCount} holes, got ${validated.holes.length}` };
@@ -174,9 +190,52 @@ export async function updateCourse(
 
   const totalPar = validated.holes.reduce((sum, h) => sum + h.par, 0);
 
+  // Build a map of existing holes by holeNumber for upsert logic
+  const existingHoleMap = new Map(existing.holes.map((h) => [h.holeNumber, h.id]));
+  const inputHoleNumbers = new Set(validated.holes.map((h) => h.holeNumber));
+
+  // Find holes to remove (exist in DB but not in input, e.g. 18 -> 9)
+  const holesToRemove = existing.holes.filter((h) => !inputHoleNumbers.has(h.holeNumber));
+
   const course = await prisma.$transaction(async (tx) => {
-    // Delete existing holes and recreate
-    await tx.hole.deleteMany({ where: { courseId } });
+    // Remove excess holes (check for FK constraint from HoleScore)
+    if (holesToRemove.length > 0) {
+      const holeIdsToRemove = holesToRemove.map((h) => h.id);
+      const referencedScores = await tx.holeScore.count({
+        where: { holeId: { in: holeIdsToRemove } },
+      });
+      if (referencedScores > 0) {
+        throw new UserError(
+          `Cannot remove holes ${holesToRemove.map((h) => h.holeNumber).join(", ")} because they have recorded scores. Delete those scorecards first.`
+        );
+      }
+      await tx.hole.deleteMany({ where: { id: { in: holeIdsToRemove } } });
+    }
+
+    // Upsert each hole: update existing, create new
+    for (const h of validated.holes) {
+      const existingId = existingHoleMap.get(h.holeNumber);
+      if (existingId) {
+        await tx.hole.update({
+          where: { id: existingId },
+          data: {
+            par: h.par,
+            handicapIndex: h.handicapIndex,
+            yardage: h.yardage ?? null,
+          },
+        });
+      } else {
+        await tx.hole.create({
+          data: {
+            courseId,
+            holeNumber: h.holeNumber,
+            par: h.par,
+            handicapIndex: h.handicapIndex,
+            yardage: h.yardage ?? null,
+          },
+        });
+      }
+    }
 
     return tx.course.update({
       where: { id: courseId },
@@ -188,14 +247,6 @@ export async function updateCourse(
         teeColor: data.teeColor?.trim() || null,
         courseRating: validated.courseRating ?? null,
         slopeRating: validated.slopeRating ?? null,
-        holes: {
-          create: validated.holes.map((h) => ({
-            holeNumber: h.holeNumber,
-            par: h.par,
-            handicapIndex: h.handicapIndex,
-            yardage: h.yardage ?? null,
-          })),
-        },
       },
       include: {
         holes: {

@@ -140,7 +140,7 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
       }
     } catch (error) {
       console.error("handleSave error:", error);
-      setMessage({ type: "error", text: "Failed to save course." });
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to save course." });
     }
     setSaving(false);
   }
