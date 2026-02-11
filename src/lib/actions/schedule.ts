@@ -162,6 +162,19 @@ export async function generateSchedule(
       logger.warn("Generated schedule has validation errors", { errors: validation.errors });
     }
 
+    // Find completed matchups that must not be overwritten
+    const completedMatchups = await prisma.scheduledMatchup.findMany({
+      where: {
+        leagueId,
+        ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+        status: "completed",
+      },
+      select: { weekNumber: true, teamAId: true },
+    });
+    const completedKeys = new Set(
+      completedMatchups.map((m) => `${m.weekNumber}-${m.teamAId}`)
+    );
+
     // Build transaction: delete existing scheduled matchups, create new ones, update league
     const operations = [];
 
@@ -183,6 +196,10 @@ export async function generateSchedule(
         league.playModeFirstWeekSide
       );
       for (const match of round.matches) {
+        // Skip if a completed matchup already occupies this slot
+        if (completedKeys.has(`${round.weekNumber}-${match.teamAId}`)) {
+          continue;
+        }
         operations.push(
           prisma.scheduledMatchup.create({
             data: {
