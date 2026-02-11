@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   previewMatchup,
   submitMatchup,
@@ -65,6 +65,8 @@ export default function MatchupsTab({
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; matchupId: number }>({ open: false, matchupId: 0 });
 
+  const entryFormRef = useRef<HTMLDivElement>(null);
+
   const isWeekOne = weekNumber === 1;
 
   // Reset form fields when week number changes
@@ -127,6 +129,9 @@ export default function MatchupsTab({
     setPreview(null);
     setIsForfeitMode(false);
     setMessage(null);
+    setTimeout(() => {
+      entryFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   }
 
   async function handlePreview() {
@@ -320,6 +325,25 @@ export default function MatchupsTab({
         onConfirm={executeDeleteMatchup}
         onCancel={() => setDeleteConfirm({ open: false, matchupId: 0 })}
       />
+      {/* Week Number Selector */}
+      <div className="flex items-center gap-4 mb-6">
+        <label className="font-display font-medium text-text-secondary uppercase tracking-wider text-sm">
+          Week
+        </label>
+        <input
+          type="number"
+          value={weekNumber}
+          onChange={(e) => changeWeek(parseInt(e.target.value) || 1)}
+          min={1}
+          className="w-24 pencil-input"
+        />
+        {isWeekOne && (
+          <span className="text-sm font-sans text-warning-text font-medium">
+            Manual handicap entry required
+          </span>
+        )}
+      </div>
+
       {/* Message Banner */}
       {message && (
         <div
@@ -404,7 +428,7 @@ export default function MatchupsTab({
 
       {/* Matchup Entry Form */}
       {!preview ? (
-        <div className="bg-scorecard-paper rounded-lg shadow-md p-6 border border-border">
+        <div ref={entryFormRef} className="bg-scorecard-paper rounded-lg shadow-md p-6 border border-border">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-display font-semibold uppercase tracking-wider text-text-primary">
               {isForfeitMode ? "Record Forfeit" : "Enter Matchup Results"}
@@ -422,24 +446,6 @@ export default function MatchupsTab({
             >
               {isForfeitMode ? "Cancel Forfeit" : "Record Forfeit"}
             </button>
-          </div>
-
-          <div className="mb-6">
-            <label className="block font-display font-medium text-text-secondary uppercase tracking-wider text-sm mb-2">
-              Week Number
-            </label>
-            <input
-              type="number"
-              value={weekNumber}
-              onChange={(e) => changeWeek(parseInt(e.target.value) || 1)}
-              min={1}
-              className="w-32 pencil-input"
-            />
-            {isWeekOne && !isForfeitMode && (
-              <p className="mt-2 text-sm font-sans text-warning-text font-medium">
-                Week 1: Manual handicap entry required
-              </p>
-            )}
           </div>
 
           {/* Off-schedule warning */}
