@@ -521,29 +521,41 @@ export async function getScorecardsForWeek(
     where: { leagueId, weekNumber },
     include: {
       team: { select: { name: true } },
-      course: { select: { numberOfHoles: true, totalPar: true } },
+      course: {
+        select: {
+          numberOfHoles: true,
+          totalPar: true,
+          holes: { select: { holeNumber: true, par: true } },
+        },
+      },
       _count: { select: { holeScores: true } },
     },
     orderBy: { team: { name: "asc" } },
   });
 
-  return scorecards.map((sc) => ({
-    id: sc.id,
-    teamId: sc.teamId,
-    teamName: sc.team.name,
-    weekNumber: sc.weekNumber,
-    grossTotal: sc.grossTotal,
-    frontNine: sc.frontNine,
-    backNine: sc.backNine,
-    status: sc.status,
-    playerName: sc.playerName,
-    completedAt: sc.completedAt,
-    approvedAt: sc.approvedAt,
-    holesCompleted: sc._count.holeScores,
-    totalHoles: getExpectedHoleCount(sc.course.numberOfHoles, sc.courseSide),
-    totalPar: sc.course.totalPar,
-    matchupId: sc.matchupId,
-  }));
+  return scorecards.map((sc) => {
+    const filteredHoles = filterHolesByCourseSide(sc.course.holes, sc.courseSide);
+    const adjustedTotalPar = sc.courseSide
+      ? filteredHoles.reduce((sum, h) => sum + h.par, 0)
+      : sc.course.totalPar;
+    return {
+      id: sc.id,
+      teamId: sc.teamId,
+      teamName: sc.team.name,
+      weekNumber: sc.weekNumber,
+      grossTotal: sc.grossTotal,
+      frontNine: sc.frontNine,
+      backNine: sc.backNine,
+      status: sc.status,
+      playerName: sc.playerName,
+      completedAt: sc.completedAt,
+      approvedAt: sc.approvedAt,
+      holesCompleted: sc._count.holeScores,
+      totalHoles: getExpectedHoleCount(sc.course.numberOfHoles, sc.courseSide),
+      totalPar: adjustedTotalPar,
+      matchupId: sc.matchupId,
+    };
+  });
 }
 
 export async function getScorecardDetail(
@@ -840,6 +852,12 @@ export async function getPublicScorecardForTeamWeek(
     return null;
   }
 
+  const filteredHoles = filterHolesByCourseSide(scorecard.course.holes, scorecard.courseSide);
+  const adjustedNumberOfHoles = getExpectedHoleCount(scorecard.course.numberOfHoles, scorecard.courseSide);
+  const adjustedTotalPar = scorecard.courseSide
+    ? filteredHoles.reduce((sum, h) => sum + h.par, 0)
+    : scorecard.course.totalPar;
+
   return {
     id: scorecard.id,
     leagueId: scorecard.leagueId,
@@ -863,9 +881,9 @@ export async function getPublicScorecardForTeamWeek(
     course: {
       id: scorecard.course.id,
       name: scorecard.course.name,
-      numberOfHoles: scorecard.course.numberOfHoles,
-      totalPar: scorecard.course.totalPar,
-      holes: scorecard.course.holes,
+      numberOfHoles: adjustedNumberOfHoles,
+      totalPar: adjustedTotalPar,
+      holes: filteredHoles,
     },
     holeScores: scorecard.holeScores,
   };
@@ -1182,33 +1200,40 @@ export async function getPublicScorecardsForWeek(
     orderBy: { grossTotal: "asc" },
   });
 
-  return scorecards.map((sc) => ({
-    id: sc.id,
-    leagueId: sc.leagueId,
-    courseId: sc.courseId,
-    teamId: sc.teamId,
-    teamName: sc.team.name,
-    seasonId: sc.seasonId,
-    weekNumber: sc.weekNumber,
-    matchupId: sc.matchupId,
-    teamSide: sc.teamSide,
-    courseSide: sc.courseSide,
-    weeklyScoreId: sc.weeklyScoreId,
-    grossTotal: sc.grossTotal,
-    frontNine: sc.frontNine,
-    backNine: sc.backNine,
-    status: sc.status,
-    playerName: sc.playerName,
-    startedAt: sc.startedAt,
-    completedAt: sc.completedAt,
-    approvedAt: sc.approvedAt,
-    course: {
-      id: sc.course.id,
-      name: sc.course.name,
-      numberOfHoles: sc.course.numberOfHoles,
-      totalPar: sc.course.totalPar,
-      holes: sc.course.holes,
-    },
-    holeScores: sc.holeScores,
-  }));
+  return scorecards.map((sc) => {
+    const filteredHoles = filterHolesByCourseSide(sc.course.holes, sc.courseSide);
+    const adjustedNumberOfHoles = getExpectedHoleCount(sc.course.numberOfHoles, sc.courseSide);
+    const adjustedTotalPar = sc.courseSide
+      ? filteredHoles.reduce((sum, h) => sum + h.par, 0)
+      : sc.course.totalPar;
+    return {
+      id: sc.id,
+      leagueId: sc.leagueId,
+      courseId: sc.courseId,
+      teamId: sc.teamId,
+      teamName: sc.team.name,
+      seasonId: sc.seasonId,
+      weekNumber: sc.weekNumber,
+      matchupId: sc.matchupId,
+      teamSide: sc.teamSide,
+      courseSide: sc.courseSide,
+      weeklyScoreId: sc.weeklyScoreId,
+      grossTotal: sc.grossTotal,
+      frontNine: sc.frontNine,
+      backNine: sc.backNine,
+      status: sc.status,
+      playerName: sc.playerName,
+      startedAt: sc.startedAt,
+      completedAt: sc.completedAt,
+      approvedAt: sc.approvedAt,
+      course: {
+        id: sc.course.id,
+        name: sc.course.name,
+        numberOfHoles: adjustedNumberOfHoles,
+        totalPar: adjustedTotalPar,
+        holes: filteredHoles,
+      },
+      holeScores: sc.holeScores,
+    };
+  });
 }
