@@ -198,41 +198,52 @@ export default function ScorecardsTab({
     setLoading(false);
   }
 
-  async function copyToClipboard(text: string): Promise<boolean> {
-    // Try modern API first
-    if (navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch {
-        // Fall through to fallback
-      }
-    }
-    // Fallback: textarea + execCommand
-    try {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(textarea);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-
   async function handleGenerateLink(teamId: number) {
     setMessage(null);
     setLinkCopied(-1); // Use -1 as a "generating..." sentinel
+
+    // Reserve clipboard write NOW, in the user gesture context.
+    // ClipboardItem accepts a Promise<Blob> so the actual content
+    // can be resolved after the async server action completes.
+    let resolveUrl!: (url: string) => void;
+    let rejectUrl!: (err: Error) => void;
+    const urlPromise = new Promise<string>((res, rej) => {
+      resolveUrl = res;
+      rejectUrl = rej;
+    });
+
+    let clipboardOk = false;
+    let clipboardWritePromise: Promise<void> | null = null;
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      try {
+        clipboardWritePromise = navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": urlPromise.then(
+              (text) => new Blob([text], { type: "text/plain" })
+            ),
+          }),
+        ]);
+      } catch {
+        // ClipboardItem not supported — will show URL as fallback
+      }
+    }
+
     try {
       const result = await generateScorecardLink(slug, teamId, weekNumber, activeSeason?.id);
       if (result.success) {
         const fullUrl = `${window.location.origin}${result.data.url}`;
-        const copied = await copyToClipboard(fullUrl);
-        if (copied) {
+        resolveUrl(fullUrl);
+
+        if (clipboardWritePromise) {
+          try {
+            await clipboardWritePromise;
+            clipboardOk = true;
+          } catch {
+            // Clipboard write failed
+          }
+        }
+
+        if (clipboardOk) {
           setLinkCopied(teamId);
           linkTimerRef.current = setTimeout(() => setLinkCopied(null), 3000);
           setMessage({ type: "success", text: "Scorecard link copied to clipboard!" });
@@ -242,11 +253,13 @@ export default function ScorecardsTab({
         }
         await loadScorecards();
       } else {
+        rejectUrl(new Error(result.error));
         setLinkCopied(null);
         setMessage({ type: "error", text: result.error });
       }
     } catch (error) {
       console.error("handleGenerateLink error:", error);
+      rejectUrl(new Error("Failed to generate link."));
       setLinkCopied(null);
       setMessage({ type: "error", text: "Failed to generate link." });
     }
@@ -299,7 +312,15 @@ export default function ScorecardsTab({
       .map((r) => `${r.teamName}: ${window.location.origin}${r.url}`)
       .join("\n");
     try {
-      await navigator.clipboard.writeText(lines);
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([lines], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(lines);
+      }
       setBulkLinksCopied(true);
       bulkTimerRef.current = setTimeout(() => setBulkLinksCopied(false), 3000);
     } catch {
