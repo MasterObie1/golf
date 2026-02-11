@@ -10,6 +10,7 @@ import {
   type MatchupPreview,
 } from "@/lib/actions/matchups";
 import {
+  getSchedule,
   getScheduleForWeek,
   type ScheduleMatchDetail,
 } from "@/lib/actions/schedule";
@@ -180,11 +181,26 @@ export default function MatchupsTab({
   }
 
   async function refreshData() {
-    const matchupsResult = await getMatchupHistory(leagueId);
+    const [matchupsResult, fullSchedule] = await Promise.all([
+      getMatchupHistory(leagueId),
+      getSchedule(leagueId),
+    ]);
     onDataRefresh({ matchups: matchupsResult.matchups });
-    // Refresh schedule for the current week (stay on same week)
+
+    // Find the first week that still has incomplete (non-bye) matches
+    const firstIncompleteWeek = fullSchedule.find((week) =>
+      week.matches.some((m) => m.teamB !== null && m.status !== "completed" && m.status !== "cancelled")
+    );
+
+    const targetWeek = firstIncompleteWeek?.weekNumber ?? weekNumber;
+    if (targetWeek !== weekNumber) {
+      changeWeek(targetWeek);
+      onDataRefresh({ weekNumber: targetWeek, matchups: matchupsResult.matchups });
+    }
+
+    // Refresh schedule for the target week
     try {
-      const scheduleData = await getScheduleForWeek(leagueId, weekNumber);
+      const scheduleData = await getScheduleForWeek(leagueId, targetWeek);
       setScheduleMatches(scheduleData);
     } catch (error) {
       console.error("refreshData schedule error:", error);
