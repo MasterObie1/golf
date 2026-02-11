@@ -19,6 +19,8 @@ import {
   type BulkScorecardResult,
 } from "@/lib/actions/scorecards";
 import { getMatchupsForWeek } from "@/lib/actions/matchups";
+import { getSchedule, type ScheduleWeek } from "@/lib/actions/schedule";
+import WeekPillSelector from "@/components/WeekPillSelector";
 import { getCourseWithHoles, type CourseWithHoles } from "@/lib/actions/courses";
 import ScorecardGrid from "@/components/ScorecardGrid";
 import AdminScorecardGrid from "@/components/AdminScorecardGrid";
@@ -51,6 +53,8 @@ export default function ScorecardsTab({
   activeSeason,
 }: ScorecardsTabProps) {
   const [weekNumber, setWeekNumber] = useState(initialWeekNumber);
+  const [fullSchedule, setFullSchedule] = useState<ScheduleWeek[]>([]);
+  const initialDefaultApplied = useRef(false);
   const [scorecards, setScorecards] = useState<ScorecardSummaryType[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -98,6 +102,44 @@ export default function ScorecardsTab({
   useEffect(() => {
     checkEmailConfigured().then(setEmailEnabled);
   }, []);
+
+  // Load full schedule for week pills and default week
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getSchedule(leagueId);
+        if (!cancelled) {
+          setFullSchedule(data);
+          if (!initialDefaultApplied.current && data.length > 0) {
+            initialDefaultApplied.current = true;
+            const firstIncomplete = data.find((w) =>
+              w.matches.some((m) => m.teamB !== null && !m.matchup)
+            );
+            const targetWeek = firstIncomplete?.weekNumber ?? data[data.length - 1].weekNumber;
+            if (targetWeek !== weekNumber) {
+              setWeekNumber(targetWeek);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("loadFullSchedule error:", error);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leagueId]);
+
+  // Derived: total weeks and completed weeks for pill selector
+  const totalWeeks = fullSchedule.length > 0 ? fullSchedule.length : weekNumber;
+  const completedWeeks = new Set(
+    fullSchedule
+      .filter((w) => {
+        const nonByeMatches = w.matches.filter((m) => m.teamB !== null);
+        return nonByeMatches.length > 0 && nonByeMatches.every((m) => m.matchup);
+      })
+      .map((w) => w.weekNumber)
+  );
 
   // Load course data
   useEffect(() => {
@@ -433,20 +475,16 @@ export default function ScorecardsTab({
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 space-y-3">
         <h2 className="text-xl font-display font-semibold uppercase tracking-wider text-scorecard-pencil">
           Scorecards
         </h2>
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">Week</label>
-          <input
-            type="number"
-            value={weekNumber}
-            onChange={(e) => setWeekNumber(parseInt(e.target.value) || 1)}
-            min={1}
-            className="pencil-input w-20 font-mono tabular-nums"
-          />
-        </div>
+        <WeekPillSelector
+          totalWeeks={totalWeeks}
+          selectedWeek={weekNumber}
+          onWeekChange={setWeekNumber}
+          completedWeeks={completedWeeks}
+        />
       </div>
 
       {/* Filter Bar */}

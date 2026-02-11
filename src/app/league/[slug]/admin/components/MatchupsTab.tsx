@@ -13,8 +13,10 @@ import {
   getSchedule,
   getScheduleForWeek,
   type ScheduleMatchDetail,
+  type ScheduleWeek,
 } from "@/lib/actions/schedule";
 import { getApprovedScorecardScoresForWeek } from "@/lib/actions/scorecards";
+import WeekPillSelector from "@/components/WeekPillSelector";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { AdminTeam, AdminMatchup } from "@/lib/types/admin";
 
@@ -60,6 +62,8 @@ export default function MatchupsTab({
 
   // Schedule context
   const [scheduleMatches, setScheduleMatches] = useState<ScheduleMatchDetail[]>([]);
+  const [fullSchedule, setFullSchedule] = useState<ScheduleWeek[]>([]);
+  const initialDefaultApplied = useRef(false);
 
   // Scorecard scores for mismatch indicators (teamId → grossTotal)
   const [scorecardScores, setScorecardScores] = useState<Record<number, number>>({});
@@ -125,6 +129,46 @@ export default function MatchupsTab({
     })();
     return () => { cancelled = true; };
   }, [leagueId, weekNumber]);
+
+  // Load full schedule for week pills and default week
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getSchedule(leagueId);
+        if (!cancelled) {
+          setFullSchedule(data);
+          // Default to first incomplete week on initial load
+          if (!initialDefaultApplied.current && data.length > 0) {
+            initialDefaultApplied.current = true;
+            const firstIncomplete = data.find((w) =>
+              w.matches.some((m) => m.teamB !== null && !m.matchup)
+            );
+            const targetWeek = firstIncomplete?.weekNumber ?? data[data.length - 1].weekNumber;
+            if (targetWeek !== weekNumber) {
+              changeWeek(targetWeek);
+              onDataRefresh({ weekNumber: targetWeek });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("loadFullSchedule error:", error);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leagueId]);
+
+  // Derived: total weeks and completed weeks for pill selector
+  const totalWeeks = fullSchedule.length > 0 ? fullSchedule.length : weekNumber;
+  const completedWeeks = new Set(
+    fullSchedule
+      .filter((w) => {
+        const nonByeMatches = w.matches.filter((m) => m.teamB !== null);
+        return nonByeMatches.length > 0 && nonByeMatches.every((m) => m.matchup);
+      })
+      .map((w) => w.weekNumber)
+  );
 
   // Check if selected teams match the schedule
   const isOffSchedule = (() => {
@@ -209,14 +253,15 @@ export default function MatchupsTab({
   }
 
   async function refreshData() {
-    const [matchupsResult, fullSchedule] = await Promise.all([
+    const [matchupsResult, fullScheduleData] = await Promise.all([
       getMatchupHistory(leagueId),
       getSchedule(leagueId),
     ]);
     onDataRefresh({ matchups: matchupsResult.matchups });
+    setFullSchedule(fullScheduleData);
 
     // Find the first week that still has incomplete (non-bye) matches
-    const firstIncompleteWeek = fullSchedule.find((week) =>
+    const firstIncompleteWeek = fullScheduleData.find((week) =>
       week.matches.some((m) => m.teamB !== null && m.status !== "completed" && m.status !== "cancelled")
     );
 
@@ -354,22 +399,18 @@ export default function MatchupsTab({
         onConfirm={executeDeleteMatchup}
         onCancel={() => setDeleteConfirm({ open: false, matchupId: 0 })}
       />
-      {/* Week Number Selector */}
-      <div className="flex items-center gap-4 mb-6">
-        <label className="font-display font-medium text-text-secondary uppercase tracking-wider text-sm">
-          Week
-        </label>
-        <input
-          type="number"
-          value={weekNumber}
-          onChange={(e) => changeWeek(parseInt(e.target.value) || 1)}
-          min={1}
-          className="w-24 pencil-input"
+      {/* Week Selector */}
+      <div className="mb-6">
+        <WeekPillSelector
+          totalWeeks={totalWeeks}
+          selectedWeek={weekNumber}
+          onWeekChange={changeWeek}
+          completedWeeks={completedWeeks}
         />
         {isWeekOne && (
-          <span className="text-sm font-sans text-warning-text font-medium">
+          <p className="mt-2 text-sm font-sans text-warning-text font-medium">
             Manual handicap entry required
-          </span>
+          </p>
         )}
       </div>
 
