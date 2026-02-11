@@ -836,8 +836,8 @@ export default function ScorecardsTab({
                       );
                     }
                     return (
-                      <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-sans font-medium text-warning-text bg-warning-bg rounded-full border border-warning-text/20">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-sans font-bold text-error-text bg-error-bg rounded-full border border-error-border">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                         Matchup has {matchupGross}
                       </span>
                     );
@@ -882,19 +882,15 @@ export default function ScorecardsTab({
                       : matchup.teamBGross;
                     if (matchupGross == null) return null;
                     const matches = expandedDetail.grossTotal === matchupGross;
-                    return (
-                      <div className={`mt-3 flex items-center gap-1.5 text-sm font-sans ${matches ? "text-fairway" : "text-warning-text"}`}>
-                        {matches ? (
-                          <>
-                            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                            <span>Matches matchup score</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span>Scorecard gross ({expandedDetail.grossTotal}) differs from matchup score ({matchupGross})</span>
-                          </>
-                        )}
+                    return matches ? (
+                      <div className="mt-3 flex items-center gap-1.5 text-sm font-sans text-fairway">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        <span>Matches matchup score</span>
+                      </div>
+                    ) : (
+                      <div className="mt-3 p-3 flex items-start gap-2.5 text-sm font-sans font-medium text-error-text bg-error-bg border border-error-border rounded-lg">
+                        <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                        <span>Score mismatch — scorecard gross is <strong className="font-mono tabular-nums">{expandedDetail.grossTotal}</strong>, matchup has <strong className="font-mono tabular-nums">{matchupGross}</strong></span>
                       </div>
                     );
                   })()}

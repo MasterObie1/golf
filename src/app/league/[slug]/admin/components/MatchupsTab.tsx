@@ -602,27 +602,32 @@ export default function MatchupsTab({
                     <label className="block font-display font-medium text-text-secondary uppercase tracking-wider text-sm mb-1">
                       Gross Score
                     </label>
-                    <input
-                      type="number"
-                      value={teamAGross}
-                      onChange={(e) => setTeamAGross(e.target.value ? parseInt(e.target.value) : "")}
-                      className="w-full pencil-input"
-                    />
-                    {teamAId !== "" && teamAGross !== "" && scorecardScores[teamAId] != null && (
-                      <div className={`mt-1 flex items-center gap-1 text-xs font-sans ${teamAGross === scorecardScores[teamAId] ? "text-fairway" : "text-warning-text"}`}>
-                        {teamAGross === scorecardScores[teamAId] ? (
-                          <>
-                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                            <span>Matches scorecard</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span>Scorecard has {scorecardScores[teamAId]}</span>
-                          </>
-                        )}
-                      </div>
-                    )}
+                    {(() => {
+                      const hasMismatch = teamAId !== "" && teamAGross !== "" && scorecardScores[teamAId as number] != null && teamAGross !== scorecardScores[teamAId as number];
+                      return (
+                        <>
+                          <input
+                            type="number"
+                            value={teamAGross}
+                            onChange={(e) => setTeamAGross(e.target.value ? parseInt(e.target.value) : "")}
+                            className={`w-full pencil-input ${hasMismatch ? "!border-board-red !ring-1 !ring-board-red/30" : ""}`}
+                          />
+                          {teamAId !== "" && teamAGross !== "" && scorecardScores[teamAId as number] != null && (
+                            teamAGross === scorecardScores[teamAId as number] ? (
+                              <div className="mt-1 flex items-center gap-1 text-xs font-sans text-fairway">
+                                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                <span>Matches scorecard</span>
+                              </div>
+                            ) : (
+                              <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-sans font-medium text-error-text bg-error-bg border border-error-border rounded-lg">
+                                <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                                <span>Score mismatch — scorecard has <strong className="font-mono tabular-nums">{scorecardScores[teamAId as number]}</strong></span>
+                              </div>
+                            )
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   {(isWeekOne || teamAIsSub) && (
                     <div>
@@ -673,27 +678,32 @@ export default function MatchupsTab({
                     <label className="block font-display font-medium text-text-secondary uppercase tracking-wider text-sm mb-1">
                       Gross Score
                     </label>
-                    <input
-                      type="number"
-                      value={teamBGross}
-                      onChange={(e) => setTeamBGross(e.target.value ? parseInt(e.target.value) : "")}
-                      className="w-full pencil-input"
-                    />
-                    {teamBId !== "" && teamBGross !== "" && scorecardScores[teamBId] != null && (
-                      <div className={`mt-1 flex items-center gap-1 text-xs font-sans ${teamBGross === scorecardScores[teamBId] ? "text-fairway" : "text-warning-text"}`}>
-                        {teamBGross === scorecardScores[teamBId] ? (
-                          <>
-                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                            <span>Matches scorecard</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span>Scorecard has {scorecardScores[teamBId]}</span>
-                          </>
-                        )}
-                      </div>
-                    )}
+                    {(() => {
+                      const hasMismatch = teamBId !== "" && teamBGross !== "" && scorecardScores[teamBId as number] != null && teamBGross !== scorecardScores[teamBId as number];
+                      return (
+                        <>
+                          <input
+                            type="number"
+                            value={teamBGross}
+                            onChange={(e) => setTeamBGross(e.target.value ? parseInt(e.target.value) : "")}
+                            className={`w-full pencil-input ${hasMismatch ? "!border-board-red !ring-1 !ring-board-red/30" : ""}`}
+                          />
+                          {teamBId !== "" && teamBGross !== "" && scorecardScores[teamBId as number] != null && (
+                            teamBGross === scorecardScores[teamBId as number] ? (
+                              <div className="mt-1 flex items-center gap-1 text-xs font-sans text-fairway">
+                                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                <span>Matches scorecard</span>
+                              </div>
+                            ) : (
+                              <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-sans font-medium text-error-text bg-error-bg border border-error-border rounded-lg">
+                                <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                                <span>Score mismatch — scorecard has <strong className="font-mono tabular-nums">{scorecardScores[teamBId as number]}</strong></span>
+                              </div>
+                            )
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   {(isWeekOne || teamBIsSub) && (
                     <div>
@@ -809,6 +819,30 @@ export default function MatchupsTab({
             </div>
           )}
 
+          {/* Scorecard mismatch warning in preview */}
+          {preview && (() => {
+            const mismatches: string[] = [];
+            if (scorecardScores[preview.teamAId] != null && preview.teamAGross !== scorecardScores[preview.teamAId]) {
+              mismatches.push(`${preview.teamAName}: entered ${preview.teamAGross}, scorecard has ${scorecardScores[preview.teamAId]}`);
+            }
+            if (scorecardScores[preview.teamBId] != null && preview.teamBGross !== scorecardScores[preview.teamBId]) {
+              mismatches.push(`${preview.teamBName}: entered ${preview.teamBGross}, scorecard has ${scorecardScores[preview.teamBId]}`);
+            }
+            if (mismatches.length === 0) return null;
+            return (
+              <div className="mt-4 p-4 bg-error-bg border-2 border-error-border rounded-lg flex items-start gap-3">
+                <svg className="w-6 h-6 flex-shrink-0 text-board-red mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                <div>
+                  <div className="font-display font-bold uppercase tracking-wider text-sm text-error-text mb-1">Score Mismatch</div>
+                  <div className="text-sm font-sans text-error-text space-y-0.5">
+                    {mismatches.map((m, i) => <div key={i}>{m}</div>)}
+                  </div>
+                  <div className="text-xs font-sans text-error-text/70 mt-1">You can still submit, but the scores will not match the scorecards.</div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="mt-6 flex gap-4">
             <button
               onClick={handleCancelPreview}
@@ -860,8 +894,8 @@ export default function MatchupsTab({
                     <td className="py-2 px-3 font-sans font-medium text-text-primary">
                       {matchup.teamA.name}
                       {teamAMismatch && (
-                        <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-sans font-medium text-warning-text bg-warning-bg rounded" title={`Matchup gross (${matchup.teamAGross}) differs from scorecard (${teamAScorecard})`}>
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-sans font-bold text-error-text bg-error-bg border border-error-border rounded" title={`Matchup gross (${matchup.teamAGross}) differs from scorecard (${teamAScorecard})`}>
+                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                           Card: {teamAScorecard}
                         </span>
                       )}
@@ -870,8 +904,8 @@ export default function MatchupsTab({
                     <td className="py-2 px-3 font-sans font-medium text-text-primary">
                       {matchup.teamB.name}
                       {teamBMismatch && (
-                        <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-sans font-medium text-warning-text bg-warning-bg rounded" title={`Matchup gross (${matchup.teamBGross}) differs from scorecard (${teamBScorecard})`}>
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-sans font-bold text-error-text bg-error-bg border border-error-border rounded" title={`Matchup gross (${matchup.teamBGross}) differs from scorecard (${teamBScorecard})`}>
+                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                           Card: {teamBScorecard}
                         </span>
                       )}
