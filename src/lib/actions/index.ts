@@ -39,6 +39,7 @@ export {
   submitMatchup,
   getMatchupHistory,
   getTeamMatchupHistory,
+  updateMatchup,
   deleteMatchup,
   submitForfeit,
   getMatchupHistoryForSeason,

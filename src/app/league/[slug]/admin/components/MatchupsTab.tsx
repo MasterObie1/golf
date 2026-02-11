@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   previewMatchup,
   submitMatchup,
@@ -9,6 +9,7 @@ import {
   getMatchupHistory,
   type MatchupPreview,
 } from "@/lib/actions/matchups";
+import MatchupEditRow from "./MatchupEditRow";
 import {
   getSchedule,
   getScheduleForWeek,
@@ -72,6 +73,7 @@ export default function MatchupsTab({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; matchupId: number }>({ open: false, matchupId: 0 });
+  const [editingMatchupId, setEditingMatchupId] = useState<number | null>(null);
 
   const entryFormRef = useRef<HTMLDivElement>(null);
 
@@ -866,10 +868,16 @@ export default function MatchupsTab({
         </div>
       )}
 
-      {/* Recent Matchups */}
-      {matchups.length > 0 && (
+      {/* Matchup History */}
+      {matchups.length > 0 && (() => {
+        const weekMatchups = matchups.filter((m) => m.weekNumber === weekNumber);
+        const displayMatchups = weekMatchups.length > 0 ? weekMatchups : matchups.slice(0, 10);
+        const showingAllWeeks = weekMatchups.length === 0;
+        return (
         <div className="bg-scorecard-paper rounded-lg shadow-md p-6 mt-6 border border-border">
-          <h2 className="text-xl font-display font-semibold uppercase tracking-wider mb-4 text-text-primary">Recent Matchups</h2>
+          <h2 className="text-xl font-display font-semibold uppercase tracking-wider mb-4 text-text-primary">
+            {showingAllWeeks ? "Recent Matchups" : `Week ${weekNumber} Matchups`}
+          </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left font-sans">
               <thead className="bg-rough text-white">
@@ -883,14 +891,21 @@ export default function MatchupsTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-scorecard-line/40">
-                {matchups.slice(0, 10).map((matchup) => {
+                {displayMatchups.map((matchup) => {
                   const teamAScorecard = matchup.weekNumber === weekNumber ? scorecardScores[matchup.teamAId] : undefined;
                   const teamBScorecard = matchup.weekNumber === weekNumber ? scorecardScores[matchup.teamBId] : undefined;
                   const teamAMismatch = teamAScorecard != null && teamAScorecard !== matchup.teamAGross;
                   const teamBMismatch = teamBScorecard != null && teamBScorecard !== matchup.teamBGross;
+                  const isForfeit = matchup.isForfeit;
                   return (
-                  <tr key={matchup.id} className="hover:bg-surface">
-                    <td className="py-2 px-3 font-mono tabular-nums text-text-secondary">{matchup.weekNumber}</td>
+                  <React.Fragment key={matchup.id}>
+                  <tr className="hover:bg-surface">
+                    <td className="py-2 px-3 font-mono tabular-nums text-text-secondary">
+                      {matchup.weekNumber}
+                      {isForfeit && (
+                        <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-warning-bg text-warning-text rounded font-display font-medium uppercase tracking-wider">F</span>
+                      )}
+                    </td>
                     <td className="py-2 px-3 font-sans font-medium text-text-primary">
                       {matchup.teamA.name}
                       {teamAMismatch && (
@@ -912,22 +927,53 @@ export default function MatchupsTab({
                     </td>
                     <td className="py-2 px-3 text-center font-mono tabular-nums font-semibold text-fairway">{matchup.teamBPoints}</td>
                     <td className="py-2 px-3">
-                      <button
-                        onClick={() => handleDeleteMatchup(matchup.id)}
-                        disabled={loading}
-                        className="text-board-red hover:text-board-red/90 text-sm font-display font-medium uppercase tracking-wider disabled:opacity-50"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {isForfeit ? (
+                          <span
+                            className="text-text-light text-sm font-display font-medium uppercase tracking-wider cursor-not-allowed opacity-50"
+                            title="Delete and re-enter to modify forfeits"
+                          >
+                            Edit
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setEditingMatchupId(editingMatchupId === matchup.id ? null : matchup.id)}
+                            disabled={loading}
+                            className="text-info-text hover:text-info-text/80 text-sm font-display font-medium uppercase tracking-wider disabled:opacity-50"
+                          >
+                            {editingMatchupId === matchup.id ? "Close" : "Edit"}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteMatchup(matchup.id)}
+                          disabled={loading}
+                          className="text-board-red hover:text-board-red/90 text-sm font-display font-medium uppercase tracking-wider disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
+                  {editingMatchupId === matchup.id && (
+                    <MatchupEditRow
+                      matchup={matchup}
+                      slug={slug}
+                      onSaved={() => {
+                        setEditingMatchupId(null);
+                        refreshData();
+                      }}
+                      onCancel={() => setEditingMatchupId(null)}
+                    />
+                  )}
+                  </React.Fragment>
                   );
                 })}
               </tbody>
             </table>
           </div>
         </div>
-      )}
+        );
+      })()}
     </>
   );
 }

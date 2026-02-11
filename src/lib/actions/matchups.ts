@@ -15,6 +15,12 @@ import { getHandicapSettings } from "./handicap-settings";
 import { requireActiveLeague } from "./leagues";
 import { type ActionResult } from "./shared";
 
+function classifyWLT(teamAPoints: number, teamBPoints: number) {
+  if (teamAPoints > teamBPoints) return { aWin: 1, aLoss: 0, aTie: 0, bWin: 0, bLoss: 1, bTie: 0 };
+  if (teamBPoints > teamAPoints) return { aWin: 0, aLoss: 1, aTie: 0, bWin: 1, bLoss: 0, bTie: 0 };
+  return { aWin: 0, aLoss: 0, aTie: 1, bWin: 0, bLoss: 0, bTie: 1 };
+}
+
 export interface MatchupPreview {
   weekNumber: number;
   teamAId: number;
@@ -224,19 +230,7 @@ export async function submitMatchup(
     });
 
     // Use transaction to ensure matchup + team stats stay consistent
-    let teamAWin = 0, teamALoss = 0, teamATie = 0;
-    let teamBWin = 0, teamBLoss = 0, teamBTie = 0;
-
-    if (validated.teamAPoints > validated.teamBPoints) {
-      teamAWin = 1;
-      teamBLoss = 1;
-    } else if (validated.teamBPoints > validated.teamAPoints) {
-      teamBWin = 1;
-      teamALoss = 1;
-    } else {
-      teamATie = 1;
-      teamBTie = 1;
-    }
+    const { aWin: teamAWin, aLoss: teamALoss, aTie: teamATie, bWin: teamBWin, bLoss: teamBLoss, bTie: teamBTie } = classifyWLT(validated.teamAPoints, validated.teamBPoints);
 
     // Verify both teams belong to this league
     const [teamAExists, teamBExists] = await Promise.all([
@@ -427,6 +421,122 @@ export async function getTeamMatchupHistory(leagueId: number, teamId: number, li
   return { matchups: hasMore ? results.slice(0, limit) : results, hasMore };
 }
 
+const updateMatchupSchema = z.object({
+  matchupId: z.number().int().positive(),
+  teamAGross: z.number().int().min(0, "Gross score cannot be negative").max(200, "Gross score cannot exceed 200"),
+  teamAHandicap: z.number(),
+  teamAPoints: z.number().min(0, "Points cannot be negative"),
+  teamAIsSub: z.boolean(),
+  teamBGross: z.number().int().min(0, "Gross score cannot be negative").max(200, "Gross score cannot exceed 200"),
+  teamBHandicap: z.number(),
+  teamBPoints: z.number().min(0, "Points cannot be negative"),
+  teamBIsSub: z.boolean(),
+});
+
+export async function updateMatchup(
+  leagueSlug: string,
+  input: z.infer<typeof updateMatchupSchema>
+): Promise<ActionResult> {
+  try {
+    const validated = updateMatchupSchema.parse(input);
+    const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
+
+    const existingMatchup = await prisma.matchup.findUniqueOrThrow({
+      where: { id: validated.matchupId },
+    });
+
+    if (existingMatchup.leagueId !== session.leagueId) {
+      return { success: false, error: "Unauthorized: Matchup does not belong to this league" };
+    }
+
+    if (existingMatchup.isForfeit) {
+      return { success: false, error: "Forfeit matchups cannot be edited. Delete and re-enter instead." };
+    }
+
+    // Re-validate net scores server-side
+    const newTeamANet = calculateNetScore(validated.teamAGross, validated.teamAHandicap);
+    const newTeamBNet = calculateNetScore(validated.teamBGross, validated.teamBHandicap);
+
+    if (!isFinite(validated.teamAHandicap) || !isFinite(validated.teamBHandicap)) {
+      return { success: false, error: "Invalid handicap values" };
+    }
+
+    if (!isFinite(newTeamANet) || !isFinite(newTeamBNet)) {
+      return { success: false, error: "Invalid score calculation result" };
+    }
+
+    // Validate points sum to 20 for match_play leagues
+    const league = await prisma.league.findUniqueOrThrow({
+      where: { id: session.leagueId },
+      select: { scoringType: true },
+    });
+    if (league.scoringType === "match_play" && validated.teamAPoints + validated.teamBPoints !== 20) {
+      return { success: false, error: "Team points must sum to 20." };
+    }
+
+    // Compute old and new W/L/T
+    const oldWLT = classifyWLT(existingMatchup.teamAPoints, existingMatchup.teamBPoints);
+    const newWLT = classifyWLT(validated.teamAPoints, validated.teamBPoints);
+
+    await prisma.$transaction(async (tx) => {
+      // Fetch current team stats for clamping
+      const [teamA, teamB] = await Promise.all([
+        tx.team.findUniqueOrThrow({ where: { id: existingMatchup.teamAId }, select: { totalPoints: true, wins: true, losses: true, ties: true } }),
+        tx.team.findUniqueOrThrow({ where: { id: existingMatchup.teamBId }, select: { totalPoints: true, wins: true, losses: true, ties: true } }),
+      ]);
+
+      // Update matchup record
+      await tx.matchup.update({
+        where: { id: validated.matchupId },
+        data: {
+          teamAGross: validated.teamAGross,
+          teamAHandicap: validated.teamAHandicap,
+          teamANet: newTeamANet,
+          teamAPoints: validated.teamAPoints,
+          teamAIsSub: validated.teamAIsSub,
+          teamBGross: validated.teamBGross,
+          teamBHandicap: validated.teamBHandicap,
+          teamBNet: newTeamBNet,
+          teamBPoints: validated.teamBPoints,
+          teamBIsSub: validated.teamBIsSub,
+        },
+      });
+
+      // Apply stat deltas to Team A
+      await tx.team.update({
+        where: { id: existingMatchup.teamAId },
+        data: {
+          totalPoints: Math.max(0, teamA.totalPoints - existingMatchup.teamAPoints + validated.teamAPoints),
+          wins: Math.max(0, teamA.wins - oldWLT.aWin + newWLT.aWin),
+          losses: Math.max(0, teamA.losses - oldWLT.aLoss + newWLT.aLoss),
+          ties: Math.max(0, teamA.ties - oldWLT.aTie + newWLT.aTie),
+        },
+      });
+
+      // Apply stat deltas to Team B
+      await tx.team.update({
+        where: { id: existingMatchup.teamBId },
+        data: {
+          totalPoints: Math.max(0, teamB.totalPoints - existingMatchup.teamBPoints + validated.teamBPoints),
+          wins: Math.max(0, teamB.wins - oldWLT.bWin + newWLT.bWin),
+          losses: Math.max(0, teamB.losses - oldWLT.bLoss + newWLT.bLoss),
+          ties: Math.max(0, teamB.ties - oldWLT.bTie + newWLT.bTie),
+        },
+      });
+    });
+
+    revalidatePath(`/league/${leagueSlug}/history`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    logger.error("updateMatchup failed", error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.issues[0]?.message || "Invalid matchup data" };
+    }
+    return { success: false, error: error instanceof Error ? error.message : "Failed to update matchup. Please try again." };
+  }
+}
+
 export async function deleteMatchup(leagueSlug: string, matchupId: number): Promise<ActionResult> {
   try {
     const session = await requireLeagueAdmin(leagueSlug);
@@ -442,19 +552,7 @@ export async function deleteMatchup(leagueSlug: string, matchupId: number): Prom
     }
 
     // Determine stats to reverse
-    let teamAWin = 0, teamALoss = 0, teamATie = 0;
-    let teamBWin = 0, teamBLoss = 0, teamBTie = 0;
-
-    if (matchup.teamAPoints > matchup.teamBPoints) {
-      teamAWin = 1;
-      teamBLoss = 1;
-    } else if (matchup.teamBPoints > matchup.teamAPoints) {
-      teamBWin = 1;
-      teamALoss = 1;
-    } else {
-      teamATie = 1;
-      teamBTie = 1;
-    }
+    const { aWin: teamAWin, aLoss: teamALoss, aTie: teamATie, bWin: teamBWin, bLoss: teamBLoss, bTie: teamBTie } = classifyWLT(matchup.teamAPoints, matchup.teamBPoints);
 
     await prisma.$transaction(async (tx) => {
       // Revert any linked scheduled matchup back to "scheduled"
