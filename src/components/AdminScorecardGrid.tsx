@@ -42,6 +42,7 @@ export default function AdminScorecardGrid({
   });
   const [savingHole, setSavingHole] = useState<number | null>(null);
   const inputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
+  const skipBlurRef = useRef(false);
 
   const frontHoles = holes.filter((h) => h.holeNumber <= 9);
   const backHoles = holes.filter((h) => h.holeNumber > 9);
@@ -85,20 +86,26 @@ export default function AdminScorecardGrid({
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>, holeNumber: number) {
     if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
+      skipBlurRef.current = true;
       // Save current value
       const target = e.target as HTMLInputElement;
       if (target.value) {
         handleSave(holeNumber, target.value);
       }
-      // Advance to next/previous hole
+      // Advance to next/previous hole after React re-render
       const allHoleNumbers = holes.map((h) => h.holeNumber).sort((a, b) => a - b);
       const idx = allHoleNumbers.indexOf(holeNumber);
       const direction = e.shiftKey ? -1 : 1;
       const nextIdx = idx + direction;
       if (nextIdx >= 0 && nextIdx < allHoleNumbers.length) {
         const nextHole = allHoleNumbers[nextIdx];
-        inputRefs.current.get(nextHole)?.focus();
-        inputRefs.current.get(nextHole)?.select();
+        requestAnimationFrame(() => {
+          inputRefs.current.get(nextHole)?.focus();
+          inputRefs.current.get(nextHole)?.select();
+          skipBlurRef.current = false;
+        });
+      } else {
+        skipBlurRef.current = false;
       }
     }
   }
@@ -148,7 +155,7 @@ export default function AdminScorecardGrid({
                       max={20}
                       defaultValue={score ?? ""}
                       disabled={disabled || saving}
-                      onBlur={(e) => e.target.value && handleSave(h.holeNumber, e.target.value)}
+                      onBlur={(e) => { if (!skipBlurRef.current && e.target.value) handleSave(h.holeNumber, e.target.value); }}
                       onKeyDown={(e) => handleKeyDown(e, h.holeNumber)}
                       className={`w-10 h-8 text-center font-mono tabular-nums text-sm font-semibold rounded border transition-colors
                         ${isSaving ? "border-fairway bg-fairway/10" : "border-scorecard-line/50 bg-scorecard-paper hover:border-fairway/50"}
