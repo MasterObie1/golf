@@ -5,6 +5,7 @@ import {
   previewSchedule,
   generateSchedule,
   clearSchedule,
+  addWeeksToSchedule,
   getSchedule,
   getScheduleStatus,
   swapTeamsInMatchup,
@@ -72,6 +73,9 @@ export default function ScheduleTab({
   const [addMatchupWeek, setAddMatchupWeek] = useState<number | null>(null);
   const [addTeamAId, setAddTeamAId] = useState<number | "">("");
   const [addTeamBId, setAddTeamBId] = useState<number | "" | "bye">("");
+
+  // Add weeks form
+  const [addWeeksCount, setAddWeeksCount] = useState(1);
 
   // Shotgun start / course side editing
   const [editingStartingHole, setEditingStartingHole] = useState<{ matchupId: number; value: string } | null>(null);
@@ -361,6 +365,26 @@ export default function ScheduleTab({
     setLoading(false);
   }
 
+  async function handleAddWeeks() {
+    if (addWeeksCount < 1) return;
+    setLoading(true);
+    setMessage(null);
+    try {
+      const result = await addWeeksToSchedule(slug, addWeeksCount);
+      if (result.success) {
+        setMessage({ type: "success", text: `Added ${result.data.weeksGenerated} week(s) starting at Week ${result.data.startWeek}.` });
+        await loadScheduleData();
+        onDataRefresh();
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch (error) {
+      console.error("handleAddWeeks error:", error);
+      setMessage({ type: "error", text: "Failed to add weeks." });
+    }
+    setLoading(false);
+  }
+
   function getTeamName(id: number): string {
     return teams.find((t) => t.id === id)?.name || `Team ${id}`;
   }
@@ -541,7 +565,24 @@ export default function ScheduleTab({
                   {" · "}<span className="text-warning-text font-mono tabular-nums">{status.remainingWeeks} remaining</span>
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={addWeeksCount}
+                    onChange={(e) => setAddWeeksCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    min={1}
+                    max={52}
+                    className="w-16 text-sm px-2 py-2 border border-border rounded-lg bg-surface-white text-center font-mono tabular-nums focus:outline-none focus:border-fairway"
+                  />
+                  <button
+                    onClick={handleAddWeeks}
+                    disabled={loading || addWeeksCount < 1}
+                    className="px-4 py-2 bg-fairway text-white rounded-lg hover:bg-rough text-sm font-display font-semibold uppercase tracking-wider disabled:opacity-50 transition-colors"
+                  >
+                    {loading ? "Adding..." : "Add Weeks"}
+                  </button>
+                </div>
                 <button
                   onClick={() => {
                     setConfirmDialog({

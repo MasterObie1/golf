@@ -111,6 +111,7 @@ export {
   generateSchedule,
   previewSchedule,
   clearSchedule,
+  addWeeksToSchedule,
   getSchedule,
   getScheduleForWeek,
   getTeamSchedule,

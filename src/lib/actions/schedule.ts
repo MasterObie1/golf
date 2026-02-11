@@ -264,6 +264,95 @@ export async function clearSchedule(
   }
 }
 
+export async function addWeeksToSchedule(
+  leagueSlug: string,
+  numberOfWeeks: number
+): Promise<ActionResult<{ weeksGenerated: number; startWeek: number }>> {
+  try {
+    const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
+    const leagueId = session.leagueId;
+
+    if (numberOfWeeks < 1 || numberOfWeeks > 52) {
+      return { success: false, error: "Number of weeks must be between 1 and 52." };
+    }
+
+    const activeSeason = await prisma.season.findFirst({
+      where: { leagueId, isActive: true },
+    });
+
+    const teams = await prisma.team.findMany({
+      where: {
+        leagueId,
+        status: "approved",
+        ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+      },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+
+    if (teams.length < 2) {
+      return { success: false, error: "Need at least 2 approved teams to add weeks." };
+    }
+
+    const teamIds = teams.map((t) => t.id);
+
+    const league = await prisma.league.findUniqueOrThrow({
+      where: { id: leagueId },
+      select: { scheduleType: true, playMode: true, playModeFirstWeekSide: true },
+    });
+
+    // Find the current max week number
+    const maxWeekResult = await prisma.scheduledMatchup.aggregate({
+      where: {
+        leagueId,
+        ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+      },
+      _max: { weekNumber: true },
+    });
+
+    const startWeek = (maxWeekResult._max.weekNumber ?? 0) + 1;
+    const isDouble = league.scheduleType === "double_round_robin";
+
+    const scheduleResult = generateScheduleForWeeks(teamIds, numberOfWeeks, isDouble, startWeek);
+    const rounds = scheduleResult.rounds;
+
+    const operations = [];
+
+    for (const round of rounds) {
+      const courseSide = getCourseSideForWeek(
+        round.weekNumber,
+        league.playMode,
+        league.playModeFirstWeekSide
+      );
+      for (const match of round.matches) {
+        operations.push(
+          prisma.scheduledMatchup.create({
+            data: {
+              leagueId,
+              seasonId: activeSeason?.id ?? null,
+              weekNumber: round.weekNumber,
+              teamAId: match.teamAId,
+              teamBId: match.teamBId,
+              status: "scheduled",
+              courseSide,
+            },
+          })
+        );
+      }
+    }
+
+    if (operations.length > 0) {
+      await prisma.$transaction(operations);
+    }
+
+    return { success: true, data: { weeksGenerated: rounds.length, startWeek } };
+  } catch (error) {
+    logger.error("addWeeksToSchedule failed", error);
+    return { success: false, error: error instanceof Error ? error.message : "Failed to add weeks to schedule." };
+  }
+}
+
 // --- Retrieval ---
 
 export async function getSchedule(
