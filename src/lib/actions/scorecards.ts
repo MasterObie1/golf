@@ -417,11 +417,33 @@ export async function approveScorecard(
     return { success: false, error: "Scorecard has no total score." };
   }
 
+  // Auto-link to matching matchup if not already linked
+  let autoMatchupId = scorecard.matchupId;
+  let autoTeamSide = scorecard.teamSide;
+  if (!autoMatchupId) {
+    const matchup = await prisma.matchup.findFirst({
+      where: {
+        leagueId: session.leagueId,
+        weekNumber: scorecard.weekNumber,
+        OR: [
+          { teamAId: scorecard.teamId },
+          { teamBId: scorecard.teamId },
+        ],
+      },
+      select: { id: true, teamAId: true },
+    });
+    if (matchup) {
+      autoMatchupId = matchup.id;
+      autoTeamSide = matchup.teamAId === scorecard.teamId ? "A" : "B";
+    }
+  }
+
   await prisma.scorecard.update({
     where: { id: scorecardId },
     data: {
       status: "approved",
       approvedAt: new Date(),
+      ...(autoMatchupId && !scorecard.matchupId ? { matchupId: autoMatchupId, teamSide: autoTeamSide } : {}),
     },
   });
 

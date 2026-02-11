@@ -338,7 +338,31 @@ export async function submitMatchup(
       return matchup;
     });
 
-    void newMatchup; // result used for schedule linking inside transaction
+    // Auto-link approved scorecards for these teams on this week
+    const unlinkedScorecards = await prisma.scorecard.findMany({
+      where: {
+        leagueId: session.leagueId,
+        weekNumber: validated.weekNumber,
+        matchupId: null,
+        status: "approved",
+        teamId: { in: [validated.teamAId, validated.teamBId] },
+      },
+      select: { id: true, teamId: true },
+    });
+    if (unlinkedScorecards.length > 0) {
+      await Promise.all(
+        unlinkedScorecards.map((sc) =>
+          prisma.scorecard.update({
+            where: { id: sc.id },
+            data: {
+              matchupId: newMatchup.id,
+              teamSide: sc.teamId === validated.teamAId ? "A" : "B",
+            },
+          })
+        )
+      );
+    }
+
     revalidatePath(`/league/${leagueSlug}/history`);
     return { success: true, data: undefined };
   } catch (error) {
