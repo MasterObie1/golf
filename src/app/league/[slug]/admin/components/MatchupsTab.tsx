@@ -14,6 +14,7 @@ import {
   getScheduleForWeek,
   type ScheduleMatchDetail,
 } from "@/lib/actions/schedule";
+import { getApprovedScorecardScoresForWeek } from "@/lib/actions/scorecards";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { AdminTeam, AdminMatchup } from "@/lib/types/admin";
 
@@ -60,6 +61,9 @@ export default function MatchupsTab({
   // Schedule context
   const [scheduleMatches, setScheduleMatches] = useState<ScheduleMatchDetail[]>([]);
 
+  // Scorecard scores for mismatch indicators (teamId → grossTotal)
+  const [scorecardScores, setScorecardScores] = useState<Record<number, number>>({});
+
   // UI state
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -98,6 +102,25 @@ export default function MatchupsTab({
       } catch (error) {
         console.error("loadScheduleForWeek error:", error);
         if (!cancelled) setScheduleMatches([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [leagueId, weekNumber]);
+
+  // Load approved scorecard scores for mismatch indicators
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getApprovedScorecardScoresForWeek(leagueId, weekNumber);
+        if (!cancelled) {
+          const map: Record<number, number> = {};
+          for (const s of data) map[s.teamId] = s.grossTotal;
+          setScorecardScores(map);
+        }
+      } catch (error) {
+        console.error("loadScorecardScores error:", error);
+        if (!cancelled) setScorecardScores({});
       }
     })();
     return () => { cancelled = true; };
@@ -203,10 +226,16 @@ export default function MatchupsTab({
       onDataRefresh({ weekNumber: targetWeek, matchups: matchupsResult.matchups });
     }
 
-    // Refresh schedule for the target week
+    // Refresh schedule and scorecard scores for the target week
     try {
-      const scheduleData = await getScheduleForWeek(leagueId, targetWeek);
+      const [scheduleData, scorecardData] = await Promise.all([
+        getScheduleForWeek(leagueId, targetWeek),
+        getApprovedScorecardScoresForWeek(leagueId, targetWeek),
+      ]);
       setScheduleMatches(scheduleData);
+      const map: Record<number, number> = {};
+      for (const s of scorecardData) map[s.teamId] = s.grossTotal;
+      setScorecardScores(map);
     } catch (error) {
       console.error("refreshData schedule error:", error);
       setScheduleMatches([]);
@@ -538,6 +567,21 @@ export default function MatchupsTab({
                       onChange={(e) => setTeamAGross(e.target.value ? parseInt(e.target.value) : "")}
                       className="w-full pencil-input"
                     />
+                    {teamAId !== "" && teamAGross !== "" && scorecardScores[teamAId] != null && (
+                      <div className={`mt-1 flex items-center gap-1 text-xs font-sans ${teamAGross === scorecardScores[teamAId] ? "text-fairway" : "text-warning-text"}`}>
+                        {teamAGross === scorecardScores[teamAId] ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span>Matches scorecard</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span>Scorecard has {scorecardScores[teamAId]}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {(isWeekOne || teamAIsSub) && (
                     <div>
@@ -594,6 +638,21 @@ export default function MatchupsTab({
                       onChange={(e) => setTeamBGross(e.target.value ? parseInt(e.target.value) : "")}
                       className="w-full pencil-input"
                     />
+                    {teamBId !== "" && teamBGross !== "" && scorecardScores[teamBId] != null && (
+                      <div className={`mt-1 flex items-center gap-1 text-xs font-sans ${teamBGross === scorecardScores[teamBId] ? "text-fairway" : "text-warning-text"}`}>
+                        {teamBGross === scorecardScores[teamBId] ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span>Matches scorecard</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span>Scorecard has {scorecardScores[teamBId]}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {(isWeekOne || teamBIsSub) && (
                     <div>

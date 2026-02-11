@@ -584,7 +584,7 @@ export async function submitForfeit(
 export async function getMatchupsForWeek(
   leagueId: number,
   weekNumber: number
-): Promise<{ id: number; teamAId: number; teamAName: string; teamBId: number; teamBName: string }[]> {
+): Promise<{ id: number; teamAId: number; teamAName: string; teamBId: number; teamBName: string; teamAGross: number | null; teamBGross: number | null }[]> {
   const matchups = await prisma.matchup.findMany({
     where: { leagueId, weekNumber },
     include: {
@@ -600,6 +600,8 @@ export async function getMatchupsForWeek(
     teamAName: m.teamA.name,
     teamBId: m.teamBId,
     teamBName: m.teamB.name,
+    teamAGross: m.teamAGross,
+    teamBGross: m.teamBGross,
   }));
 }
 

@@ -31,6 +31,8 @@ interface MatchupOption {
   teamAName: string;
   teamBId: number;
   teamBName: string;
+  teamAGross: number | null;
+  teamBGross: number | null;
 }
 
 interface ScorecardsTabProps {
@@ -752,6 +754,34 @@ export default function ScorecardsTab({
                       backNine={expandedDetail.backNine}
                     />
                   )}
+
+                  {/* Scorecard vs matchup mismatch indicator */}
+                  {expandedDetail.grossTotal != null && (() => {
+                    const matchup = weekMatchups.find(
+                      (m) => m.teamAId === expandedDetail.teamId || m.teamBId === expandedDetail.teamId
+                    );
+                    if (!matchup) return null;
+                    const matchupGross = matchup.teamAId === expandedDetail.teamId
+                      ? matchup.teamAGross
+                      : matchup.teamBGross;
+                    if (matchupGross == null) return null;
+                    const matches = expandedDetail.grossTotal === matchupGross;
+                    return (
+                      <div className={`mt-3 flex items-center gap-1.5 text-sm font-sans ${matches ? "text-fairway" : "text-warning-text"}`}>
+                        {matches ? (
+                          <>
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span>Matches matchup score</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span>Scorecard gross ({expandedDetail.grossTotal}) differs from matchup score ({matchupGross})</span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Matchup linking dropdown */}
                   {weekMatchups.length > 0 && (

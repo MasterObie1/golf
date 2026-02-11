@@ -646,6 +646,28 @@ export async function getApprovedScorecardScores(
 }
 
 /**
+ * Get approved scorecard gross totals as a serializable array (for client components).
+ */
+export async function getApprovedScorecardScoresForWeek(
+  leagueId: number,
+  weekNumber: number
+): Promise<{ teamId: number; grossTotal: number }[]> {
+  const scorecards = await prisma.scorecard.findMany({
+    where: {
+      leagueId,
+      weekNumber,
+      status: "approved",
+      grossTotal: { not: null },
+    },
+    select: { teamId: true, grossTotal: true },
+  });
+
+  return scorecards
+    .filter((sc): sc is typeof sc & { grossTotal: number } => sc.grossTotal !== null)
+    .map((sc) => ({ teamId: sc.teamId, grossTotal: sc.grossTotal }));
+}
+
+/**
  * Get scorecards for public display (approved only).
  */
 export async function checkEmailConfigured(): Promise<boolean> {
