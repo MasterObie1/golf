@@ -103,32 +103,36 @@ function buildHandicapHistory(
       );
 
       if (weekMatchup) {
-        let handicap: number;
         let gross: number;
         let isSub: boolean;
 
         if (weekMatchup.teamAId === team.id) {
-          handicap = weekMatchup.teamAHandicap;
           gross = weekMatchup.teamAGross;
           isSub = weekMatchup.teamAIsSub;
         } else {
-          handicap = weekMatchup.teamBHandicap;
           gross = weekMatchup.teamBGross;
           isSub = weekMatchup.teamBIsSub;
         }
 
-        weeklyHandicaps.push({ week, handicap });
-
         if (!isSub) {
           allGrossScores.push(gross);
+        }
+
+        // Calculate the handicap from accumulated gross scores — this reflects
+        // what the engine actually uses, rather than the stored manual entry
+        const handicap = allGrossScores.length > 0
+          ? calculateHandicap(allGrossScores, settings, week + 1)
+          : null;
+
+        if (handicap !== null) {
+          weeklyHandicaps.push({ week, handicap });
         }
       }
     }
 
-    // Calculate what the handicap would be for the next week
-    const nextWeek = weekNumbers[weekNumbers.length - 1] + 1;
+    // Current handicap is the same as the last calculated value
     const currentHandicap = allGrossScores.length > 0
-      ? calculateHandicap(allGrossScores, settings, nextWeek)
+      ? calculateHandicap(allGrossScores, settings, weekNumbers[weekNumbers.length - 1] + 1)
       : null;
 
     result.push({
