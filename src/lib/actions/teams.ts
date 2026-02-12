@@ -544,28 +544,33 @@ export async function deleteTeam(leagueSlug: string, teamId: number): Promise<Ac
       return { success: false, error: `Cannot delete team: Team has ${matchupCount} matchup(s) recorded. Delete the matchups first.` };
     }
 
-    // Handle scheduled matchups + delete team atomically
+    // Handle scheduled matchups + delete team atomically in a single transaction
     const league = await prisma.league.findUniqueOrThrow({
       where: { id: session.leagueId },
       select: { midSeasonRemoveAction: true },
     });
 
-    const scheduledCount = await prisma.scheduledMatchup.count({
-      where: {
-        leagueId: session.leagueId,
-        OR: [{ teamAId: teamId }, { teamBId: teamId }],
-        status: "scheduled",
-      },
-    });
+    const { removeTeamFromScheduleInTx } = await import("./schedule");
 
-    if (scheduledCount > 0) {
-      // Convert future scheduled matchups to byes for opponents, then delete team
-      const { removeTeamFromSchedule } = await import("./schedule");
-      await removeTeamFromSchedule(leagueSlug, teamId, league.midSeasonRemoveAction as "bye_opponents" | "regenerate");
-    }
-
-    // Delete related records and team in a transaction
     await prisma.$transaction(async (tx) => {
+      // Check for scheduled matchups and handle them within this tx
+      const scheduledCount = await tx.scheduledMatchup.count({
+        where: {
+          leagueId: session.leagueId,
+          OR: [{ teamAId: teamId }, { teamBId: teamId }],
+          status: "scheduled",
+        },
+      });
+
+      if (scheduledCount > 0) {
+        await removeTeamFromScheduleInTx(
+          tx,
+          session.leagueId,
+          teamId,
+          league.midSeasonRemoveAction as "bye_opponents" | "regenerate",
+        );
+      }
+
       // Delete weekly scores for this team
       await tx.weeklyScore.deleteMany({
         where: { teamId },

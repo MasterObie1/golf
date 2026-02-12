@@ -276,11 +276,12 @@ async function recalculateLeagueStats(leagueId: number) {
       },
     });
     const handicapSettings = leagueToHandicapSettings(league);
-    // Get all matchups ordered by week across all seasons (intentional — handicap settings
-    // are league-wide and recalculation must cover all historical data for consistency)
+    // Get all matchups across all seasons — handicap settings are league-wide and
+    // recalculation must cover all historical data for consistency.
+    // Order by seasonId first to prevent cross-season week number interleaving.
     const matchups = await tx.matchup.findMany({
       where: { leagueId },
-      orderBy: [{ weekNumber: "asc" }, { id: "asc" }],
+      orderBy: [{ seasonId: "asc" }, { weekNumber: "asc" }, { id: "asc" }],
     });
 
     // Fetch weekly score points and bye-week points for inclusion in team totals
@@ -356,15 +357,22 @@ async function recalculateLeagueStats(leagueId: number) {
       let teamAHandicap: number;
       let teamBHandicap: number;
 
-      if (matchup.weekNumber === 1) {
-        // Week 1: Keep original manual handicaps
+      // Use "no prior scores" to detect first matchup (works across seasons,
+      // unlike checking weekNumber === 1 which would trigger for every season's week 1)
+      const teamAHasHistory = (teamScores[matchup.teamAId]?.length ?? 0) > 0;
+      const teamBHasHistory = (teamScores[matchup.teamBId]?.length ?? 0) > 0;
+
+      if (!teamAHasHistory && !matchup.teamAIsSub) {
         teamAHandicap = matchup.teamAHandicap;
-        teamBHandicap = matchup.teamBHandicap;
       } else {
-        // For subs, keep original handicap; otherwise recalculate
         teamAHandicap = matchup.teamAIsSub
           ? matchup.teamAHandicap
           : calculateHandicap(teamScores[matchup.teamAId], handicapSettings, matchup.weekNumber);
+      }
+
+      if (!teamBHasHistory && !matchup.teamBIsSub) {
+        teamBHandicap = matchup.teamBHandicap;
+      } else {
         teamBHandicap = matchup.teamBIsSub
           ? matchup.teamBHandicap
           : calculateHandicap(teamScores[matchup.teamBId], handicapSettings, matchup.weekNumber);

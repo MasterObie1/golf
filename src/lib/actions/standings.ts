@@ -74,6 +74,53 @@ function buildHeadToHead(
   return h2h;
 }
 
+/**
+ * Resolve head-to-head tiebreaker transitively for multi-way ties.
+ * Groups teams by a key function, then within each tied group, sorts by
+ * aggregate H2H points among only the tied teams. This avoids the
+ * non-transitive cyclic comparison issue with pairwise H2H in Array.sort.
+ */
+function resolveHeadToHeadTies<T extends { id: number }>(
+  sortedTeams: T[],
+  keyFn: (t: T) => string,
+  headToHead: Record<number, Record<number, number>>,
+  fallbackSort: (a: T, b: T) => number
+): T[] {
+  const result: T[] = [];
+  let i = 0;
+  while (i < sortedTeams.length) {
+    // Find the end of the tie group
+    let j = i + 1;
+    while (j < sortedTeams.length && keyFn(sortedTeams[j]) === keyFn(sortedTeams[i])) {
+      j++;
+    }
+    const group = sortedTeams.slice(i, j);
+    if (group.length <= 1) {
+      result.push(...group);
+    } else {
+      // Compute aggregate H2H points within the tied group
+      const groupIds = new Set(group.map(t => t.id));
+      const h2hTotal: Record<number, number> = {};
+      for (const t of group) h2hTotal[t.id] = 0;
+      for (const t of group) {
+        for (const opp of group) {
+          if (t.id !== opp.id) {
+            h2hTotal[t.id] += headToHead[t.id]?.[opp.id] ?? 0;
+          }
+        }
+      }
+      group.sort((a, b) => {
+        const h2hDiff = h2hTotal[b.id] - h2hTotal[a.id];
+        if (h2hDiff !== 0) return h2hDiff;
+        return fallbackSort(a, b);
+      });
+      result.push(...group);
+    }
+    i = j;
+  }
+  return result;
+}
+
 // --- Match Play Ranking (existing) ---
 
 function rankTeams<T extends TeamWithStats>(teams: T[], matchups: MatchupForRanking[]) {
@@ -107,20 +154,20 @@ function rankTeams<T extends TeamWithStats>(teams: T[], matchups: MatchupForRank
 
   const headToHead = buildHeadToHead(teams, matchups);
 
-  const sortedTeams = [...teams].sort((a, b) => {
+  // First sort by points and wins only
+  const preSorted = [...teams].sort((a, b) => {
     if (a.totalPoints !== b.totalPoints) return b.totalPoints - a.totalPoints;
     if (a.wins !== b.wins) return b.wins - a.wins;
-
-    const aVsB = headToHead[a.id]?.[b.id] || 0;
-    const bVsA = headToHead[b.id]?.[a.id] || 0;
-    if (aVsB !== 0 || bVsA !== 0) {
-      if (aVsB !== bVsA) return bVsA - aVsB;
-    }
-
-    const aDiff = netDifferential[a.id] || 0;
-    const bDiff = netDifferential[b.id] || 0;
-    return bDiff - aDiff;
+    return 0;
   });
+
+  // Then resolve H2H ties transitively within groups of equal points+wins
+  const sortedTeams = resolveHeadToHeadTies(
+    preSorted,
+    (t) => `${t.totalPoints}:${t.wins}`,
+    headToHead,
+    (a, b) => (netDifferential[b.id] || 0) - (netDifferential[a.id] || 0)
+  );
 
   return sortedTeams.map((team) => ({
     ...team,
@@ -289,40 +336,38 @@ function rankTeamsHybrid<T extends TeamWithStats>(
   // Build head-to-head record from matchups
   const headToHead = buildHeadToHead(teams, matchups);
 
+  // Helper to compute final hybrid score for a team
+  function hybridFinal(t: TeamWithStats) {
+    const stroke = strokeStats.get(t.id)!;
+    const mp = matchPointsMap[t.id] ?? 0;
+    const fp = stroke.totalPoints === -Infinity ? 0 : stroke.totalPoints;
+    return mp * (1 - clampedWeight) + fp * clampedWeight;
+  }
+
   // Calculate combined points using match-play points from matchups and field points from weekly scores
-  const sortedTeams = [...teams].sort((a, b) => {
-    const aStroke = strokeStats.get(a.id)!;
-    const bStroke = strokeStats.get(b.id)!;
-
-    const aMatchPoints = matchPointsMap[a.id] ?? 0;
-    const bMatchPoints = matchPointsMap[b.id] ?? 0;
-    // When totalPoints is -Infinity the team was excluded via maxDnp; 0 is used so it contributes nothing to the weighted sum
-    const aFieldPoints = aStroke.totalPoints === -Infinity ? 0 : aStroke.totalPoints;
-    const bFieldPoints = bStroke.totalPoints === -Infinity ? 0 : bStroke.totalPoints;
-
-    // Note: If proRate is enabled, fieldPoints is already divided by roundsPlayed.
-    // This means the hybrid formula mixes absolute match points with per-round field points.
-    // This is intentional: it normalizes field performance across teams with different round counts.
-    const aFinal = aMatchPoints * (1 - clampedWeight) + aFieldPoints * clampedWeight;
-    const bFinal = bMatchPoints * (1 - clampedWeight) + bFieldPoints * clampedWeight;
-
-    // Use epsilon to avoid floating-point rounding treating microscopically different sums as different ranks
-    const RANK_EPSILON = 0.001;
+  // First sort by combined points and wins only
+  const RANK_EPSILON = 0.001;
+  const preSorted = [...teams].sort((a, b) => {
+    const aFinal = hybridFinal(a);
+    const bFinal = hybridFinal(b);
     if (Math.abs(aFinal - bFinal) > RANK_EPSILON) return bFinal - aFinal;
-    // Tiebreaker: W/L
     if (a.wins !== b.wins) return b.wins - a.wins;
-    // Tiebreaker: head-to-head record
-    const aVsB = headToHead[a.id]?.[b.id] || 0;
-    const bVsA = headToHead[b.id]?.[a.id] || 0;
-    if (aVsB !== 0 || bVsA !== 0) {
-      if (aVsB !== bVsA) return bVsA - aVsB;
-    }
-    // Tiebreaker: counting method
-    const countingResult = compareCountingMethod(aStroke.positionCounts, bStroke.positionCounts);
-    if (countingResult !== 0) return countingResult;
-    // Tiebreaker: avg net
-    return aStroke.avgNet - bStroke.avgNet;
+    return 0;
   });
+
+  // Then resolve H2H ties transitively within groups of equal combined points + wins
+  const sortedTeams = resolveHeadToHeadTies(
+    preSorted,
+    (t) => `${Math.round(hybridFinal(t) * 1000)}:${t.wins}`,
+    headToHead,
+    (a, b) => {
+      const aStroke = strokeStats.get(a.id)!;
+      const bStroke = strokeStats.get(b.id)!;
+      const countingResult = compareCountingMethod(aStroke.positionCounts, bStroke.positionCounts);
+      if (countingResult !== 0) return countingResult;
+      return aStroke.avgNet - bStroke.avgNet;
+    }
+  );
 
   return sortedTeams.map((team) => {
     const stroke = strokeStats.get(team.id)!;
@@ -394,21 +439,21 @@ function calculateStandingsAtWeek(
     avgHandicaps[team.id] = averageHandicap(hcps, 0);
   }
 
-  const sortedTeams = [...teams].sort((a, b) => {
+  // Sort by points and wins, then resolve H2H ties transitively
+  const preSortedStandings = [...teams].sort((a, b) => {
     const aStats = stats[a.id] || { points: 0, wins: 0 };
     const bStats = stats[b.id] || { points: 0, wins: 0 };
-
     if (aStats.points !== bStats.points) return bStats.points - aStats.points;
     if (aStats.wins !== bStats.wins) return bStats.wins - aStats.wins;
-
-    const aVsB = headToHead[a.id]?.[b.id] || 0;
-    const bVsA = headToHead[b.id]?.[a.id] || 0;
-    if (aVsB !== 0 || bVsA !== 0) {
-      if (aVsB !== bVsA) return bVsA - aVsB;
-    }
-
-    return (netDifferential[b.id] || 0) - (netDifferential[a.id] || 0);
+    return 0;
   });
+
+  const sortedTeams = resolveHeadToHeadTies(
+    preSortedStandings,
+    (t) => `${(stats[t.id] || { points: 0 }).points}:${(stats[t.id] || { wins: 0 }).wins}`,
+    headToHead,
+    (a, b) => (netDifferential[b.id] || 0) - (netDifferential[a.id] || 0)
+  );
 
   const ranked = sortedTeams.map((team) => ({
     teamId: team.id,

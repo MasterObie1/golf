@@ -1023,6 +1023,136 @@ export async function addTeamToSchedule(
 
 export type RemoveTeamAction = "bye_opponents" | "regenerate";
 
+/**
+ * Internal helper that performs team schedule removal within an existing transaction.
+ * Exported for use by deleteTeam (to run atomically within the same tx).
+ */
+export async function removeTeamFromScheduleInTx(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  leagueId: number,
+  teamId: number,
+  action: RemoveTeamAction,
+): Promise<void> {
+  const activeSeason = await tx.season.findFirst({
+    where: { leagueId, isActive: true },
+  });
+
+  // Get current week
+  const lastCompletedMatchup = await tx.matchup.findFirst({
+    where: { leagueId },
+    orderBy: { weekNumber: "desc" },
+    select: { weekNumber: true },
+  });
+  const currentWeek = lastCompletedMatchup ? lastCompletedMatchup.weekNumber + 1 : 1;
+
+  if (action === "regenerate") {
+    // Get remaining teams (excluding the removed one)
+    const remainingTeams = await tx.team.findMany({
+      where: {
+        leagueId,
+        status: "approved",
+        id: { not: teamId },
+        ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+      },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+
+    const league = await tx.league.findUniqueOrThrow({
+      where: { id: leagueId },
+      select: { scheduleType: true, playMode: true, playModeFirstWeekSide: true },
+    });
+
+    const totalScheduledWeeks = await tx.scheduledMatchup.findMany({
+      where: {
+        leagueId,
+        ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+      },
+      select: { weekNumber: true },
+      distinct: ["weekNumber"],
+    });
+
+    const maxWeek = totalScheduledWeeks.length > 0
+      ? Math.max(...totalScheduledWeeks.map((w) => w.weekNumber))
+      : currentWeek;
+
+    const remainingWeeks = maxWeek - currentWeek + 1;
+
+    const isDouble = league.scheduleType === "double_round_robin";
+    const rounds = remainingTeams.length >= 2 && remainingWeeks > 0
+      ? generateScheduleForWeeks(
+          remainingTeams.map((t) => t.id),
+          remainingWeeks,
+          isDouble,
+          currentWeek
+        ).rounds
+      : [];
+
+    await tx.scheduledMatchup.deleteMany({
+      where: {
+        leagueId,
+        ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+        weekNumber: { gte: currentWeek },
+        status: { in: ["scheduled", "cancelled"] },
+      },
+    });
+
+    for (const round of rounds) {
+      const roundCourseSide = getCourseSideForWeek(
+        round.weekNumber,
+        league.playMode,
+        league.playModeFirstWeekSide
+      );
+      for (const match of round.matches) {
+        await tx.scheduledMatchup.create({
+          data: {
+            leagueId,
+            seasonId: activeSeason?.id ?? null,
+            weekNumber: round.weekNumber,
+            teamAId: match.teamAId,
+            teamBId: match.teamBId,
+            status: "scheduled",
+            courseSide: roundCourseSide,
+          },
+        });
+      }
+    }
+  } else {
+    // Default: "bye_opponents" — convert future matchups to byes
+    const futureMatchups = await tx.scheduledMatchup.findMany({
+      where: {
+        leagueId,
+        ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+        weekNumber: { gte: currentWeek },
+        status: "scheduled",
+        OR: [{ teamAId: teamId }, { teamBId: teamId }],
+      },
+    });
+
+    for (const m of futureMatchups) {
+      if (m.teamAId === teamId && m.teamBId !== null) {
+        // Swap: opponent becomes teamA with a bye
+        await tx.scheduledMatchup.update({
+          where: { id: m.id },
+          data: { teamAId: m.teamBId, teamBId: null },
+        });
+      } else if (m.teamBId === teamId) {
+        // teamA stays, teamB becomes null (bye)
+        await tx.scheduledMatchup.update({
+          where: { id: m.id },
+          data: { teamBId: null },
+        });
+      } else {
+        // teamA is the removed team and teamB is null — cancel it
+        await tx.scheduledMatchup.update({
+          where: { id: m.id },
+          data: { status: "cancelled" },
+        });
+      }
+    }
+  }
+}
+
 export async function removeTeamFromSchedule(
   leagueSlug: string,
   teamId: number,
@@ -1036,138 +1166,9 @@ export async function removeTeamFromSchedule(
     const session = await requireLeagueAdmin(leagueSlug);
     const leagueId = session.leagueId;
 
-    const activeSeason = await prisma.season.findFirst({
-      where: { leagueId, isActive: true },
+    await prisma.$transaction(async (tx) => {
+      await removeTeamFromScheduleInTx(tx, leagueId, teamId, action);
     });
-
-    // Get current week
-    const lastCompletedMatchup = await prisma.matchup.findFirst({
-      where: { leagueId },
-      orderBy: { weekNumber: "desc" },
-      select: { weekNumber: true },
-    });
-    const currentWeek = lastCompletedMatchup ? lastCompletedMatchup.weekNumber + 1 : 1;
-
-    if (action === "regenerate") {
-      // Get remaining teams (excluding the removed one)
-      const remainingTeams = await prisma.team.findMany({
-        where: {
-          leagueId,
-          status: "approved",
-          id: { not: teamId },
-          ...(activeSeason ? { seasonId: activeSeason.id } : {}),
-        },
-        select: { id: true },
-        orderBy: { id: "asc" },
-      });
-
-      const league = await prisma.league.findUniqueOrThrow({
-        where: { id: leagueId },
-        select: { scheduleType: true, playMode: true, playModeFirstWeekSide: true },
-      });
-
-      const totalScheduledWeeks = await prisma.scheduledMatchup.findMany({
-        where: {
-          leagueId,
-          ...(activeSeason ? { seasonId: activeSeason.id } : {}),
-        },
-        select: { weekNumber: true },
-        distinct: ["weekNumber"],
-      });
-
-      const maxWeek = totalScheduledWeeks.length > 0
-        ? Math.max(...totalScheduledWeeks.map((w) => w.weekNumber))
-        : currentWeek;
-
-      const remainingWeeks = maxWeek - currentWeek + 1;
-
-      // Delete future scheduled/cancelled matchups + insert new schedule atomically
-      const isDouble = league.scheduleType === "double_round_robin";
-      const rounds = remainingTeams.length >= 2 && remainingWeeks > 0
-        ? generateScheduleForWeeks(
-            remainingTeams.map((t) => t.id),
-            remainingWeeks,
-            isDouble,
-            currentWeek
-          ).rounds
-        : [];
-
-      await prisma.$transaction(async (tx) => {
-        await tx.scheduledMatchup.deleteMany({
-          where: {
-            leagueId,
-            ...(activeSeason ? { seasonId: activeSeason.id } : {}),
-            weekNumber: { gte: currentWeek },
-            status: { in: ["scheduled", "cancelled"] },
-          },
-        });
-
-        for (const round of rounds) {
-          const roundCourseSide = getCourseSideForWeek(
-            round.weekNumber,
-            league.playMode,
-            league.playModeFirstWeekSide
-          );
-          for (const match of round.matches) {
-            await tx.scheduledMatchup.create({
-              data: {
-                leagueId,
-                seasonId: activeSeason?.id ?? null,
-                weekNumber: round.weekNumber,
-                teamAId: match.teamAId,
-                teamBId: match.teamBId,
-                status: "scheduled",
-                courseSide: roundCourseSide,
-              },
-            });
-          }
-        }
-      });
-    } else {
-      // Default: "bye_opponents" — convert future matchups to byes
-      const futureMatchups = await prisma.scheduledMatchup.findMany({
-        where: {
-          leagueId,
-          ...(activeSeason ? { seasonId: activeSeason.id } : {}),
-          weekNumber: { gte: currentWeek },
-          status: "scheduled",
-          OR: [{ teamAId: teamId }, { teamBId: teamId }],
-        },
-      });
-
-      const operations = [];
-      for (const m of futureMatchups) {
-        if (m.teamAId === teamId && m.teamBId !== null) {
-          // Swap: opponent becomes teamA with a bye
-          operations.push(
-            prisma.scheduledMatchup.update({
-              where: { id: m.id },
-              data: { teamAId: m.teamBId, teamBId: null },
-            })
-          );
-        } else if (m.teamBId === teamId) {
-          // teamA stays, teamB becomes null (bye)
-          operations.push(
-            prisma.scheduledMatchup.update({
-              where: { id: m.id },
-              data: { teamBId: null },
-            })
-          );
-        } else {
-          // teamA is the removed team and teamB is null — cancel it
-          operations.push(
-            prisma.scheduledMatchup.update({
-              where: { id: m.id },
-              data: { status: "cancelled" },
-            })
-          );
-        }
-      }
-
-      if (operations.length > 0) {
-        await prisma.$transaction(operations);
-      }
-    }
 
     return { success: true, data: undefined };
   } catch (error) {
