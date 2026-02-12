@@ -1045,6 +1045,7 @@ export async function adminCreateScorecard(
     } else if (resolvedMatchupId && !teamSide) {
       const matchup = await prisma.matchup.findFirst({
         where: { id: resolvedMatchupId, leagueId: session.leagueId },
+        select: { teamAId: true, teamBId: true },
       });
       if (matchup) {
         resolvedTeamSide = matchup.teamAId === teamId ? "A" : matchup.teamBId === teamId ? "B" : null;
@@ -1155,6 +1156,7 @@ export async function adminLinkScorecardToMatchup(
   if (matchupId !== null) {
     const matchup = await prisma.matchup.findFirst({
       where: { id: matchupId, leagueId: session.leagueId },
+      select: { id: true, teamAId: true, teamBId: true },
     });
     if (!matchup) {
       return { success: false, error: "Matchup not found in this league." };

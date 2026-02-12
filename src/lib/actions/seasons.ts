@@ -172,6 +172,7 @@ export async function getCurrentWeekNumberForSeason(seasonId: number): Promise<n
   const lastMatchup = await prisma.matchup.findFirst({
     where: { seasonId },
     orderBy: { weekNumber: "desc" },
+    select: { weekNumber: true },
   });
   return lastMatchup ? lastMatchup.weekNumber + 1 : 1;
 }
@@ -184,6 +185,11 @@ export async function getTeamPreviousScoresForSeason(seasonId: number, teamId: n
       OR: [{ teamAId: teamId }, { teamBId: teamId }],
     },
     orderBy: { weekNumber: "asc" },
+    select: {
+      teamAId: true, teamBId: true,
+      teamAGross: true, teamBGross: true,
+      teamAIsSub: true, teamBIsSub: true,
+    },
   });
 
   return matchups

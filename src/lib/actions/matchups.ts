@@ -69,7 +69,8 @@ export async function previewMatchup(
         { teamBId: teamBId },
       ],
     },
-    include: {
+    select: {
+      teamAId: true, teamBId: true,
       teamA: { select: { id: true, name: true } },
       teamB: { select: { id: true, name: true } },
     },
@@ -286,6 +287,7 @@ export async function submitMatchup(
             { teamBId: validated.teamBId },
           ],
         },
+        select: { id: true },
       });
       if (existing) {
         throw new Error("One or both teams already have a matchup this week.");
@@ -391,18 +393,29 @@ export async function submitMatchup(
   }
 }
 
+// Select clause for public matchup history queries — avoids over-fetching.
+const matchupHistorySelect = {
+  id: true,
+  weekNumber: true,
+  leagueId: true,
+  seasonId: true,
+  teamAId: true, teamAGross: true, teamAHandicap: true, teamANet: true, teamAPoints: true, teamAIsSub: true,
+  teamBId: true, teamBGross: true, teamBHandicap: true, teamBNet: true, teamBPoints: true, teamBIsSub: true,
+  isForfeit: true,
+  forfeitTeamId: true,
+  teamA: {
+    select: { id: true, name: true, totalPoints: true, wins: true, losses: true, ties: true },
+  },
+  teamB: {
+    select: { id: true, name: true, totalPoints: true, wins: true, losses: true, ties: true },
+  },
+} as const;
+
 // Public read — no auth required. Called from public leaderboard/history pages.
 export async function getMatchupHistory(leagueId: number, limit = 200) {
   const results = await prisma.matchup.findMany({
     where: { leagueId },
-    include: {
-      teamA: {
-        select: { id: true, name: true, totalPoints: true, wins: true, losses: true, ties: true },
-      },
-      teamB: {
-        select: { id: true, name: true, totalPoints: true, wins: true, losses: true, ties: true },
-      },
-    },
+    select: matchupHistorySelect,
     take: limit + 1,
     orderBy: [{ weekNumber: "desc" }, { playedAt: "desc" }],
   });
@@ -417,14 +430,7 @@ export async function getTeamMatchupHistory(leagueId: number, teamId: number, li
       leagueId,
       OR: [{ teamAId: teamId }, { teamBId: teamId }],
     },
-    include: {
-      teamA: {
-        select: { id: true, name: true, totalPoints: true, wins: true, losses: true, ties: true },
-      },
-      teamB: {
-        select: { id: true, name: true, totalPoints: true, wins: true, losses: true, ties: true },
-      },
-    },
+    select: matchupHistorySelect,
     take: limit + 1,
     orderBy: [{ weekNumber: "desc" }, { playedAt: "desc" }],
   });
@@ -455,6 +461,10 @@ export async function updateMatchup(
 
     const existingMatchup = await prisma.matchup.findUniqueOrThrow({
       where: { id: validated.matchupId },
+      select: {
+        leagueId: true, teamAId: true, teamBId: true,
+        teamAPoints: true, teamBPoints: true, isForfeit: true,
+      },
     });
 
     if (existingMatchup.leagueId !== session.leagueId) {
@@ -560,6 +570,11 @@ export async function deleteMatchup(leagueSlug: string, matchupId: number): Prom
 
     const matchup = await prisma.matchup.findUniqueOrThrow({
       where: { id: matchupId },
+      select: {
+        leagueId: true, weekNumber: true,
+        teamAId: true, teamBId: true,
+        teamAPoints: true, teamBPoints: true,
+      },
     });
 
     // Verify matchup belongs to this league
@@ -684,6 +699,7 @@ export async function submitForfeit(
             { teamBId: validated.forfeitingTeamId },
           ],
         },
+        select: { id: true },
       });
 
       if (existingMatchups.length > 0) {
@@ -764,7 +780,10 @@ export async function getMatchupsForWeek(
 ): Promise<{ id: number; teamAId: number; teamAName: string; teamBId: number; teamBName: string; teamAGross: number | null; teamBGross: number | null }[]> {
   const matchups = await prisma.matchup.findMany({
     where: { leagueId, weekNumber },
-    include: {
+    select: {
+      id: true,
+      teamAId: true, teamAGross: true,
+      teamBId: true, teamBGross: true,
       teamA: { select: { name: true } },
       teamB: { select: { name: true } },
     },
@@ -785,14 +804,7 @@ export async function getMatchupsForWeek(
 export async function getMatchupHistoryForSeason(seasonId: number, limit = 200) {
   const results = await prisma.matchup.findMany({
     where: { seasonId },
-    include: {
-      teamA: {
-        select: { id: true, name: true, totalPoints: true, wins: true, losses: true, ties: true },
-      },
-      teamB: {
-        select: { id: true, name: true, totalPoints: true, wins: true, losses: true, ties: true },
-      },
-    },
+    select: matchupHistorySelect,
     take: limit + 1,
     orderBy: [{ weekNumber: "desc" }, { playedAt: "desc" }],
   });

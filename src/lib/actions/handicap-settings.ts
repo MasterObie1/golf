@@ -161,6 +161,13 @@ export async function getHandicapHistory(leagueId: number): Promise<HandicapHist
     prisma.matchup.findMany({
       where: { leagueId },
       orderBy: { weekNumber: "asc" },
+      select: {
+        weekNumber: true, teamAId: true, teamBId: true,
+        teamAGross: true, teamBGross: true,
+        teamAHandicap: true, teamBHandicap: true,
+        teamAIsSub: true, teamBIsSub: true,
+        isForfeit: true,
+      },
     }),
     getHandicapSettings(leagueId),
   ]);
@@ -235,6 +242,13 @@ async function buildHandicapHistoryFromMatchups(
   const matchups = await prisma.matchup.findMany({
     where,
     orderBy: { weekNumber: "asc" },
+    select: {
+      weekNumber: true, teamAId: true, teamBId: true,
+      teamAGross: true, teamBGross: true,
+      teamAHandicap: true, teamBHandicap: true,
+      teamAIsSub: true, teamBIsSub: true,
+      isForfeit: true,
+    },
   });
   return buildHandicapHistory(teams, matchups, settings);
 }

@@ -2,6 +2,22 @@
 
 import { prisma } from "../db";
 
+// Select clause for matchup queries used in ranking/standings calculations.
+// Only select the fields needed for ranking to avoid over-fetching and schema drift issues.
+const matchupRankingSelect = {
+  teamAId: true,
+  teamBId: true,
+  teamAPoints: true,
+  teamBPoints: true,
+  teamANet: true,
+  teamBNet: true,
+  teamAHandicap: true,
+  teamBHandicap: true,
+  teamAIsSub: true,
+  teamBIsSub: true,
+  weekNumber: true,
+} as const;
+
 // Safe select clause for team queries in public-facing standings/leaderboard responses.
 // Excludes PII fields (captainName, email, phone) that should never appear in public responses.
 const safeTeamSelect = {
@@ -544,6 +560,7 @@ export async function getLeaderboard(leagueId: number) {
 
   const matchups = await prisma.matchup.findMany({
     where: { leagueId },
+    select: matchupRankingSelect,
   });
 
   return rankTeams(teams, matchups);
@@ -606,6 +623,7 @@ async function getMatchPlayMovement(
 ): Promise<LeaderboardWithMovement[]> {
   const matchups = await prisma.matchup.findMany({
     where: { leagueId },
+    select: matchupRankingSelect,
   });
 
   if (matchups.length === 0) {
@@ -780,7 +798,7 @@ async function getHybridMovement(
   config: { proRate: boolean; maxDnp: number | null }
 ): Promise<LeaderboardWithMovement[]> {
   const [matchups, weeklyScores] = await Promise.all([
-    prisma.matchup.findMany({ where: { leagueId } }),
+    prisma.matchup.findMany({ where: { leagueId }, select: matchupRankingSelect }),
     prisma.weeklyScore.findMany({
       where: { leagueId },
       select: {
@@ -915,7 +933,7 @@ export async function getSeasonLeaderboard(seasonId: number) {
 
   if (scoringType === "hybrid") {
     const [matchups, weeklyScores] = await Promise.all([
-      prisma.matchup.findMany({ where: { seasonId } }),
+      prisma.matchup.findMany({ where: { seasonId }, select: matchupRankingSelect }),
       prisma.weeklyScore.findMany({
         where: { seasonId },
         select: {
@@ -933,6 +951,7 @@ export async function getSeasonLeaderboard(seasonId: number) {
   // Match play (default)
   const matchups = await prisma.matchup.findMany({
     where: { seasonId },
+    select: matchupRankingSelect,
   });
   return rankTeams(teams, matchups);
 }
