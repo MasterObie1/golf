@@ -130,7 +130,14 @@ export default async function TeamHistoryPage({ params }: Props) {
 
   // Calculate stroke play stats
   const playedScores = weeklyScores.filter((s) => !s.isDnp);
+  const dnpCount = weeklyScores.filter((s) => s.isDnp).length;
   const strokeTotalPoints = weeklyScores.reduce((sum, s) => sum + s.points, 0);
+  // Apply proRate if enabled (divide total points by rounds played, matching leaderboard)
+  const strokeDisplayPoints = league.strokePlayProRate && playedScores.length > 0
+    ? Math.round((strokeTotalPoints / playedScores.length) * 10) / 10
+    : strokeTotalPoints;
+  // Check if team is excluded by maxDnp (matching leaderboard logic)
+  const excludedByDnp = league.strokePlayMaxDnp !== null && dnpCount > league.strokePlayMaxDnp;
   const avgNet = playedScores.length > 0
     ? Math.round((playedScores.reduce((sum, s) => sum + s.netScore, 0) / playedScores.length) * 10) / 10
     : 0;
@@ -165,8 +172,8 @@ export default async function TeamHistoryPage({ params }: Props) {
           {isStrokePlay ? (
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-fairway font-mono tabular-nums">{strokeTotalPoints}</div>
-                <div className="text-sm text-text-muted font-sans">Total Points</div>
+                <div className="text-2xl font-bold text-fairway font-mono tabular-nums">{excludedByDnp ? 0 : strokeDisplayPoints}</div>
+                <div className="text-sm text-text-muted font-sans">{league.strokePlayProRate ? "Pts/Rd" : "Total Points"}</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-text-primary font-mono tabular-nums">{playedScores.length}</div>
@@ -190,7 +197,7 @@ export default async function TeamHistoryPage({ params }: Props) {
           ) : isHybrid ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-fairway font-mono tabular-nums">{Math.round((matchPoints * (1 - (league.hybridFieldWeight ?? 0.5)) + strokeTotalPoints * (league.hybridFieldWeight ?? 0.5)) * 10) / 10}</div>
+                <div className="text-2xl font-bold text-fairway font-mono tabular-nums">{excludedByDnp ? 0 : Math.round((matchPoints * (1 - (league.hybridFieldWeight ?? 0.5)) + strokeDisplayPoints * (league.hybridFieldWeight ?? 0.5)) * 10) / 10}</div>
                 <div className="text-sm text-text-muted font-sans">Combined Points</div>
               </div>
               <div>

@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
       .setExpirationTime("1h") // Shorter expiry for impersonation
+      .setIssuer("leaguelinks")
       .setAudience("admin")
       .sign(secret);
 

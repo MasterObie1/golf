@@ -46,19 +46,24 @@ export async function updateLeagueSettings(
   }
 }
 
+const updateScorecardSchema = z.object({
+  scorecardMode: z.enum(["disabled", "optional", "required"]),
+  scorecardRequireApproval: z.boolean(),
+});
+
 export async function updateScorecardSettings(
   leagueSlug: string,
   scorecardMode: "disabled" | "optional" | "required",
   scorecardRequireApproval: boolean
 ): Promise<ActionResult> {
   try {
-    z.enum(["disabled", "optional", "required"]).parse(scorecardMode);
+    const validated = updateScorecardSchema.parse({ scorecardMode, scorecardRequireApproval });
     const session = await requireLeagueAdmin(leagueSlug);
     await requireActiveLeague(session.leagueId);
 
     await prisma.league.update({
       where: { id: session.leagueId },
-      data: { scorecardMode, scorecardRequireApproval },
+      data: { scorecardMode: validated.scorecardMode, scorecardRequireApproval: validated.scorecardRequireApproval },
       select: { id: true },
     });
 
@@ -236,8 +241,8 @@ export async function updateHandicapSettings(
  * Used when handicap settings change.
  * Wrapped in a transaction for atomicity — all updates succeed or none do.
  */
-// TODO: Add auth check if exposed as a server action
-export async function recalculateLeagueStats(leagueId: number) {
+// Internal-only — not exported as a server action. Called by updateHandicapSettings.
+async function recalculateLeagueStats(leagueId: number) {
   await prisma.$transaction(async (tx) => {
     // Read handicap settings inside the transaction for consistency
     const league = await tx.league.findUniqueOrThrow({
@@ -295,12 +300,23 @@ export async function recalculateLeagueStats(leagueId: number) {
     });
 
     if (matchups.length === 0) {
-      // No matchups — but still apply weekly score points
+      // No matchups — still apply weekly score points and bye-week points
+      const byePointsMapEmpty: Record<number, number> = {};
+      for (const bye of completedByes) {
+        let points = 0;
+        if (league.byePointsMode === "flat") points = league.byePointsFlat;
+        // league_average and team_average are 0 with no matchups
+        byePointsMapEmpty[bye.teamAId] = (byePointsMapEmpty[bye.teamAId] ?? 0) + points;
+      }
+
       const allTeamsForEmpty = await tx.team.findMany({ where: { leagueId }, select: { id: true } });
       for (const team of allTeamsForEmpty) {
         await tx.team.update({
           where: { id: team.id },
-          data: { totalPoints: weeklyPointsMap[team.id] ?? 0, wins: 0, losses: 0, ties: 0 },
+          data: {
+            totalPoints: (weeklyPointsMap[team.id] ?? 0) + (byePointsMapEmpty[team.id] ?? 0),
+            wins: 0, losses: 0, ties: 0,
+          },
         });
       }
       return;

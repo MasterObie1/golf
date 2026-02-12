@@ -98,12 +98,20 @@ export async function previewMatchup(
     }
   }
 
+  if (teamAId === teamBId) {
+    return { success: false, error: "Team A and Team B must be different teams" };
+  }
+
   const [teamA, teamB, handicapSettings, league] = await Promise.all([
-    prisma.team.findUniqueOrThrow({ where: { id: teamAId }, select: { id: true, name: true } }),
-    prisma.team.findUniqueOrThrow({ where: { id: teamBId }, select: { id: true, name: true } }),
+    prisma.team.findFirst({ where: { id: teamAId, leagueId }, select: { id: true, name: true } }),
+    prisma.team.findFirst({ where: { id: teamBId, leagueId }, select: { id: true, name: true } }),
     getHandicapSettings(leagueId),
     prisma.league.findUniqueOrThrow({ where: { id: leagueId }, select: { scoringType: true } }),
   ]);
+
+  if (!teamA || !teamB) {
+    return { success: false, error: "One or both teams do not belong to this league." };
+  }
 
   const isWeekOne = weekNumber === 1;
 
@@ -198,6 +206,8 @@ const submitMatchupSchema = z.object({
   teamBNet: z.number(),
   teamBPoints: z.number().min(0, "Points cannot be negative"),
   teamBIsSub: z.boolean(),
+}).refine(d => d.teamAId !== d.teamBId, {
+  message: "Team A and Team B must be different teams",
 });
 
 export async function submitMatchup(
@@ -346,33 +356,29 @@ export async function submitMatchup(
         });
       }
 
+      // Auto-link approved scorecards for these teams on this week (inside tx for atomicity)
+      const unlinkedScorecards = await tx.scorecard.findMany({
+        where: {
+          leagueId: session.leagueId,
+          weekNumber: validated.weekNumber,
+          matchupId: null,
+          status: "approved",
+          teamId: { in: [validated.teamAId, validated.teamBId] },
+        },
+        select: { id: true, teamId: true },
+      });
+      for (const sc of unlinkedScorecards) {
+        await tx.scorecard.update({
+          where: { id: sc.id },
+          data: {
+            matchupId: matchup.id,
+            teamSide: sc.teamId === validated.teamAId ? "A" : "B",
+          },
+        });
+      }
+
       return matchup;
     });
-
-    // Auto-link approved scorecards for these teams on this week
-    const unlinkedScorecards = await prisma.scorecard.findMany({
-      where: {
-        leagueId: session.leagueId,
-        weekNumber: validated.weekNumber,
-        matchupId: null,
-        status: "approved",
-        teamId: { in: [validated.teamAId, validated.teamBId] },
-      },
-      select: { id: true, teamId: true },
-    });
-    if (unlinkedScorecards.length > 0) {
-      await Promise.all(
-        unlinkedScorecards.map((sc) =>
-          prisma.scorecard.update({
-            where: { id: sc.id },
-            data: {
-              matchupId: newMatchup.id,
-              teamSide: sc.teamId === validated.teamAId ? "A" : "B",
-            },
-          })
-        )
-      );
-    }
 
     revalidatePath(`/league/${leagueSlug}/history`);
     return { success: true, data: undefined };
@@ -603,11 +609,18 @@ export async function deleteMatchup(leagueSlug: string, matchupId: number): Prom
         },
       });
 
+      // Unlink scorecards before deleting (reset teamSide that onDelete won't clear)
+      await tx.scorecard.updateMany({
+        where: { matchupId: matchupId },
+        data: { matchupId: null, teamSide: null },
+      });
+
       await tx.matchup.delete({
         where: { id: matchupId },
       });
     });
 
+    revalidatePath(`/league/${leagueSlug}/history`);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("deleteMatchup failed", error);
@@ -633,6 +646,24 @@ export async function submitForfeit(
     const validated = submitForfeitSchema.parse({ weekNumber, winningTeamId, forfeitingTeamId });
     const session = await requireLeagueAdmin(leagueSlug);
     await requireActiveLeague(session.leagueId);
+
+    // Verify both teams belong to this league
+    const [winnerExists, forfeiterExists] = await Promise.all([
+      prisma.team.findFirst({ where: { id: validated.winningTeamId, leagueId: session.leagueId }, select: { id: true } }),
+      prisma.team.findFirst({ where: { id: validated.forfeitingTeamId, leagueId: session.leagueId }, select: { id: true } }),
+    ]);
+    if (!winnerExists || !forfeiterExists) {
+      return { success: false, error: "One or both teams do not belong to this league." };
+    }
+
+    // Forfeits are only supported for match_play leagues (20-point pool)
+    const league = await prisma.league.findUniqueOrThrow({
+      where: { id: session.leagueId },
+      select: { scoringType: true },
+    });
+    if (league.scoringType !== "match_play") {
+      return { success: false, error: "Forfeits are only supported for match play leagues." };
+    }
 
     // Get active season for this league
     const activeSeason = await prisma.season.findFirst({

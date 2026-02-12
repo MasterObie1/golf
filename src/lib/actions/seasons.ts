@@ -160,6 +160,11 @@ export async function getTeamsForSeason(seasonId: number) {
   return prisma.team.findMany({
     where: { seasonId, status: "approved" },
     orderBy: { name: "asc" },
+    select: {
+      id: true, name: true, leagueId: true, seasonId: true,
+      totalPoints: true, wins: true, losses: true, ties: true,
+      status: true, createdAt: true,
+    },
   });
 }
 

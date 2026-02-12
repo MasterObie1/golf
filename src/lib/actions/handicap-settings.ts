@@ -118,25 +118,27 @@ function buildHandicapHistory(
           isSub = weekMatchup.teamBIsSub;
         }
 
+        // Calculate handicap BEFORE adding this week's score (matches actual game flow)
+        // Skip sub weeks — sub handicaps are manually entered, not recalculated
         if (!isSub) {
+          const handicap = allGrossScores.length > 0
+            ? calculateHandicap(allGrossScores, settings, week)
+            : null;
+
+          if (handicap !== null) {
+            weeklyHandicaps.push({ week, handicap });
+          }
+
+          // Accumulate score AFTER calculating for future weeks
           allGrossScores.push(gross);
-        }
-
-        // Calculate the handicap from accumulated gross scores — this reflects
-        // what the engine actually uses, rather than the stored manual entry
-        const handicap = allGrossScores.length > 0
-          ? calculateHandicap(allGrossScores, settings, week + 1)
-          : null;
-
-        if (handicap !== null) {
-          weeklyHandicaps.push({ week, handicap });
         }
       }
     }
 
-    // Current handicap is the same as the last calculated value
+    // Current handicap: what they'd have for the next upcoming week
+    const nextWeek = weekNumbers[weekNumbers.length - 1] + 1;
     const currentHandicap = allGrossScores.length > 0
-      ? calculateHandicap(allGrossScores, settings, weekNumbers[weekNumbers.length - 1] + 1)
+      ? calculateHandicap(allGrossScores, settings, nextWeek)
       : null;
 
     result.push({
@@ -277,17 +279,16 @@ async function buildHandicapHistoryFromWeeklyScores(
         (s) => s.weekNumber === week && s.teamId === team.id && !s.isDnp
       );
 
-      if (score) {
-        if (!score.isSub) {
-          allGrossScores.push(score.grossScore);
-        }
-        // Recalculate handicap from accumulated gross scores (consistent with match play)
+      if (score && !score.isSub) {
+        // Calculate handicap BEFORE adding this week's score (matches actual game flow)
         const handicap = allGrossScores.length > 0
-          ? calculateHandicap(allGrossScores, settings, week + 1)
+          ? calculateHandicap(allGrossScores, settings, week)
           : null;
         if (handicap !== null) {
           weeklyHandicaps.push({ week, handicap });
         }
+        // Accumulate score AFTER calculating for future weeks
+        allGrossScores.push(score.grossScore);
       }
     }
 

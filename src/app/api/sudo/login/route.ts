@@ -10,8 +10,15 @@ export async function POST(request: Request) {
     // CSRF: verify Origin header matches our host
     const origin = request.headers.get("origin");
     const host = request.headers.get("host");
-    if (origin && host && !origin.endsWith(host)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (origin && host) {
+      try {
+        const originHost = new URL(origin).host;
+        if (originHost !== host) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      } catch {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     // Rate limit check — stricter for super-admin

@@ -608,7 +608,8 @@ export function calculateStrokePlayPoints(
   tieMode: "split" | "same",
   bonusConfig: StrokePlayBonusConfig
 ): StrokePlayResult[] {
-  const playing = entries.filter((e) => !e.isDnp);
+  const playing = entries.filter((e) => !e.isDnp && isFinite(e.netScore));
+  const invalidEntries = entries.filter((e) => !e.isDnp && !isFinite(e.netScore));
   const dnp = entries.filter((e) => e.isDnp);
 
   // Sort playing teams by net score ascending (lower is better)
@@ -667,6 +668,16 @@ export function calculateStrokePlayPoints(
 
   // DNP teams
   for (const entry of dnp) {
+    results.push({
+      teamId: entry.teamId,
+      position: 0,
+      points: bonusConfig.dnpPoints + bonusConfig.dnpPenalty,
+      bonusPoints: 0,
+    });
+  }
+
+  // Invalid entries (NaN/Infinity net scores) — treat as DNP
+  for (const entry of invalidEntries) {
     results.push({
       teamId: entry.teamId,
       position: 0,

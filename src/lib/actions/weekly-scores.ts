@@ -175,11 +175,10 @@ export async function previewWeeklyScores(
         handicap = calculateHandicap(prevScores, handicapSettings, weekNumber);
       }
 
-      let netScore = calculateNetScore(input.grossScore, handicap);
-
       if (!isFinite(handicap)) {
         handicap = handicapSettings.defaultHandicap;
       }
+      let netScore = calculateNetScore(input.grossScore, handicap);
       if (!isFinite(netScore)) {
         netScore = 0;
       }

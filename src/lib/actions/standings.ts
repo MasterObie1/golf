@@ -97,8 +97,12 @@ function rankTeams<T extends TeamWithStats>(teams: T[], matchups: MatchupForRank
   }
 
   for (const m of matchups) {
-    netDifferential[m.teamAId] += m.teamBNet - m.teamANet;
-    netDifferential[m.teamBId] += m.teamANet - m.teamBNet;
+    if (netDifferential[m.teamAId] !== undefined) {
+      netDifferential[m.teamAId] += m.teamBNet - m.teamANet;
+    }
+    if (netDifferential[m.teamBId] !== undefined) {
+      netDifferential[m.teamBId] += m.teamANet - m.teamBNet;
+    }
   }
 
   const headToHead = buildHeadToHead(teams, matchups);
@@ -622,10 +626,10 @@ async function getMatchPlayMovement(
     return {
       id: team.id,
       name: team.name,
-      totalPoints: team.totalPoints,
-      wins: team.wins,
-      losses: team.losses,
-      ties: team.ties,
+      totalPoints: standing.points,
+      wins: standing.wins,
+      losses: standing.losses,
+      ties: standing.ties,
       handicap: standing.handicap,
       rankChange,
       handicapChange,

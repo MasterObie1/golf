@@ -169,11 +169,14 @@ export async function generateSchedule(
         ...(activeSeason ? { seasonId: activeSeason.id } : {}),
         status: "completed",
       },
-      select: { weekNumber: true, teamAId: true },
+      select: { weekNumber: true, teamAId: true, teamBId: true },
     });
-    const completedKeys = new Set(
-      completedMatchups.map((m) => `${m.weekNumber}-${m.teamAId}`)
-    );
+    // Track all teams involved in completed matchups for each week (both teamA and teamB)
+    const completedTeamWeeks = new Set<string>();
+    for (const m of completedMatchups) {
+      completedTeamWeeks.add(`${m.weekNumber}-${m.teamAId}`);
+      if (m.teamBId) completedTeamWeeks.add(`${m.weekNumber}-${m.teamBId}`);
+    }
 
     // Build transaction: delete existing scheduled matchups, create new ones, update league
     const operations = [];
@@ -196,8 +199,9 @@ export async function generateSchedule(
         league.playModeFirstWeekSide
       );
       for (const match of round.matches) {
-        // Skip if a completed matchup already occupies this slot
-        if (completedKeys.has(`${round.weekNumber}-${match.teamAId}`)) {
+        // Skip if a completed matchup already occupies this slot (check both teams)
+        if (completedTeamWeeks.has(`${round.weekNumber}-${match.teamAId}`) ||
+            (match.teamBId && completedTeamWeeks.has(`${round.weekNumber}-${match.teamBId}`))) {
           continue;
         }
         operations.push(
@@ -751,109 +755,101 @@ export async function processByeWeekPoints(
   try {
     const session = await requireLeagueAdmin(leagueSlug);
 
-    const league = await prisma.league.findUniqueOrThrow({
-      where: { id: session.leagueId },
-      select: { byePointsMode: true, byePointsFlat: true },
-    });
-
-    // Find bye entries for this week (teamBId is null, only scheduled — not already completed)
-    const byeEntries = await prisma.scheduledMatchup.findMany({
-      where: {
-        leagueId: session.leagueId,
-        weekNumber,
-        teamBId: null,
-        status: "scheduled",
-      },
-    });
-
-    if (byeEntries.length === 0) {
-      return { success: true, data: undefined };
-    }
-
-    const operations = [];
-
-    // Pre-compute league average once (outside the loop) to avoid N+1 queries
-    let leagueAvgPoints = 0;
-    if (league.byePointsMode === "league_average") {
-      const weekMatchups = await prisma.matchup.findMany({
-        where: { leagueId: session.leagueId, weekNumber },
-        select: { teamAPoints: true, teamBPoints: true },
+    // Use interactive transaction to prevent double-processing from concurrent calls
+    await prisma.$transaction(async (tx) => {
+      const league = await tx.league.findUniqueOrThrow({
+        where: { id: session.leagueId },
+        select: { byePointsMode: true, byePointsFlat: true },
       });
-      if (weekMatchups.length > 0) {
-        const totalPts = weekMatchups.reduce(
-          (sum, m) => sum + m.teamAPoints + m.teamBPoints,
-          0
-        );
-        leagueAvgPoints = Math.round((totalPts / (weekMatchups.length * 2)) * 10) / 10;
-      }
-    }
 
-    // Pre-compute team averages in batch (outside the loop) to avoid N+1 queries
-    const teamAvgMap = new Map<number, number>();
-    if (league.byePointsMode === "team_average") {
-      const byeTeamIds = byeEntries.map((b) => b.teamAId);
-      const allTeamMatchups = await prisma.matchup.findMany({
+      // Find bye entries for this week (teamBId is null, only scheduled — not already completed)
+      // Re-check inside transaction to prevent race conditions
+      const byeEntries = await tx.scheduledMatchup.findMany({
         where: {
           leagueId: session.leagueId,
-          OR: byeTeamIds.flatMap((tid) => [
-            { teamAId: tid },
-            { teamBId: tid },
-          ]),
+          weekNumber,
+          teamBId: null,
+          status: "scheduled",
         },
-        select: { teamAId: true, teamBId: true, teamAPoints: true, teamBPoints: true },
       });
-      for (const tid of byeTeamIds) {
-        const teamMatchups = allTeamMatchups.filter(
-          (m) => m.teamAId === tid || m.teamBId === tid
-        );
-        if (teamMatchups.length > 0) {
-          const teamPts = teamMatchups.reduce((sum, m) => {
-            return sum + (m.teamAId === tid ? m.teamAPoints : m.teamBPoints);
-          }, 0);
-          teamAvgMap.set(tid, Math.round((teamPts / teamMatchups.length) * 10) / 10);
+
+      if (byeEntries.length === 0) return;
+
+      // Pre-compute league average once (outside the loop) to avoid N+1 queries
+      let leagueAvgPoints = 0;
+      if (league.byePointsMode === "league_average") {
+        const weekMatchups = await tx.matchup.findMany({
+          where: { leagueId: session.leagueId, weekNumber },
+          select: { teamAPoints: true, teamBPoints: true },
+        });
+        if (weekMatchups.length > 0) {
+          const totalPts = weekMatchups.reduce(
+            (sum, m) => sum + m.teamAPoints + m.teamBPoints,
+            0
+          );
+          leagueAvgPoints = Math.round((totalPts / (weekMatchups.length * 2)) * 10) / 10;
         }
       }
-    }
 
-    for (const bye of byeEntries) {
-      let points = 0;
-
-      switch (league.byePointsMode) {
-        case "zero":
-          points = 0;
-          break;
-        case "flat":
-          points = league.byePointsFlat;
-          break;
-        case "league_average":
-          points = leagueAvgPoints;
-          break;
-        case "team_average":
-          points = teamAvgMap.get(bye.teamAId) ?? 0;
-          break;
+      // Pre-compute team averages in batch (outside the loop) to avoid N+1 queries
+      const teamAvgMap = new Map<number, number>();
+      if (league.byePointsMode === "team_average") {
+        const byeTeamIds = byeEntries.map((b) => b.teamAId);
+        const allTeamMatchups = await tx.matchup.findMany({
+          where: {
+            leagueId: session.leagueId,
+            OR: byeTeamIds.flatMap((tid) => [
+              { teamAId: tid },
+              { teamBId: tid },
+            ]),
+          },
+          select: { teamAId: true, teamBId: true, teamAPoints: true, teamBPoints: true },
+        });
+        for (const tid of byeTeamIds) {
+          const teamMatchups = allTeamMatchups.filter(
+            (m) => m.teamAId === tid || m.teamBId === tid
+          );
+          if (teamMatchups.length > 0) {
+            const teamPts = teamMatchups.reduce((sum, m) => {
+              return sum + (m.teamAId === tid ? m.teamAPoints : m.teamBPoints);
+            }, 0);
+            teamAvgMap.set(tid, Math.round((teamPts / teamMatchups.length) * 10) / 10);
+          }
+        }
       }
 
-      if (points > 0) {
-        operations.push(
-          prisma.team.update({
+      for (const bye of byeEntries) {
+        let points = 0;
+
+        switch (league.byePointsMode) {
+          case "zero":
+            points = 0;
+            break;
+          case "flat":
+            points = league.byePointsFlat;
+            break;
+          case "league_average":
+            points = leagueAvgPoints;
+            break;
+          case "team_average":
+            points = teamAvgMap.get(bye.teamAId) ?? 0;
+            break;
+        }
+
+        if (points > 0) {
+          await tx.team.update({
             where: { id: bye.teamAId },
             data: { totalPoints: { increment: points } },
-          })
-        );
-      }
+          });
+        }
 
-      // Mark bye as completed
-      operations.push(
-        prisma.scheduledMatchup.update({
+        // Mark bye as completed
+        await tx.scheduledMatchup.update({
           where: { id: bye.id },
           data: { status: "completed" },
-        })
-      );
-    }
-
-    if (operations.length > 0) {
-      await prisma.$transaction(operations);
-    }
+        });
+      }
+    });
 
     return { success: true, data: undefined };
   } catch (error) {
@@ -922,14 +918,31 @@ export async function addTeamToSchedule(
         return { success: false, error: "No bye slots available to fill." };
       }
 
+      // Check for weeks where the new team already has a matchup (avoid double-booking)
+      const existingMatchups = await prisma.scheduledMatchup.findMany({
+        where: {
+          leagueId,
+          status: { not: "cancelled" },
+          weekNumber: { in: futureByeEntries.map(b => b.weekNumber) },
+          OR: [{ teamAId: teamId }, { teamBId: teamId }],
+        },
+        select: { weekNumber: true },
+      });
+      const conflictWeeks = new Set(existingMatchups.map(m => m.weekNumber));
+
       const operations = [];
       for (const bye of futureByeEntries) {
+        if (conflictWeeks.has(bye.weekNumber)) continue; // skip — team already plays this week
         operations.push(
           prisma.scheduledMatchup.update({
             where: { id: bye.id },
             data: { teamBId: teamId },
           })
         );
+      }
+
+      if (operations.length === 0) {
+        return { success: false, error: "No bye slots available that don't conflict with the team's existing schedule." };
       }
 
       await prisma.$transaction(operations);
@@ -1115,6 +1128,7 @@ export async function removeTeamFromSchedule(
       const futureMatchups = await prisma.scheduledMatchup.findMany({
         where: {
           leagueId,
+          ...(activeSeason ? { seasonId: activeSeason.id } : {}),
           weekNumber: { gte: currentWeek },
           status: "scheduled",
           OR: [{ teamAId: teamId }, { teamBId: teamId }],

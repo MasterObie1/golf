@@ -10,7 +10,11 @@ export type ActionResult<T = void> =
 
 export async function getServerActionIp(): Promise<string> {
   const hdrs = await headers();
-  return hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() || hdrs.get("x-real-ip") || "unknown";
+  // Prefer Vercel's non-spoofable header, then fall back to x-forwarded-for
+  return hdrs.get("x-vercel-forwarded-for")?.split(",")[0]?.trim()
+    || hdrs.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || hdrs.get("x-real-ip")
+    || "unknown";
 }
 
 export function generateSlug(name: string): string {
