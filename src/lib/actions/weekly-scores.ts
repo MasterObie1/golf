@@ -153,13 +153,25 @@ export async function previewWeeklyScores(
         continue;
       }
 
+      // Helper to clamp manual handicap entries within league min/max caps
+      function capManualHandicap(value: number): number {
+        let result = value;
+        if (handicapSettings.maxHandicap !== null && result > handicapSettings.maxHandicap) {
+          result = handicapSettings.maxHandicap;
+        }
+        if (handicapSettings.minHandicap !== null && result < handicapSettings.minHandicap) {
+          result = handicapSettings.minHandicap;
+        }
+        return result;
+      }
+
       let handicap: number;
       if (isWeekOne || (input.isSub && input.manualHandicap != null)) {
-        handicap = input.manualHandicap ?? handicapSettings.defaultHandicap;
+        handicap = capManualHandicap(input.manualHandicap ?? handicapSettings.defaultHandicap);
       } else if (input.manualHandicap != null) {
-        handicap = input.manualHandicap;
+        handicap = capManualHandicap(input.manualHandicap);
       } else {
-        const prevScores = await getTeamPreviousScoresForScoring(leagueId, input.teamId, league.scoringType);
+        const prevScores = await getTeamPreviousScoresForScoring(leagueId, input.teamId, league.scoringType, weekNumber);
         handicap = calculateHandicap(prevScores, handicapSettings, weekNumber);
       }
 

@@ -175,6 +175,7 @@ export async function getTeamPreviousScoresForSeason(seasonId: number, teamId: n
   const matchups = await prisma.matchup.findMany({
     where: {
       seasonId,
+      isForfeit: false,
       OR: [{ teamAId: teamId }, { teamBId: teamId }],
     },
     orderBy: { weekNumber: "asc" },
@@ -191,6 +192,10 @@ export async function getTeamPreviousScoresForSeason(seasonId: number, teamId: n
 const updateSeasonSchema = z.object({
   name: z.string().min(2).max(100).trim().optional(),
   isActive: z.boolean().optional(),
+  year: z.number().int().min(2000).max(2100).optional(),
+  startDate: z.date().nullable().optional(),
+  endDate: z.date().nullable().optional(),
+  numberOfWeeks: z.number().int().min(1).max(52).nullable().optional(),
 });
 
 export async function updateSeason(

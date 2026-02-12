@@ -639,7 +639,7 @@ export default function MatchupsTab({
                       <input
                         type="number"
                         value={teamAHandicapManual}
-                        onChange={(e) => setTeamAHandicapManual(e.target.value ? parseInt(e.target.value) : "")}
+                        onChange={(e) => setTeamAHandicapManual(e.target.value ? parseFloat(e.target.value) : "")}
                         className="w-full pencil-input"
                       />
                     </div>
@@ -715,7 +715,7 @@ export default function MatchupsTab({
                       <input
                         type="number"
                         value={teamBHandicapManual}
-                        onChange={(e) => setTeamBHandicapManual(e.target.value ? parseInt(e.target.value) : "")}
+                        onChange={(e) => setTeamBHandicapManual(e.target.value ? parseFloat(e.target.value) : "")}
                         className="w-full pencil-input"
                       />
                     </div>

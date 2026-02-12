@@ -314,7 +314,7 @@ export default function WeeklyScoresTab({
                             <input
                               type="number"
                               value={entry.manualHandicap}
-                              onChange={(e) => updateEntry(entry.teamId, "manualHandicap", e.target.value ? parseInt(e.target.value) : "")}
+                              onChange={(e) => updateEntry(entry.teamId, "manualHandicap", e.target.value ? parseFloat(e.target.value) : "")}
                               disabled={entry.isDnp}
                               className="w-20 px-2 py-1 border-b border-scorecard-line rounded-none text-center font-mono tabular-nums bg-transparent focus:outline-none focus:border-fairway disabled:bg-surface disabled:text-text-muted"
                             />

@@ -82,6 +82,7 @@ export async function getTeamPreviousScores(leagueId: number, teamId: number, be
   const matchups = await prisma.matchup.findMany({
     where: {
       leagueId,
+      isForfeit: false,
       OR: [{ teamAId: teamId }, { teamBId: teamId }],
       ...(beforeWeek ? { weekNumber: { lt: beforeWeek } } : {}),
     },

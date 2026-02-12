@@ -69,6 +69,7 @@ type MatchupForHistory = {
   teamBHandicap: number;
   teamAIsSub: boolean;
   teamBIsSub: boolean;
+  isForfeit: boolean;
 };
 
 /**
@@ -103,6 +104,9 @@ function buildHandicapHistory(
       );
 
       if (weekMatchup) {
+        // Skip forfeits — gross scores of 0 would corrupt handicap calculations
+        if (weekMatchup.isForfeit) continue;
+
         let gross: number;
         let isSub: boolean;
 
