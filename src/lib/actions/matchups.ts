@@ -281,6 +281,10 @@ export async function submitMatchup(
         throw new Error("One or both teams already have a matchup this week.");
       }
 
+      // Detect if admin manually adjusted points from the suggested values
+      const suggested = suggestPoints(recalcTeamANet, recalcTeamBNet);
+      const pointsOverridden = validated.teamAPoints !== suggested.teamAPoints || validated.teamBPoints !== suggested.teamBPoints;
+
       const matchup = await tx.matchup.create({
         data: {
           leagueId: session.leagueId,
@@ -298,6 +302,7 @@ export async function submitMatchup(
           teamBNet: recalcTeamBNet,
           teamBPoints: validated.teamBPoints,
           teamBIsSub: validated.teamBIsSub,
+          pointsOverridden,
         },
       });
 
@@ -486,6 +491,10 @@ export async function updateMatchup(
         tx.team.findUniqueOrThrow({ where: { id: existingMatchup.teamBId }, select: { totalPoints: true, wins: true, losses: true, ties: true } }),
       ]);
 
+      // Detect if admin manually adjusted points from the suggested values
+      const suggested = suggestPoints(newTeamANet, newTeamBNet);
+      const pointsOverridden = validated.teamAPoints !== suggested.teamAPoints || validated.teamBPoints !== suggested.teamBPoints;
+
       // Update matchup record
       await tx.matchup.update({
         where: { id: validated.matchupId },
@@ -500,6 +509,7 @@ export async function updateMatchup(
           teamBNet: newTeamBNet,
           teamBPoints: validated.teamBPoints,
           teamBIsSub: validated.teamBIsSub,
+          pointsOverridden,
         },
       });
 

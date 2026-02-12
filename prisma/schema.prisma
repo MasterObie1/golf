@@ -252,6 +252,8 @@ model Matchup {
   teamBPoints     Float
   teamBIsSub      Boolean  @default(false) // True if substitute played (excludes from handicap calc)
 
+  pointsOverridden Boolean  @default(false) // True if admin manually adjusted points
+
   // Forfeit data
   isForfeit       Boolean  @default(false) // True if this was a forfeit match
   forfeitTeamId   Int?     // ID of the team that forfeited (null if not a forfeit)

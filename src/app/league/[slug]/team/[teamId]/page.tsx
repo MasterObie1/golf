@@ -190,7 +190,7 @@ export default async function TeamHistoryPage({ params }: Props) {
           ) : isHybrid ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-fairway font-mono tabular-nums">{matchPoints + strokeTotalPoints}</div>
+                <div className="text-2xl font-bold text-fairway font-mono tabular-nums">{Math.round((matchPoints * (1 - (league.hybridFieldWeight ?? 0.5)) + strokeTotalPoints * (league.hybridFieldWeight ?? 0.5)) * 10) / 10}</div>
                 <div className="text-sm text-text-muted font-sans">Combined Points</div>
               </div>
               <div>

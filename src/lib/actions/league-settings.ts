@@ -266,6 +266,8 @@ export async function recalculateLeagueStats(leagueId: number) {
         handicapUseTrend: true,
         handicapTrendWeight: true,
         handicapRequireApproval: true,
+        byePointsMode: true,
+        byePointsFlat: true,
       },
     });
     const handicapSettings = leagueToHandicapSettings(league);
@@ -276,17 +278,31 @@ export async function recalculateLeagueStats(leagueId: number) {
       orderBy: [{ weekNumber: "asc" }, { id: "asc" }],
     });
 
-    // If no matchups, just ensure team stats are zeroed and return.
-    // This is expected for stroke_play leagues that have no matchups.
-    // NOTE: Weekly score recalculation for stroke_play/hybrid is not yet
-    // implemented here — this function only processes matchup-based handicaps
-    // and team W/L/T stats. Stroke play field points are managed via
-    // the weekly-scores module.
+    // Fetch weekly score points and bye-week points for inclusion in team totals
+    const weeklyScores = await tx.weeklyScore.findMany({
+      where: { leagueId },
+      select: { teamId: true, points: true },
+    });
+    const weeklyPointsMap: Record<number, number> = {};
+    for (const ws of weeklyScores) {
+      weeklyPointsMap[ws.teamId] = (weeklyPointsMap[ws.teamId] ?? 0) + ws.points;
+    }
+
+    // Calculate bye-week points from completed byes
+    const completedByes = await tx.scheduledMatchup.findMany({
+      where: { leagueId, teamBId: null, status: "completed" },
+      select: { teamAId: true, weekNumber: true },
+    });
+
     if (matchups.length === 0) {
-      await tx.team.updateMany({
-        where: { leagueId },
-        data: { totalPoints: 0, wins: 0, losses: 0, ties: 0 },
-      });
+      // No matchups — but still apply weekly score points
+      const allTeamsForEmpty = await tx.team.findMany({ where: { leagueId }, select: { id: true } });
+      for (const team of allTeamsForEmpty) {
+        await tx.team.update({
+          where: { id: team.id },
+          data: { totalPoints: weeklyPointsMap[team.id] ?? 0, wins: 0, losses: 0, ties: 0 },
+        });
+      }
       return;
     }
 
@@ -350,8 +366,14 @@ export async function recalculateLeagueStats(leagueId: number) {
         throw new Error(`Invalid net score calculation for matchup ${matchup.id}`);
       }
 
-      // Calculate new points based on net scores
-      const { teamAPoints, teamBPoints } = suggestPoints(teamANet, teamBNet);
+      // Calculate new points — preserve admin overrides, otherwise recalculate
+      let teamAPoints: number, teamBPoints: number;
+      if (matchup.pointsOverridden) {
+        teamAPoints = matchup.teamAPoints;
+        teamBPoints = matchup.teamBPoints;
+      } else {
+        ({ teamAPoints, teamBPoints } = suggestPoints(teamANet, teamBNet));
+      }
 
       if (!isFinite(teamAPoints) || !isFinite(teamBPoints)) {
         throw new Error(`Invalid points calculation for matchup ${matchup.id}`);
@@ -380,7 +402,58 @@ export async function recalculateLeagueStats(leagueId: number) {
       }
     }
 
+    // Calculate bye-week points per team
+    const byePointsMap: Record<number, number> = {};
+    if (completedByes.length > 0) {
+      // Build week-level data from original matchups for average calculations
+      const matchupsByWeek: Record<number, Array<{ teamAId: number; teamBId: number; teamAPoints: number; teamBPoints: number }>> = {};
+      for (let i = 0; i < matchups.length; i++) {
+        const wk = matchups[i].weekNumber;
+        if (!matchupsByWeek[wk]) matchupsByWeek[wk] = [];
+        matchupsByWeek[wk].push(matchupResults[i]);
+      }
+
+      for (const bye of completedByes) {
+        let points = 0;
+        switch (league.byePointsMode) {
+          case "zero":
+            points = 0;
+            break;
+          case "flat":
+            points = league.byePointsFlat;
+            break;
+          case "league_average": {
+            const weekMatches = matchupsByWeek[bye.weekNumber];
+            if (weekMatches && weekMatches.length > 0) {
+              const totalPts = weekMatches.reduce((sum, m) => sum + m.teamAPoints + m.teamBPoints, 0);
+              points = Math.round((totalPts / (weekMatches.length * 2)) * 10) / 10;
+            }
+            break;
+          }
+          case "team_average": {
+            let teamPts = 0;
+            let teamMatchCount = 0;
+            for (const m of matchupResults) {
+              if (m.teamAId === bye.teamAId) {
+                teamPts += m.teamAPoints;
+                teamMatchCount++;
+              } else if (m.teamBId === bye.teamAId) {
+                teamPts += m.teamBPoints;
+                teamMatchCount++;
+              }
+            }
+            if (teamMatchCount > 0) {
+              points = Math.round((teamPts / teamMatchCount) * 10) / 10;
+            }
+            break;
+          }
+        }
+        byePointsMap[bye.teamAId] = (byePointsMap[bye.teamAId] ?? 0) + points;
+      }
+    }
+
     // Recalculate team aggregate stats from in-memory matchup results (no N+1 queries)
+    // Include weekly score points and bye-week points in totals
     // Reuse allTeams fetched at the start of the transaction
     for (const team of allTeams) {
       let totalPoints = 0;
@@ -401,6 +474,11 @@ export async function recalculateLeagueStats(leagueId: number) {
           else ties++;
         }
       }
+
+      // Add weekly score points (stroke play / hybrid field points)
+      totalPoints += weeklyPointsMap[team.id] ?? 0;
+      // Add bye-week points
+      totalPoints += byePointsMap[team.id] ?? 0;
 
       await tx.team.update({
         where: { id: team.id },

@@ -278,9 +278,15 @@ async function buildHandicapHistoryFromWeeklyScores(
       );
 
       if (score) {
-        weeklyHandicaps.push({ week, handicap: score.handicap });
         if (!score.isSub) {
           allGrossScores.push(score.grossScore);
+        }
+        // Recalculate handicap from accumulated gross scores (consistent with match play)
+        const handicap = allGrossScores.length > 0
+          ? calculateHandicap(allGrossScores, settings, week + 1)
+          : null;
+        if (handicap !== null) {
+          weeklyHandicaps.push({ week, handicap });
         }
       }
     }
