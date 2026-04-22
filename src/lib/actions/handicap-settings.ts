@@ -109,27 +109,22 @@ function buildHandicapHistory(
 
         let gross: number;
         let isSub: boolean;
+        let recordedHandicap: number;
 
         if (weekMatchup.teamAId === team.id) {
           gross = weekMatchup.teamAGross;
           isSub = weekMatchup.teamAIsSub;
+          recordedHandicap = weekMatchup.teamAHandicap;
         } else {
           gross = weekMatchup.teamBGross;
           isSub = weekMatchup.teamBIsSub;
+          recordedHandicap = weekMatchup.teamBHandicap;
         }
 
-        // Calculate handicap BEFORE adding this week's score (matches actual game flow)
         // Skip sub weeks — sub handicaps are manually entered, not recalculated
         if (!isSub) {
-          const handicap = allGrossScores.length > 0
-            ? calculateHandicap(allGrossScores, settings, week)
-            : null;
-
-          if (handicap !== null) {
-            weeklyHandicaps.push({ week, handicap });
-          }
-
-          // Accumulate score AFTER calculating for future weeks
+          // Record the handicap the team actually played with that week
+          weeklyHandicaps.push({ week, handicap: recordedHandicap });
           allGrossScores.push(gross);
         }
       }
@@ -294,14 +289,8 @@ async function buildHandicapHistoryFromWeeklyScores(
       );
 
       if (score && !score.isSub) {
-        // Calculate handicap BEFORE adding this week's score (matches actual game flow)
-        const handicap = allGrossScores.length > 0
-          ? calculateHandicap(allGrossScores, settings, week)
-          : null;
-        if (handicap !== null) {
-          weeklyHandicaps.push({ week, handicap });
-        }
-        // Accumulate score AFTER calculating for future weeks
+        // Record the handicap the team actually played with that week
+        weeklyHandicaps.push({ week, handicap: score.handicap });
         allGrossScores.push(score.grossScore);
       }
     }
