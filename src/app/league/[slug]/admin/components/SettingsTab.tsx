@@ -5,6 +5,7 @@ import {
   updateLeagueSettings,
   updateHandicapSettings,
   updateScorecardSettings,
+  recalculateAllMatchups,
 } from "@/lib/actions/league-settings";
 import { changeLeaguePassword, getLeagueBySlug } from "@/lib/actions/leagues";
 import { getMatchupHistory } from "@/lib/actions/matchups";
@@ -38,6 +39,8 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
   // Handicap settings - Basic Formula
   const [handicapBaseScore, setHandicapBaseScore] = useState(league.handicapBaseScore);
   const [handicapMultiplier, setHandicapMultiplier] = useState(league.handicapMultiplier);
+  const [handicapUnderParMultiplier, setHandicapUnderParMultiplier] = useState<number | "">(league.handicapUnderParMultiplier ?? "");
+  const [handicapUnderParCap, setHandicapUnderParCap] = useState<number | "">(league.handicapUnderParCap ?? "");
   const [handicapRounding, setHandicapRounding] = useState<"floor" | "round" | "ceil">(league.handicapRounding as "floor" | "round" | "ceil");
   const [handicapDefault, setHandicapDefault] = useState(league.handicapDefault);
   const [handicapMax, setHandicapMax] = useState<number | "">(league.handicapMax ?? "");
@@ -140,6 +143,8 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
     setSyncedLeague(league);
     setHandicapBaseScore(league.handicapBaseScore);
     setHandicapMultiplier(league.handicapMultiplier);
+    setHandicapUnderParMultiplier(league.handicapUnderParMultiplier ?? "");
+    setHandicapUnderParCap(league.handicapUnderParCap ?? "");
     setHandicapRounding((league.handicapRounding ?? "floor") as "floor" | "round" | "ceil");
     setHandicapDefault(league.handicapDefault);
     setHandicapMax(league.handicapMax ?? "");
@@ -164,13 +169,19 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
   }
 
   function calculatePreviewHandicap(avg: number): number {
-    const rawHandicap = (avg - handicapBaseScore) * handicapMultiplier;
+    const isUnderPar = avg <= handicapBaseScore;
+    const effectiveMultiplier =
+      isUnderPar && handicapUnderParMultiplier !== "" ? handicapUnderParMultiplier : handicapMultiplier;
+    const rawHandicap = (avg - handicapBaseScore) * effectiveMultiplier;
     let result: number;
     switch (handicapRounding) {
       case "floor": result = Math.floor(rawHandicap); break;
       case "ceil": result = Math.ceil(rawHandicap); break;
       case "round": result = Math.round(rawHandicap); break;
       default: result = Math.floor(rawHandicap);
+    }
+    if (isUnderPar && handicapUnderParCap !== "" && result > handicapUnderParCap) {
+      result = handicapUnderParCap;
     }
     if (handicapMax !== "" && result > handicapMax) result = handicapMax;
     if (handicapMin !== "" && result < handicapMin) result = handicapMin;
@@ -198,6 +209,8 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
 
     setHandicapBaseScore(merged.baseScore);
     setHandicapMultiplier(merged.multiplier);
+    setHandicapUnderParMultiplier(merged.underParMultiplier ?? "");
+    setHandicapUnderParCap(merged.underParCap ?? "");
     setHandicapRounding(merged.rounding);
     setHandicapDefault(merged.defaultHandicap);
     setHandicapMax(merged.maxHandicap ?? "");
@@ -255,6 +268,8 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
       const result = await updateHandicapSettings(slug, {
         baseScore: handicapBaseScore,
         multiplier: handicapMultiplier,
+        underParMultiplier: handicapUnderParMultiplier === "" ? null : handicapUnderParMultiplier,
+        underParCap: handicapUnderParCap === "" ? null : handicapUnderParCap,
         rounding: handicapRounding,
         defaultHandicap: handicapDefault,
         maxHandicap: handicapMax === "" ? null : handicapMax,
@@ -292,6 +307,30 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
     } catch (error) {
       console.error("handleSaveHandicapSettings error:", error);
       setMessage({ type: "error", text: "Failed to save handicap settings." });
+    }
+    setLoadingSection(null);
+  }
+
+  async function handleRecalculateAll() {
+    if (!confirm("Recompute every matchup's handicap, net score, points, and team totals from the current settings? Week-1 manual entries are preserved.")) return;
+    setLoadingSection("recalc");
+    try {
+      const result = await recalculateAllMatchups(slug);
+      if (!result.success) {
+        setMessage({ type: "error", text: result.error });
+        setLoadingSection(null);
+        return;
+      }
+      const [leagueData, matchupsResult, teamsData] = await Promise.all([
+        getLeagueBySlug(slug),
+        getMatchupHistory(league.id),
+        getTeams(league.id),
+      ]);
+      onDataRefresh({ league: leagueData, matchups: matchupsResult.matchups, teams: teamsData });
+      setMessage({ type: "success", text: "All matchups recalculated." });
+    } catch (error) {
+      console.error("handleRecalculateAll error:", error);
+      setMessage({ type: "error", text: "Failed to recalculate matchups." });
     }
     setLoadingSection(null);
   }
@@ -977,6 +1016,16 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                   <input id="hc-min" type="number" value={handicapMin} onChange={(e) => { setHandicapMin(e.target.value ? parseFloat(e.target.value) : ""); setSelectedPreset("custom"); }} placeholder="No limit" className="pencil-input w-full font-mono tabular-nums" />
                   <p className="text-xs font-sans text-text-muted mt-1">For scratch golfers</p>
                 </div>
+                <div>
+                  <label htmlFor="hc-under-par-multiplier" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Under-Par Multiplier</label>
+                  <input id="hc-under-par-multiplier" type="number" value={handicapUnderParMultiplier} onChange={(e) => { setHandicapUnderParMultiplier(e.target.value ? parseFloat(e.target.value) : ""); setSelectedPreset("custom"); }} step="0.01" placeholder="Use main" className="pencil-input w-full font-mono tabular-nums" />
+                  <p className="text-xs font-sans text-text-muted mt-1">Multiplier when avg &le; par (e.g. 1.1)</p>
+                </div>
+                <div>
+                  <label htmlFor="hc-under-par-cap" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Under-Par Cap</label>
+                  <input id="hc-under-par-cap" type="number" value={handicapUnderParCap} onChange={(e) => { setHandicapUnderParCap(e.target.value ? parseFloat(e.target.value) : ""); setSelectedPreset("custom"); }} placeholder="No cap" className="pencil-input w-full font-mono tabular-nums" />
+                  <p className="text-xs font-sans text-text-muted mt-1">Max handicap when avg &le; par (e.g. -1)</p>
+                </div>
               </div>
             </div>
           )}
@@ -1177,9 +1226,14 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
           </p>
         </div>
 
-        <button onClick={handleSaveHandicapSettings} disabled={loadingSection !== null || handicapHasErrors} className="mt-6 px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors">
-          {loadingSection === "handicap" ? "Saving..." : "Save Handicap Settings"}
-        </button>
+        <div className="mt-6 flex gap-3 flex-wrap">
+          <button onClick={handleSaveHandicapSettings} disabled={loadingSection !== null || handicapHasErrors} className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors">
+            {loadingSection === "handicap" ? "Saving..." : "Save Handicap Settings"}
+          </button>
+          <button onClick={handleRecalculateAll} disabled={loadingSection !== null} className="px-6 py-2 bg-scorecard-pencil text-white rounded-lg hover:bg-scorecard-pencil/80 disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors" title="Recompute all matchup handicaps, net scores, points, and team totals from current settings. Week-1 manual entries are preserved.">
+            {loadingSection === "recalc" ? "Recalculating..." : "Recalculate All Matchups"}
+          </button>
+        </div>
       </div>
     </div>
   );
