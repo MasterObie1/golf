@@ -88,3 +88,8 @@ test-failure-*.png
 task_plan.md
 findings.md
 progress.md
+
+# ===========================================
+# INTERNAL REVIEW ARTIFACTS (never commit — contain security findings)
+# ===========================================
+review-output/
