@@ -59,7 +59,6 @@ export {
   updateLeagueSettings,
   updateHandicapSettings,
   updateScorecardSettings,
-  recalculateAllMatchups,
   type HandicapSettingsInput,
 } from "./league-settings";
 

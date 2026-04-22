@@ -44,11 +44,6 @@ model League {
   handicapMax          Float?    @default(9)        // Maximum handicap cap (default: 9, set to null for no limit)
   handicapMin          Float?                       // Minimum handicap cap (null = no limit, for scratch golfers)
 
-  // Split multiplier: different multiplier for at-or-under-par averages (null = use main multiplier)
-  handicapUnderParMultiplier Float?                 // e.g. 1.1 to punish sub-par play more harshly; null = reuse handicapMultiplier
-  // Cap applied to handicaps when avg <= baseScore: handicap = min(computed, cap). null = no cap
-  handicapUnderParCap        Float?                 // e.g. -1 so "even par" yields at least -1
-
   // --- Score Selection ---
   handicapScoreSelection   String    @default("all")   // "all", "last_n", "best_of_last"
   handicapScoreCount       Int?                        // For "last_n": how many recent scores to use

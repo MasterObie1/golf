@@ -14,8 +14,6 @@ export async function getHandicapSettings(leagueId: number): Promise<HandicapSet
     select: {
       handicapBaseScore: true,
       handicapMultiplier: true,
-      handicapUnderParMultiplier: true,
-      handicapUnderParCap: true,
       handicapRounding: true,
       handicapDefault: true,
       handicapMax: true,

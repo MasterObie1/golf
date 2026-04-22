@@ -236,8 +236,6 @@ export async function getLeagueBySlug(slug: string) {
       // Handicap config (needed by admin page, not sensitive)
       handicapBaseScore: true,
       handicapMultiplier: true,
-      handicapUnderParMultiplier: true,
-      handicapUnderParCap: true,
       handicapRounding: true,
       handicapDefault: true,
       handicapMax: true,

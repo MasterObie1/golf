@@ -78,8 +78,6 @@ export interface HandicapSettingsInput {
   // Basic Formula
   baseScore: number;
   multiplier: number;
-  underParMultiplier: number | null;
-  underParCap: number | null;
   rounding: RoundingMethod;
   defaultHandicap: number;
   maxHandicap: number | null;
@@ -116,8 +114,6 @@ export interface HandicapSettingsInput {
 const updateHandicapSettingsSchema = z.object({
   baseScore: z.number().min(0).max(200),
   multiplier: z.number().min(0).max(5),
-  underParMultiplier: z.number().min(0).max(5).nullable(),
-  underParCap: z.number().min(-100).max(100).nullable(),
   rounding: z.enum(["floor", "round", "ceil"]),
   defaultHandicap: z.number().min(-50).max(100),
   maxHandicap: z.number().min(0).max(200).nullable(),
@@ -192,8 +188,6 @@ export async function updateHandicapSettings(
         // Basic Formula
         handicapBaseScore: validated.baseScore,
         handicapMultiplier: validated.multiplier,
-        handicapUnderParMultiplier: validated.underParMultiplier,
-        handicapUnderParCap: validated.underParCap,
         handicapRounding: validated.rounding,
         handicapDefault: validated.defaultHandicap,
         handicapMax: validated.maxHandicap,
@@ -243,23 +237,6 @@ export async function updateHandicapSettings(
 }
 
 /**
- * Admin-triggered recalculation of all matchups and stats from current settings.
- * Used when an admin wants to re-run the handicap engine against historical data
- * (e.g., after a formula change or manual matchup correction) without editing settings.
- */
-export async function recalculateAllMatchups(leagueSlug: string): Promise<ActionResult> {
-  try {
-    const session = await requireLeagueAdmin(leagueSlug);
-    await requireActiveLeague(session.leagueId);
-    await recalculateLeagueStats(session.leagueId);
-    return { success: true, data: undefined };
-  } catch (error) {
-    logger.error("recalculateAllMatchups failed", error);
-    return { success: false, error: error instanceof Error ? error.message : "Failed to recalculate" };
-  }
-}
-
-/**
  * Recalculate all matchup handicaps, net scores, points, and team stats
  * Used when handicap settings change.
  * Wrapped in a transaction for atomicity — all updates succeed or none do.
@@ -273,8 +250,6 @@ async function recalculateLeagueStats(leagueId: number) {
       select: {
         handicapBaseScore: true,
         handicapMultiplier: true,
-        handicapUnderParMultiplier: true,
-        handicapUnderParCap: true,
         handicapRounding: true,
         handicapDefault: true,
         handicapMax: true,

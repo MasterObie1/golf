@@ -19,8 +19,6 @@ export interface HandicapSettings {
   // Basic Formula
   baseScore: number;                    // Subtracted from average (default: 35)
   multiplier: number;                   // Multiplied by difference (default: 0.9)
-  underParMultiplier: number | null;    // Alternate multiplier when avg <= baseScore (null = reuse multiplier)
-  underParCap: number | null;           // Cap applied from above when avg <= baseScore (null = no cap)
   rounding: RoundingMethod;             // Rounding method (default: floor)
   defaultHandicap: number;              // When no scores available (default: 0)
   maxHandicap: number | null;           // Maximum handicap cap (9 = default, null = no limit)
@@ -61,8 +59,6 @@ export const DEFAULT_HANDICAP_SETTINGS: HandicapSettings = {
   // Basic Formula
   baseScore: 35,
   multiplier: 0.9,
-  underParMultiplier: null,
-  underParCap: null,
   rounding: "floor",
   defaultHandicap: 0,
   maxHandicap: 9,                    // Maximum handicap cap (9 = default, null = no limit)
@@ -480,14 +476,7 @@ export function calculateHandicap(
   const average = calculateWeightedAverage(processedScores, settings);
 
   // Step 4: Apply base formula
-  // Use a distinct multiplier for at-or-under-par averages if configured. Lets leagues
-  // be harsher on sub-par play (e.g., 1.1) without affecting above-par calculations.
-  const isUnderPar = average <= settings.baseScore;
-  const effectiveMultiplier =
-    isUnderPar && settings.underParMultiplier !== null
-      ? settings.underParMultiplier
-      : settings.multiplier;
-  let rawHandicap = (average - settings.baseScore) * effectiveMultiplier;
+  let rawHandicap = (average - settings.baseScore) * settings.multiplier;
 
   // Guard against NaN/Infinity from degenerate inputs
   if (!isFinite(rawHandicap)) return settings.defaultHandicap;
@@ -510,12 +499,7 @@ export function calculateHandicap(
   // Step 7: Apply rounding
   let handicap = applyRounding(rawHandicap, settings.rounding);
 
-  // Step 8: Apply under-par cap from above (e.g., -1 so even par never scores 0)
-  if (isUnderPar && settings.underParCap !== null && handicap > settings.underParCap) {
-    handicap = settings.underParCap;
-  }
-
-  // Step 9: Apply min/max caps
+  // Step 8: Apply min/max caps
   handicap = applyCaps(handicap, settings);
 
   // Final guard against NaN/Infinity
@@ -727,8 +711,6 @@ const leagueHandicapSchema = z.object({
 export function leagueToHandicapSettings(league: {
   handicapBaseScore: number;
   handicapMultiplier: number;
-  handicapUnderParMultiplier?: number | null;
-  handicapUnderParCap?: number | null;
   handicapRounding: string;
   handicapDefault: number;
   handicapMax: number | null;
@@ -765,8 +747,6 @@ export function leagueToHandicapSettings(league: {
     // Basic Formula
     baseScore: league.handicapBaseScore,
     multiplier: league.handicapMultiplier,
-    underParMultiplier: league.handicapUnderParMultiplier ?? null,
-    underParCap: league.handicapUnderParCap ?? null,
     rounding: validRounding.includes(league.handicapRounding)
       ? (league.handicapRounding as RoundingMethod)
       : "floor",
