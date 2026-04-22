@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && npx tsx scripts/apply-migrations.ts && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest",
