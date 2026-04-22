@@ -56,7 +56,7 @@ Hardcoded credentials removed. Now uses `SuperAdmin` database model with bcrypt.
 
 ### Known Bugs (Must Fix)
 
-1. **`submitMatchup` has no transaction** (`actions.ts:406-462`) — partial failures corrupt team stats
+1. **`submitMatchup` has no transaction** — FIXED. Matchup create + both team updates + scheduled-match link + scorecard auto-link now run inside `prisma.$transaction` at `src/lib/actions/matchups.ts:277`. Regression covered by `tests/integration/matchups.test.ts` `describe("submitMatchup", …)`.
 2. **Head-to-head tiebreaker sorts backwards** — FIXED. Changed `aVsB - bVsA` → `bVsA - aVsB` in all 3 locations in `standings.ts`.
 3. **Points override passes `""` as number** (`admin/page.tsx:388`) — `as number` cast on `number | ""` doesn't convert at runtime
 4. **`createSeason` has no transaction** (`actions.ts:1530-1548`) — can leave zero active seasons

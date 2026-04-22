@@ -472,6 +472,139 @@ describe("getTeamMatchupHistory", () => {
 });
 
 // ==========================================
+// submitMatchup
+// ==========================================
+
+describe("submitMatchup", () => {
+  it("creates the matchup and updates both teams' stats atomically on a win", async () => {
+    const ctx = await setupLeagueWithTeams("Submit Happy Path League");
+
+    const result = await submitMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 40, 0, 40, 20, false,
+      ctx.teamBId, 45, 0, 45, 0, false
+    );
+
+    expect(result.success).toBe(true);
+
+    const matchupCount = await testPrisma.matchup.count({ where: { leagueId: ctx.leagueId } });
+    expect(matchupCount).toBe(1);
+
+    const teamA = await testPrisma.team.findUnique({ where: { id: ctx.teamAId } });
+    const teamB = await testPrisma.team.findUnique({ where: { id: ctx.teamBId } });
+    expect(teamA).toMatchObject({ totalPoints: 20, wins: 1, losses: 0, ties: 0 });
+    expect(teamB).toMatchObject({ totalPoints: 0, wins: 0, losses: 1, ties: 0 });
+  });
+
+  it("records a tie on both teams without win/loss", async () => {
+    const ctx = await setupLeagueWithTeams("Submit Tie League");
+
+    const result = await submitMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 40, 5, 35, 10, false,
+      ctx.teamBId, 40, 5, 35, 10, false
+    );
+
+    expect(result.success).toBe(true);
+
+    const teamA = await testPrisma.team.findUnique({ where: { id: ctx.teamAId } });
+    const teamB = await testPrisma.team.findUnique({ where: { id: ctx.teamBId } });
+    expect(teamA).toMatchObject({ totalPoints: 10, wins: 0, losses: 0, ties: 1 });
+    expect(teamB).toMatchObject({ totalPoints: 10, wins: 0, losses: 0, ties: 1 });
+  });
+
+  it("rejects match_play points that don't sum to 20 and leaves state untouched", async () => {
+    const ctx = await setupLeagueWithTeams("Submit Sum Rejection League");
+
+    const result = await submitMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 40, 0, 40, 15, false,
+      ctx.teamBId, 45, 0, 45, 10, false
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/sum to 20/i);
+    }
+
+    const matchupCount = await testPrisma.matchup.count({ where: { leagueId: ctx.leagueId } });
+    expect(matchupCount).toBe(0);
+
+    const teamA = await testPrisma.team.findUnique({ where: { id: ctx.teamAId } });
+    const teamB = await testPrisma.team.findUnique({ where: { id: ctx.teamBId } });
+    expect(teamA!.totalPoints).toBe(0);
+    expect(teamB!.totalPoints).toBe(0);
+  });
+
+  it("rejects a team that does not belong to this league", async () => {
+    const ctx = await setupLeagueWithTeams("Submit Cross-League Target");
+    const otherLeague = await setupLeagueWithTeams("Submit Cross-League Source");
+
+    // Re-auth as the first league's admin (setupLeagueWithTeams overrode context)
+    setAuthContext(ctx.leagueId, ctx.leagueSlug, ctx.adminUsername);
+
+    const result = await submitMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 40, 0, 40, 20, false,
+      otherLeague.teamAId, 45, 0, 45, 0, false
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/do not belong to this league/i);
+    }
+
+    const matchupCount = await testPrisma.matchup.count({ where: { leagueId: ctx.leagueId } });
+    expect(matchupCount).toBe(0);
+  });
+
+  it("rolls back atomically when a duplicate-team submission is rejected inside the transaction", async () => {
+    // Regression test for the bug originally flagged in CLAUDE.md Known Bugs #1:
+    // "submitMatchup has no transaction — partial failures corrupt team stats."
+    // The $transaction wrapper is what keeps the duplicate-detection throw from
+    // leaving a partial matchup row or half-updated team stats behind.
+    const ctx = await setupLeagueWithTeams("Submit Atomicity League");
+    const teamC = unwrap(await createTeam(ctx.leagueId, "Team Gamma"));
+    await approveTeam(ctx.leagueSlug, teamC.id);
+
+    // First submission succeeds: teamA vs teamB, A wins 20-0.
+    const first = await submitMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 40, 0, 40, 20, false,
+      ctx.teamBId, 45, 0, 45, 0, false
+    );
+    expect(first.success).toBe(true);
+
+    // Second submission for the same week tries to pair teamA (already used) with teamC.
+    // The duplicate check inside the transaction throws, which must roll back the entire
+    // transaction — no matchup row, no team stat drift on teamC.
+    const duplicate = await submitMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 42, 0, 42, 12, false,
+      teamC.id, 44, 0, 44, 8, false
+    );
+    expect(duplicate.success).toBe(false);
+    if (!duplicate.success) {
+      expect(duplicate.error).toMatch(/already/i);
+    }
+
+    // Exactly the first matchup should exist.
+    const matchupCount = await testPrisma.matchup.count({
+      where: { leagueId: ctx.leagueId, weekNumber: 1 },
+    });
+    expect(matchupCount).toBe(1);
+
+    // teamA's stats reflect the first matchup only — no increment from the rejected one.
+    const teamA = await testPrisma.team.findUnique({ where: { id: ctx.teamAId } });
+    expect(teamA).toMatchObject({ totalPoints: 20, wins: 1, losses: 0, ties: 0 });
+
+    // teamC was untouched — no partial update leaked out of the rolled-back transaction.
+    const teamCAfter = await testPrisma.team.findUnique({ where: { id: teamC.id } });
+    expect(teamCAfter).toMatchObject({ totalPoints: 0, wins: 0, losses: 0, ties: 0 });
+  });
+});
+
+// ==========================================
 // deleteMatchup
 // ==========================================
 
