@@ -6,91 +6,86 @@ LeagueLinks is a golf league management web app. Next.js 16 + React 19 + Prisma 
 
 ## Commands
 
-- `npm run dev` — Start dev server
-- `npm run build` — `prisma generate && next build`
-- `npm run lint` — ESLint
-- No test command exists yet. Tests need to be set up from scratch.
+- `npm run dev` — Start dev server (webpack)
+- `npm run build` — `prisma generate && npx tsx scripts/apply-migrations.ts && next build` (migrations run against Turso during Vercel builds)
+- `npm run lint` — ESLint (clean as of 2026-07-08; keep it that way)
+- `npm run test:ci` — Vitest, all unit + integration tests
+- `npm run test:coverage` — Coverage with enforced thresholds (60% lines/functions, 50% branches on `src/lib`)
+- `npm run test:e2e` — Seeds via `scripts/seed-e2e.ts`, then Playwright
 
-## Critical Warnings (Phase 1 Security — FIXED 2026-02-05)
+### Databases (three SQLite files — easy to confuse)
 
-### Authentication — FIXED
-Session tokens now use HS256-signed JWTs via `jose`. Requires `SESSION_SECRET` env var.
-- `src/lib/auth.ts` — `createSessionToken()` / `verifySessionToken()` use signed JWTs
-- `src/lib/superadmin-auth.ts` — same pattern for super-admin tokens
-- `src/middleware.ts` — verifies JWT signatures before allowing access
+- `./dev.db` (repo root) — the real local dev database (`src/lib/db.ts` resolves `file:./dev.db` from CWD)
+- `./test.db` (repo root) — used by integration tests (each test file wires its own PrismaClient at `../../test.db`)
+- `prisma/dev.db` — 0-byte stale artifact; ignore it. The Prisma CLI resolves `.env`'s `file:./dev.db` against the repo root, not `prisma/`.
+- After adding a migration, apply it to BOTH root databases: `DATABASE_URL="file:$PWD/test.db" npx prisma migrate deploy` (and same for `dev.db`), then `npx prisma generate`.
+- Keep `prisma`, `@prisma/client`, and `@prisma/adapter-libsql` on the SAME version — a CLI/client skew produces a generated client that imports runtime files the installed client doesn't have.
 
-### Super-Admin Auth — FIXED
-Hardcoded credentials removed. Now uses `SuperAdmin` database model with bcrypt.
-- Seed with: `SUPER_ADMIN_PASSWORD=yourpass npx tsx scripts/seed-superadmin.ts`
-- Old credentials (`alex`/`sudo123!`) are still in git history — consider BFG cleanup
+## Architecture
 
-### Password Hash Leak — FIXED
-`getLeagueBySlug()` now uses a `select` clause excluding `adminPassword` and `adminUsername`.
+### Server actions — `src/lib/actions/` (split by domain)
 
-### Password Management — FIXED
-- `createLeague()` now requires a password (no more default `pass@word1`)
-- `changeLeaguePassword()` server action added for admin password changes
-- Password change UI added to admin settings tab
+`leagues`, `teams`, `matchups`, `weekly-scores`, `standings`, `seasons`, `schedule`, `scorecards`, `courses`, `league-settings`, `handicap-settings`, `scoring-config`, `league-about`, `course-import` (stub), plus `shared.ts` (ActionResult type, `getServerActionIp`, `revalidateLeaguePages`) and `index.ts` (re-exports).
 
-### Rate Limiting — ADDED
-- Login: 5 attempts per 15 min per IP
-- Sudo login: 3 attempts per 15 min per IP
-- League creation: 3 per hour per IP
-- Team registration: 10 per hour per IP
+Conventions that hold today — preserve them:
+- Every mutating action calls `requireLeagueAdmin(leagueSlug)` (or `requireSuperAdmin()`) and derives `leagueId` from the verified session, never from client input. Middleware alone does NOT protect server actions.
+- Mutations that touch an entity by id re-verify the entity belongs to `session.leagueId`.
+- Most mutations also call `requireActiveLeague()` to block writes on suspended leagues.
+- Multi-table mutations use `prisma.$transaction` with check-then-act reads INSIDE the transaction.
+- Zod-validate numeric/string inputs at the top of the action.
+- Public reads use explicit `select` clauses (`safeTeamSelect`, league selects excluding `adminPassword`/`adminUsername`/PII).
+- After any mutation that changes standings/matchups/scores, call `revalidateLeaguePages(leagueSlug)` from `shared.ts` (revalidates league root, history, leaderboard, handicap-history, schedule, scorecards).
 
-## Architecture Notes
+### Handicap engine — `src/lib/handicap.ts`
 
-### File Structure
+Pure functions; the best code in the project. Key entry points:
+- `calculateHandicapFromEntries(entries, settings, weekNumber)` — PREFERRED. Takes `{week, gross}[]` so freeze-week truncation selects true calendar weeks 1..freezeWeek even when a team missed weeks (subs/forfeits/absences leave gaps).
+- `calculateHandicap(scores, settings, weekNumber)` — positional legacy variant; freeze week slices by array index. Only for callers that genuinely have no week numbers.
+- Score fetchers in `actions/teams.ts`: `getTeamPreviousScoreEntries` / `getTeamPreviousScoreEntriesForScoring` return week-tagged entries (`ForScoring` reads WeeklyScore for stroke_play/hybrid, Matchup for match_play). The plain `getTeamPreviousScores*` variants are thin `number[]` wrappers kept for compatibility.
+- **By design:** `Course.courseRating`/`slopeRating` are display-only; the engine is a custom configurable system, not WHS-compliant. The "USGA-Inspired" preset is a loose approximation.
+- Under-par split: `underParMultiplier` applies when avg <= baseScore; `underParCap` caps the rounded result before min/max caps. `describeCalculation` mirrors both.
 
-- `src/lib/actions.ts` — **1,951-line monolith**. Contains ALL server actions (read + write). Needs to be split into domain modules (`src/lib/actions/leagues.ts`, `src/lib/actions/matchups.ts`, etc.).
-- `src/app/league/[slug]/admin/page.tsx` — **2,068-line client component** with 40+ `useState` calls. Must be decomposed into tab-level components.
-- `src/lib/handicap.ts` — The handicap calculation engine. This is well-designed and is the best code in the project. 840 lines of pure functions.
-  - **By design:** `Course.courseRating` and `Course.slopeRating` are NOT used by the handicap engine. This is intentional — the system uses admin-controlled settings (`baseScore`, `multiplier`, etc.) rather than WHS-style differential calculations. The course fields exist for display/reference only.
-  - **By design:** The engine is not WHS-compliant. It's a custom league system with configurable presets. The "USGA-Inspired" preset is a loose approximation, not an implementation of the standard.
+### Recalculation — `league-settings.ts # recalculateLeagueStats`
 
-### Data Model
+Triggered by `updateHandicapSettings` and the exported `recalculateAllMatchups(leagueSlug)` action. Inside one transaction it: (1) replays WeeklyScore rows week-by-week (recomputes handicap/net/position/points via the same `calculateStrokePlayPoints` + `generatePointScale` pipeline as `previewWeeklyScores`), (2) replays Matchups (using WeeklyScore gross history for stroke_play/hybrid, matchup history for match_play), (3) rebuilds Team aggregates from the recomputed values. Manual handicaps (subs, first entries) are preserved; `pointsOverridden` matchups keep their points.
 
-- The `League` model in `prisma/schema.prisma` is a god object with 40+ columns. The 20+ handicap config fields should be extracted to a separate `HandicapConfig` model.
-- `Team.totalPoints`, `wins`, `losses`, `ties` are denormalized aggregates that are manually incremented. They can drift from reality. `recalculateLeagueStats()` exists as a reconciliation tool.
-- **No database indexes exist on foreign keys.** Add `@@index` on `leagueId`, `seasonId`, `teamAId`, `teamBId` before scaling.
+### Data model notes
 
-### Known Bugs (Must Fix)
+- `Team.totalPoints/wins/losses/ties` are denormalized; mutations keep them in sync transactionally, and `recalculateAllMatchups` is the reconciliation tool.
+- FK indexes exist on all hot paths (leagueId, seasonId, teamAId/BId, composite league+week).
+- `LoginAttempt` backs durable login rate limiting (see Security).
+- The `League` model is still a god object (~50 columns of handicap/scoring/schedule config). Extracting a `HandicapConfig` model remains a good future refactor.
+- Matchup uniqueness is `[leagueId, weekNumber, teamAId, teamBId]` — a swapped A/B pair bypasses the DB constraint; the app-layer duplicate check in `submitMatchup` (inside the transaction) covers both orderings.
 
-1. **`submitMatchup` has no transaction** (`actions.ts:406-462`) — partial failures corrupt team stats
-2. **Head-to-head tiebreaker sorts backwards** — FIXED. Changed `aVsB - bVsA` → `bVsA - aVsB` in all 3 locations in `standings.ts`.
-3. **Points override passes `""` as number** (`admin/page.tsx:388`) — `as number` cast on `number | ""` doesn't convert at runtime
-4. **`createSeason` has no transaction** (`actions.ts:1530-1548`) — can leave zero active seasons
-5. **Freeze week is a no-op** — FIXED. Freeze week truncation now implemented in `handicap.ts:441-446`. However, has a semantic issue: invalid scores are filtered before freeze truncation, so freeze means "first N valid scores" not "scores from weeks 1..N".
+## Security
 
-### Patterns to Follow
+- Sessions: HS256 JWTs via `jose` with pinned algorithms, issuer/audience, expiry (24h admin, 4h sudo, 1h impersonation, 48h scorecard links). `SESSION_SECRET` required; the placeholder value is rejected everywhere via `session-secret.ts # getSessionSecret()` — always use that helper, never `process.env.SESSION_SECRET!` directly.
+- Login routes (`/api/admin/login`, `/api/sudo/login`): CSRF Origin check FAILS CLOSED (missing Origin → 403), timing-safe dummy bcrypt compare on unknown user, and durable DB-backed rate limiting via `checkRateLimitDurable` (LoginAttempt table, shared across serverless instances; falls back to the in-memory limiter on DB errors).
+- Client IP: only `x-vercel-forwarded-for` is trusted by default. Self-hosted deployments must set `TRUST_PROXY_IP_HEADERS=true` to honor `x-forwarded-for`/`x-real-ip` (see `.env.example`).
+- In-memory `checkRateLimit` still guards lower-value paths (createLeague, registerTeam, scorecard saves) — per-instance on Vercel, acceptable for those.
+- Super-admin: `SuperAdmin` table with bcrypt (cost 12). Seed: `SUPER_ADMIN_PASSWORD=yourpass npx tsx scripts/seed-superadmin.ts`. Old hardcoded creds exist only in old git history.
+- `/api/health` returns only `{timestamp, database: {status}}` — do not add env details or error strings back.
+- Known accepted risks: scorecard share links are irrevocable until their 48h expiry (add a tokenVersion if this matters later); remaining `npm audit` moderates are build-time transitive (postcss-in-next, hono-in-prisma-dev) with no non-breaking fix.
 
-- Use Zod schemas for ALL server action input validation (currently only used for `registerTeam` and `updateLeagueAbout`)
-- Use `$transaction` for any operation that touches multiple tables
-- Use `select` clauses on Prisma queries to avoid over-fetching
-- Use `Promise.all` for independent async operations (several pages have serial waterfalls)
-- Server components should fetch data directly; reserve `"use server"` for mutations only
+## Patterns to Follow / Avoid
 
-### Patterns to Avoid
+- Zod for all action inputs; `$transaction` for multi-table writes; `select` clauses everywhere; `Promise.all` for independent queries.
+- Do NOT return full Prisma models to client components.
+- Do NOT use `as number`/`as string` casts on unvalidated unions — validate and narrow.
+- Do NOT trust client-computed points blindly: `submitMatchup` re-derives nets and enforces sum-to-20 for match play; `submitWeeklyScores` bounds-checks all numerics (a full server-side recompute there is still a worthwhile future hardening).
+- Admin UI numeric inputs coerce blank → 0 (`parseFloat(v) || 0`); handicap save blocks multiplier/baseScore <= 0 client-side and the server rejects multiplier <= 0. Apply the same care to any new numeric setting.
+- `handicapUnderParMultiplier`/`Cap` are optional in `updateHandicapSettings` (default null) — keep new settings optional-with-default so older clients/tests don't break.
 
-- Do NOT add more state to the admin page — decompose into smaller components first
-- Do NOT use `as number` casts on union types — validate and convert properly
-- Do NOT use `force-dynamic` without good reason — prefer `revalidate` for read-heavy pages
-- Do NOT return full Prisma models to client components — always select/omit sensitive fields
+## Testing
 
-## Tech Stack
+- `tests/unit/` — 15 files (handicap engine, auth, rate-limit, rss, round-robin, scoring-utils, ...). `tests/integration/` — 15 files covering every action module against `test.db` with mocked auth (`setAuthContext` pattern) and mocked `next/cache`/`next/headers`/rate-limit.
+- Integration tests run with `fileParallelism: false` (shared test.db) under happy-dom. happy-dom's `Request` strips forbidden headers (origin/host) — `api-routes.test.ts` uses a duck-typed request helper for the CSRF tests.
+- When changing engine or recalc behavior, extend `tests/unit/handicap.test.ts` and `tests/integration/league-settings.test.ts` ("recalculation rewrites weekly scores").
+- E2E: Playwright specs in `e2e/` against the `seed-e2e.ts` league (password from `E2E_LEAGUE_PASSWORD`, default local-only).
 
-- **Framework:** Next.js 16.1.1 (App Router)
-- **UI:** React 19.2.3 + Tailwind CSS 4
-- **Database:** Prisma 7.2.0 with SQLite provider, libSQL adapter for Turso in production
-- **Auth:** Custom cookie-based (BROKEN — see warnings above)
-- **Validation:** Zod 4.3.5 (underused)
-- **Fonts:** Plus Jakarta Sans, Inter, Playfair Display (3 font families, 12 weights total)
-- **Deployment:** Vercel + Turso
+## History / Gotchas
 
-## Testing (TODO)
-
-No tests exist. Priority order for adding tests:
-1. `src/lib/handicap.ts` — pure functions, highest value, easiest to test
-2. `src/lib/auth.ts` — session parsing and validation
-3. Server actions in `src/lib/actions.ts` — integration tests with test database
-4. E2E with Playwright — login flow, matchup submission, leaderboard display
+- 2026-07-08 audit fixed: recalc now rewrites WeeklyScore rows (was a silent no-op for stroke play); freeze week is week-aligned via `calculateHandicapFromEntries` (was positional); durable login rate limiting; fail-closed CSRF; health endpoint slimmed; `approveTeam` capacity check made transactional; schedule week numbers Zod-validated; dense rank labels respect tiebreakers.
+- Handicap history (`getHandicapHistoryForSeason`) shows the recorded per-week handicap but a CALCULATED `currentHandicap`, and omits sub weeks entirely — tests encode this; don't "fix" it back.
+- Manual handicap entries are capped at league max/min on entry (`capManualHandicap`).
+- An auto-commit hook has previously swept unrelated untracked files into commits — verify commit contents before pushing.

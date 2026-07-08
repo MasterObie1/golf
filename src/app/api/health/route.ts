@@ -2,29 +2,25 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
-  const checks: Record<string, unknown> = {
-    timestamp: new Date().toISOString(),
-    env: {
-      hasTursoUrl: !!process.env.TURSO_DATABASE_URL,
-      hasTursoToken: !!process.env.TURSO_AUTH_TOKEN,
-    },
-  };
+  const timestamp = new Date().toISOString();
 
   try {
     // Test database connection with a simple query
-    const leagueCount = await prisma.league.count();
-    checks.database = {
-      status: "connected",
-      leagueCount,
-    };
+    await prisma.league.count();
+    return NextResponse.json({
+      timestamp,
+      database: { status: "connected" },
+    });
   } catch (error) {
-    checks.database = {
-      status: "error",
-      message: error instanceof Error ? error.message : "Unknown error",
-    };
+    // Log details server-side; the public response stays generic — env
+    // configuration and driver error strings are internal information.
+    console.error("Health check failed:", error instanceof Error ? error.message : error);
+    return NextResponse.json(
+      {
+        timestamp,
+        database: { status: "error" },
+      },
+      { status: 500 }
+    );
   }
-
-  const isHealthy = checks.database && (checks.database as { status: string }).status === "connected";
-
-  return NextResponse.json(checks, { status: isHealthy ? 200 : 500 });
 }

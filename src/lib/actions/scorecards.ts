@@ -3,12 +3,10 @@
 import { Prisma } from "../../generated/prisma/client";
 import { prisma } from "../db";
 import { requireLeagueAdmin } from "../auth";
-import { logger } from "../logger";
 import { createScorecardToken, verifyScorecardToken } from "../scorecard-auth";
 import { sendScorecardEmail, isEmailConfigured } from "../email";
-import { revalidatePath } from "next/cache";
 import { requireActiveLeague } from "./leagues";
-import type { ActionResult } from "./shared";
+import { revalidateLeaguePages, type ActionResult } from "./shared";
 import { filterHolesByCourseSide, isHoleInPlay, getExpectedHoleCount, getCourseSideForWeek } from "../scheduling/course-side";
 
 // ── Types ───────────────────────────────────────────────
@@ -480,7 +478,7 @@ export async function approveScorecard(
     },
   });
 
-  revalidatePath(`/league/${leagueSlug}/history`);
+  revalidateLeaguePages(leagueSlug);
   return { success: true, data: undefined };
 }
 

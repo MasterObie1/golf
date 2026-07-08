@@ -105,7 +105,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
   const [strokePlayMaxDnp, setStrokePlayMaxDnp] = useState<number | "">(league.strokePlayMaxDnp ?? "");
   const [strokePlayProRate, setStrokePlayProRate] = useState(league.strokePlayProRate);
   const [hybridFieldWeight, setHybridFieldWeight] = useState(league.hybridFieldWeight);
-  const [hybridFieldPointScale, setHybridFieldPointScale] = useState<number[]>(() => {
+  const [hybridFieldPointScale, _setHybridFieldPointScale] = useState<number[]>(() => {
     if (league.hybridFieldPointScale) {
       try { return JSON.parse(league.hybridFieldPointScale) as number[]; }
       catch (error) { console.error("Failed to parse hybridFieldPointScale:", error); }
@@ -259,6 +259,16 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
   }
 
   async function handleSaveHandicapSettings() {
+    // Blank numeric inputs coerce to 0; a 0 multiplier would zero every handicap
+    // on recalc and a 0 base score would explode them. Block the save instead.
+    if (!isFinite(handicapMultiplier) || handicapMultiplier <= 0) {
+      setMessage({ type: "error", text: "Multiplier must be greater than 0." });
+      return;
+    }
+    if (!isFinite(handicapBaseScore) || handicapBaseScore <= 0) {
+      setMessage({ type: "error", text: "Base score must be greater than 0." });
+      return;
+    }
     setLoadingSection("handicap");
     try {
       // Convert empty string placeholders to null for server.
@@ -1222,7 +1232,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
             </div>
           </div>
           <p className="text-xs font-sans text-text-muted mt-2">
-            Formula: (<span className="font-mono tabular-nums">{handicapPreviewAvg}</span> - <span className="font-mono tabular-nums">{handicapBaseScore}</span>) x <span className="font-mono tabular-nums">{handicapMultiplier}</span> = <span className="font-mono tabular-nums">{((handicapPreviewAvg - handicapBaseScore) * handicapMultiplier).toFixed(2)}</span>
+            Formula{handicapPreviewAvg <= handicapBaseScore && handicapUnderParMultiplier !== "" ? " (under-par multiplier)" : ""}: (<span className="font-mono tabular-nums">{handicapPreviewAvg}</span> - <span className="font-mono tabular-nums">{handicapBaseScore}</span>) x <span className="font-mono tabular-nums">{handicapPreviewAvg <= handicapBaseScore && handicapUnderParMultiplier !== "" ? handicapUnderParMultiplier : handicapMultiplier}</span> = <span className="font-mono tabular-nums">{((handicapPreviewAvg - handicapBaseScore) * (handicapPreviewAvg <= handicapBaseScore && handicapUnderParMultiplier !== "" ? handicapUnderParMultiplier : handicapMultiplier)).toFixed(2)}</span>
           </p>
         </div>
 

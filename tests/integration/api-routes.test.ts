@@ -27,6 +27,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: () => ({ allowed: true, remaining: 100, resetAt: Date.now() + 60000 }),
+  checkRateLimitDurable: async () => ({ allowed: true, remaining: 100, resetAt: Date.now() + 60000 }),
   getClientIp: () => "127.0.0.1",
   RATE_LIMITS: {
     login: { maxRequests: 5, windowSeconds: 900 },
@@ -56,15 +57,29 @@ import { GET as golfNewsGET } from "../../src/app/api/golf-news/route";
 // Helper: create a mock Request
 // ==========================================
 
+// happy-dom's Request strips browser-forbidden headers (origin, host), which the
+// login route's CSRF check depends on. Duck-type the request instead — the route
+// handlers only use headers.get(), json(), and url.
 function createRequest(url: string, options?: RequestInit): Request {
-  return new Request(`http://localhost:3000${url}`, {
+  const headerEntries = Object.entries({
+    "content-type": "application/json",
+    "x-forwarded-for": "127.0.0.1",
+    // Login routes fail closed when Origin is missing (CSRF protection)
+    origin: "http://localhost:3000",
+    host: "localhost:3000",
+    ...((options?.headers as Record<string, string>) || {}),
+  }).filter(([, v]) => v !== undefined)
+    .map(([k, v]) => [k.toLowerCase(), v] as const);
+  const headers = new Map(headerEntries);
+
+  return {
+    url: `http://localhost:3000${url}`,
+    method: options?.method ?? "GET",
     headers: {
-      "Content-Type": "application/json",
-      "x-forwarded-for": "127.0.0.1",
-      ...((options?.headers as Record<string, string>) || {}),
+      get: (name: string) => headers.get(name.toLowerCase()) ?? null,
     },
-    ...options,
-  });
+    json: async () => JSON.parse((options?.body as string) ?? "{}"),
+  } as unknown as Request;
 }
 
 // ==========================================
@@ -108,6 +123,28 @@ describe("GET /api/health", () => {
 });
 
 describe("POST /api/admin/login", () => {
+  it("returns 403 when Origin header is missing (CSRF fail-closed)", async () => {
+    const request = createRequest("/api/admin/login", {
+      method: "POST",
+      headers: { origin: undefined as unknown as string },
+      body: JSON.stringify({ password: "anypass", leagueSlug: "some-league" }),
+    });
+
+    const response = await adminLoginPOST(request);
+    expect(response.status).toBe(403);
+  });
+
+  it("returns 403 when Origin does not match host", async () => {
+    const request = createRequest("/api/admin/login", {
+      method: "POST",
+      headers: { origin: "http://evil.example.com" },
+      body: JSON.stringify({ password: "anypass", leagueSlug: "some-league" }),
+    });
+
+    const response = await adminLoginPOST(request);
+    expect(response.status).toBe(403);
+  });
+
   it("returns 400 for missing fields", async () => {
     const request = createRequest("/api/admin/login", {
       method: "POST",

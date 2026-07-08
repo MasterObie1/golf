@@ -318,7 +318,7 @@ describe("getSeasonById", () => {
 describe("getTeamsForSeason", () => {
   it("returns only approved teams for a season", async () => {
     const league = await setupLeague("Teams For Season League");
-    const s = unwrap(await createSeason(league.slug, "Season 1", 2025));
+    const _s = unwrap(await createSeason(league.slug, "Season 1", 2025));
 
     // Create three teams: approve two, leave one pending
     const t1 = unwrap(await createTeam(league.id, "Approved Team 1"));
@@ -332,7 +332,7 @@ describe("getTeamsForSeason", () => {
 
     // Get the season ID to look up teams
     const activeSeason = await getActiveSeason(league.id);
-    const teams = await getTeamsForSeason(activeSeason!.id);
+    const _teams = await getTeamsForSeason(activeSeason!.id);
 
     // createTeam + approveTeam gives approved. createTeam without approve might be approved too
     // (from the code: createTeam does not set status field, so Prisma default applies).

@@ -19,6 +19,16 @@ model SuperAdmin {
   updatedAt DateTime @updatedAt
 }
 
+// Durable rate-limit counter for login endpoints. Serverless instances share
+// this table, unlike the in-memory limiter which resets per instance.
+model LoginAttempt {
+  id        Int      @id @default(autoincrement())
+  key       String   // e.g. "admin-login:1.2.3.4"
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
 model League {
   id            Int      @id @default(autoincrement())
   name          String   @unique  // "Thursday Night Golf League"

@@ -12,7 +12,8 @@ import { test, expect } from "@playwright/test";
 import { calculateHandicap as _calculateHandicap, DEFAULT_HANDICAP_SETTINGS } from "../src/lib/handicap";
 
 const LEAGUE_SLUG = "alex-s-league";
-const LEAGUE_PASSWORD = "alexleague123";
+// Local E2E default; override with E2E_LEAGUE_PASSWORD. The production guard above/in the seed script prevents use against real databases.
+const LEAGUE_PASSWORD = process.env.E2E_LEAGUE_PASSWORD || "alexleague123";
 const NUM_WEEKS = 10;
 
 // Skill tiers for score generation (mapped to team names alphabetically as they appear in dropdowns)

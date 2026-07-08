@@ -3,27 +3,30 @@ import {
   validateSuperAdminCredentials,
   createSuperAdminSessionToken,
 } from "@/lib/superadmin-auth";
-import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { checkRateLimitDurable, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    // CSRF: verify Origin header matches our host
+    // CSRF: verify Origin header matches our host. Fail closed — browsers always
+    // send Origin on POST fetch, so a missing header means a non-browser client
+    // or a stripping proxy, neither of which should be logging in.
     const origin = request.headers.get("origin");
     const host = request.headers.get("host");
-    if (origin && host) {
-      try {
-        const originHost = new URL(origin).host;
-        if (originHost !== host) {
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
-      } catch {
+    if (!origin || !host) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    try {
+      const originHost = new URL(origin).host;
+      if (originHost !== host) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
+    } catch {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Rate limit check — stricter for super-admin
+    // Rate limit check — stricter for super-admin; durable so serverless instances share state
     const ip = getClientIp(request);
-    const rateCheck = checkRateLimit(`sudo-login:${ip}`, RATE_LIMITS.sudoLogin);
+    const rateCheck = await checkRateLimitDurable(`sudo-login:${ip}`, RATE_LIMITS.sudoLogin);
     if (!rateCheck.allowed) {
       return NextResponse.json(
         { error: "Too many login attempts. Please try again later." },

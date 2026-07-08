@@ -682,7 +682,7 @@ async function seed() {
   const teams1 = await createTeams(league1.id, season1.id, l1Names, l1Bases);
 
   // Create 8 weeks of matchups with 1 forfeit (week 5) and 1 sub (week 3)
-  const { matchupIds: l1Matchups } = await createMatchups({
+  const { matchupIds: _l1Matchups } = await createMatchups({
     leagueId: league1.id,
     seasonId: season1.id,
     teams: teams1,

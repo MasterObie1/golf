@@ -525,6 +525,51 @@ export function calculateHandicap(
 }
 
 /**
+ * A gross score tagged with the calendar week it was played.
+ */
+export interface WeeklyGrossEntry {
+  week: number;
+  gross: number;
+}
+
+/**
+ * Calculate handicap from week-tagged score entries.
+ *
+ * Prefer this over calculateHandicap(number[]) whenever week numbers are known:
+ * freeze-week truncation keeps scores from weeks 1..freezeWeek even when the
+ * entry list has gaps (missed weeks, subs, forfeits are simply absent). The
+ * positional variant can only slice by array index, which lets a post-freeze
+ * score slide into the frozen window when an earlier week is missing.
+ */
+export function calculateHandicapFromEntries(
+  entries: WeeklyGrossEntry[],
+  settings: HandicapSettings = DEFAULT_HANDICAP_SETTINGS,
+  weekNumber?: number
+): number {
+  const freezeActive =
+    weekNumber !== undefined &&
+    settings.freezeWeek !== null &&
+    settings.freezeWeek > 0 &&
+    weekNumber > settings.freezeWeek;
+
+  let working = entries;
+  if (freezeActive) {
+    const freezeWeek = settings.freezeWeek as number;
+    working = entries.filter((e) => e.week <= freezeWeek);
+    if (working.length === 0) {
+      return settings.defaultHandicap;
+    }
+  }
+
+  return calculateHandicap(
+    working.map((e) => e.gross),
+    // Freeze was already applied by week number; disable the positional fallback.
+    freezeActive ? { ...settings, freezeWeek: null } : settings,
+    weekNumber
+  );
+}
+
+/**
  * Check if two scores are effectively tied, accounting for floating-point imprecision.
  * Uses an epsilon of 0.05 to handle net score rounding artifacts.
  */
@@ -879,9 +924,18 @@ export function describeCalculation(
     steps.push(`Simple average: ${average.toFixed(2)}`);
   }
 
-  // Formula
-  const raw = (average - settings.baseScore) * settings.multiplier;
-  steps.push(`Formula: (${average.toFixed(2)} - ${settings.baseScore}) × ${settings.multiplier} = ${raw.toFixed(2)}`);
+  // Formula — mirror calculateHandicap's under-par multiplier selection
+  const isUnderPar = average <= settings.baseScore;
+  const effectiveMultiplier =
+    isUnderPar && settings.underParMultiplier !== null
+      ? settings.underParMultiplier
+      : settings.multiplier;
+  const raw = (average - settings.baseScore) * effectiveMultiplier;
+  if (isUnderPar && settings.underParMultiplier !== null) {
+    steps.push(`Formula (under-par multiplier): (${average.toFixed(2)} - ${settings.baseScore}) × ${effectiveMultiplier} = ${raw.toFixed(2)}`);
+  } else {
+    steps.push(`Formula: (${average.toFixed(2)} - ${settings.baseScore}) × ${effectiveMultiplier} = ${raw.toFixed(2)}`);
+  }
 
   // Trend — computed on the final selected scores (after selection + drops), matching calculateHandicap
   const trendAdjustment = settings.useTrend ? calculateTrendAdjustment(selectedScores, settings) : 0;
@@ -906,6 +960,12 @@ export function describeCalculation(
 
   // Rounding
   steps.push(`Rounded (${settings.rounding}): ${finalHandicap}`);
+
+  // Under-par cap — applied after rounding, before min/max (matching calculateHandicap step 8)
+  if (isUnderPar && settings.underParCap !== null && uncapped > settings.underParCap) {
+    steps.push(`Capped at under-par maximum: ${settings.underParCap}`);
+    uncapped = settings.underParCap;
+  }
 
   // Caps — compare the rounded value to detect if capping was actually applied
   if (settings.maxHandicap !== null && uncapped > settings.maxHandicap) {

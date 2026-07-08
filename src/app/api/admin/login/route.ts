@@ -2,27 +2,30 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { createSessionToken } from "@/lib/auth";
-import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { checkRateLimitDurable, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    // CSRF: verify Origin header matches our host
+    // CSRF: verify Origin header matches our host. Fail closed — browsers always
+    // send Origin on POST fetch, so a missing header means a non-browser client
+    // or a stripping proxy, neither of which should be logging in.
     const origin = request.headers.get("origin");
     const host = request.headers.get("host");
-    if (origin && host) {
-      try {
-        const originHost = new URL(origin).host;
-        if (originHost !== host) {
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
-      } catch {
+    if (!origin || !host) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    try {
+      const originHost = new URL(origin).host;
+      if (originHost !== host) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
+    } catch {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Rate limit check
+    // Rate limit check — durable (DB-backed) so serverless instances share state
     const ip = getClientIp(request);
-    const rateCheck = checkRateLimit(`admin-login:${ip}`, RATE_LIMITS.login);
+    const rateCheck = await checkRateLimitDurable(`admin-login:${ip}`, RATE_LIMITS.login);
     if (!rateCheck.allowed) {
       return NextResponse.json(
         { error: "Too many login attempts. Please try again later." },

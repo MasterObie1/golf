@@ -6,7 +6,7 @@ import {
   calculateByeDistribution,
   generateScheduleForWeeks,
   type Round,
-  type ScheduleResult,
+
 } from "@/lib/scheduling/round-robin";
 
 // Helper to get all matchup pairs from a schedule

@@ -291,7 +291,8 @@ describe("getHandicapHistoryForSeason", () => {
       expect(teamAHistory!.weeklyHandicaps[0]).toEqual({ week: 1, handicap: 5 });
       expect(teamAHistory!.weeklyHandicaps[1]).toEqual({ week: 2, handicap: 6 });
       expect(teamAHistory!.weeklyHandicaps[2]).toEqual({ week: 3, handicap: 6 });
-      expect(teamAHistory!.currentHandicap).toBe(6); // Last non-sub handicap
+      // currentHandicap is calculated from gross scores [42,40,38]: avg 40 -> (40-35)*0.9 = 4.5 -> floor 4
+      expect(teamAHistory!.currentHandicap).toBe(4);
 
       const teamBHistory = history.find((h) => h.teamId === teamBId);
       expect(teamBHistory).toBeDefined();
@@ -300,7 +301,8 @@ describe("getHandicapHistoryForSeason", () => {
       expect(teamBHistory!.weeklyHandicaps[0]).toEqual({ week: 1, handicap: 3 });
       expect(teamBHistory!.weeklyHandicaps[1]).toEqual({ week: 2, handicap: 4 });
       expect(teamBHistory!.weeklyHandicaps[2]).toEqual({ week: 3, handicap: 5 });
-      expect(teamBHistory!.currentHandicap).toBe(5);
+      // Calculated from [45,43,41]: avg 43 -> (43-35)*0.9 = 7.2 -> floor 7
+      expect(teamBHistory!.currentHandicap).toBe(7);
     });
 
     it("returns empty history for season with no data", async () => {
@@ -324,10 +326,11 @@ describe("getHandicapHistoryForSeason", () => {
       const history = await getHandicapHistoryForSeason(seasonId);
       const teamAHistory = history.find((h) => h.teamId === teamAId);
       expect(teamAHistory).toBeDefined();
-      // Both weeks should appear in weeklyHandicaps
-      expect(teamAHistory!.weeklyHandicaps).toHaveLength(2);
-      // currentHandicap should be from week 1 (5), not week 2 sub (8)
-      expect(teamAHistory!.currentHandicap).toBe(5);
+      // Sub weeks are omitted from the history entirely
+      expect(teamAHistory!.weeklyHandicaps).toHaveLength(1);
+      expect(teamAHistory!.weeklyHandicaps[0]).toEqual({ week: 1, handicap: 5 });
+      // currentHandicap is calculated from non-sub gross scores [42]: (42-35)*0.9 = 6.3 -> floor 6
+      expect(teamAHistory!.currentHandicap).toBe(6);
     });
   });
 
@@ -381,7 +384,8 @@ describe("getHandicapHistoryForSeason", () => {
       expect(teamAHistory!.weeklyHandicaps[0]).toEqual({ week: 1, handicap: 5 });
       expect(teamAHistory!.weeklyHandicaps[1]).toEqual({ week: 2, handicap: 6 });
       expect(teamAHistory!.weeklyHandicaps[2]).toEqual({ week: 3, handicap: 5 });
-      expect(teamAHistory!.currentHandicap).toBe(5); // Last non-sub handicap
+      // currentHandicap is calculated from gross scores [42,40,38]: avg 40 -> (40-35)*0.9 = 4.5 -> floor 4
+      expect(teamAHistory!.currentHandicap).toBe(4);
 
       const teamBHistory = history.find((h) => h.teamId === teamBId);
       expect(teamBHistory).toBeDefined();
@@ -389,7 +393,8 @@ describe("getHandicapHistoryForSeason", () => {
       expect(teamBHistory!.weeklyHandicaps[0]).toEqual({ week: 1, handicap: 3 });
       expect(teamBHistory!.weeklyHandicaps[1]).toEqual({ week: 2, handicap: 4 });
       expect(teamBHistory!.weeklyHandicaps[2]).toEqual({ week: 3, handicap: 5 });
-      expect(teamBHistory!.currentHandicap).toBe(5);
+      // Calculated from [45,43,41]: avg 43 -> (43-35)*0.9 = 7.2 -> floor 7
+      expect(teamBHistory!.currentHandicap).toBe(7);
     });
 
     it("returns empty history for stroke play season with no scores", async () => {
@@ -429,7 +434,8 @@ describe("getHandicapHistoryForSeason", () => {
       expect(teamAHistory!.weeklyHandicaps).toHaveLength(2);
       expect(teamAHistory!.weeklyHandicaps[0]).toEqual({ week: 1, handicap: 5 });
       expect(teamAHistory!.weeklyHandicaps[1]).toEqual({ week: 3, handicap: 6 });
-      expect(teamAHistory!.currentHandicap).toBe(6);
+      // currentHandicap calculated from gross scores [42,40]: avg 41 -> (41-35)*0.9 = 5.4 -> floor 5
+      expect(teamAHistory!.currentHandicap).toBe(5);
 
       // Team B played all 3 weeks
       const teamBHistory = history.find((h) => h.teamId === teamBId);
@@ -437,7 +443,7 @@ describe("getHandicapHistoryForSeason", () => {
       expect(teamBHistory!.weeklyHandicaps).toHaveLength(3);
     });
 
-    it("tracks sub handicaps in weeklyHandicaps but excludes from currentHandicap", async () => {
+    it("omits sub weeks from weeklyHandicaps and currentHandicap", async () => {
       // Week 1: Team Alpha plays normally
       unwrap(await submitWeeklyScores(leagueSlug, 1, [
         { teamId: teamAId, grossScore: 42, handicap: 5, netScore: 37, points: 10, bonusPoints: 0, isSub: false, isDnp: false, position: 1 },
@@ -454,12 +460,11 @@ describe("getHandicapHistoryForSeason", () => {
 
       const teamAHistory = history.find((h) => h.teamId === teamAId);
       expect(teamAHistory).toBeDefined();
-      // Both weeks appear in weeklyHandicaps (sub is still listed)
-      expect(teamAHistory!.weeklyHandicaps).toHaveLength(2);
+      // Sub weeks are omitted from the history entirely
+      expect(teamAHistory!.weeklyHandicaps).toHaveLength(1);
       expect(teamAHistory!.weeklyHandicaps[0]).toEqual({ week: 1, handicap: 5 });
-      expect(teamAHistory!.weeklyHandicaps[1]).toEqual({ week: 2, handicap: 8 });
-      // currentHandicap should be from week 1 (the last non-sub handicap)
-      expect(teamAHistory!.currentHandicap).toBe(5);
+      // currentHandicap calculated from non-sub gross scores [42]: (42-35)*0.9 = 6.3 -> floor 6
+      expect(teamAHistory!.currentHandicap).toBe(6);
     });
   });
 
@@ -543,13 +548,14 @@ describe("getHandicapHistoryForSeason", () => {
 
       const teamAHistory = history.find((h) => h.teamId === teamAId);
       expect(teamAHistory).toBeDefined();
-      // currentHandicap should come from weekly scores (7), not matchups (6)
-      expect(teamAHistory!.currentHandicap).toBe(7);
+      // currentHandicap comes from the weekly-score source, calculated from its gross
+      // scores [40]: (40-35)*0.9 = 4.5 -> floor 4 (not from matchup gross scores)
+      expect(teamAHistory!.currentHandicap).toBe(4);
 
       const teamBHistory = history.find((h) => h.teamId === teamBId);
       expect(teamBHistory).toBeDefined();
-      // currentHandicap from weekly scores (5), not matchups (4)
-      expect(teamBHistory!.currentHandicap).toBe(5);
+      // From weekly gross scores [43]: (43-35)*0.9 = 7.2 -> floor 7
+      expect(teamBHistory!.currentHandicap).toBe(7);
     });
 
     it("falls back to matchup currentHandicap when no weekly scores exist", async () => {
@@ -561,12 +567,14 @@ describe("getHandicapHistoryForSeason", () => {
 
       const teamAHistory = history.find((h) => h.teamId === teamAId);
       expect(teamAHistory).toBeDefined();
-      // currentHandicap should fall back to matchup data since weekly is null
-      expect(teamAHistory!.currentHandicap).toBe(6);
+      // currentHandicap falls back to matchup data since weekly is null,
+      // calculated from matchup gross scores [42,40]: avg 41 -> (41-35)*0.9 = 5.4 -> floor 5
+      expect(teamAHistory!.currentHandicap).toBe(5);
 
       const teamBHistory = history.find((h) => h.teamId === teamBId);
       expect(teamBHistory).toBeDefined();
-      expect(teamBHistory!.currentHandicap).toBe(4);
+      // From [45,43]: avg 44 -> (44-35)*0.9 = 8.1 -> floor 8
+      expect(teamBHistory!.currentHandicap).toBe(8);
     });
 
     it("returns empty history for hybrid season with no data", async () => {

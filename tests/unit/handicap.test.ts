@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   calculateHandicap,
+  calculateHandicapFromEntries,
   calculateNetScore,
   calculateWeightedAverage,
   calculateTrendAdjustment,
@@ -927,6 +928,64 @@ describe("Fix 1.3: Freeze week semantics — temporal truncation order", () => {
     const filterIdx = steps.findIndex((step) => step.includes("Filtered"));
     expect(freezeIdx).toBeGreaterThanOrEqual(0);
     expect(filterIdx).toBeGreaterThan(freezeIdx); // filter happens AFTER freeze
+  });
+});
+
+describe("calculateHandicapFromEntries: week-aligned freeze truncation", () => {
+  it("keeps only weeks <= freezeWeek even when earlier weeks are missing", () => {
+    // Team missed week 2 (sub/forfeit/absence), so the entry list has a gap.
+    // freezeWeek=4, weekNumber=9: the frozen handicap must use weeks 1,3,4 only.
+    // The positional variant would slice(0,4) and pull week 5 into the window.
+    const s = settings({ freezeWeek: 4 });
+    const entries = [
+      { week: 1, gross: 44 },
+      { week: 3, gross: 42 },
+      { week: 4, gross: 40 },
+      { week: 5, gross: 36 },
+      { week: 6, gross: 36 },
+    ];
+    const result = calculateHandicapFromEntries(entries, s, 9);
+    // avg of [44, 42, 40] = 42, (42-35)*0.9 = 6.3, floor = 6
+    expect(result).toBe(6);
+
+    // The positional variant demonstrates the bug this fixes: slice(0,4) keeps
+    // week 5's 36 => avg 40.5 => (40.5-35)*0.9 = 4.95 => floor 4
+    const positional = calculateHandicap([44, 42, 40, 36, 36], s, 9);
+    expect(positional).toBe(4);
+  });
+
+  it("returns default handicap when all entries are after the freeze week", () => {
+    const s = settings({ freezeWeek: 2, defaultHandicap: 3 });
+    const entries = [
+      { week: 5, gross: 40 },
+      { week: 6, gross: 42 },
+    ];
+    expect(calculateHandicapFromEntries(entries, s, 8)).toBe(3);
+  });
+
+  it("matches calculateHandicap when freeze is inactive", () => {
+    const s = settings();
+    const entries = [
+      { week: 1, gross: 44 },
+      { week: 3, gross: 42 },
+      { week: 4, gross: 40 },
+    ];
+    expect(calculateHandicapFromEntries(entries, s, 5)).toBe(
+      calculateHandicap([44, 42, 40], s, 5)
+    );
+  });
+
+  it("does not freeze while still at or before the freeze week", () => {
+    const s = settings({ freezeWeek: 4 });
+    const entries = [
+      { week: 1, gross: 44 },
+      { week: 2, gross: 42 },
+      { week: 3, gross: 40 },
+    ];
+    // weekNumber=4 is not past the freeze week, so all scores count
+    expect(calculateHandicapFromEntries(entries, s, 4)).toBe(
+      calculateHandicap([44, 42, 40], s, 4)
+    );
   });
 });
 

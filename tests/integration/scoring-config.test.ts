@@ -158,12 +158,10 @@ describe("getScoringConfig", () => {
 
 describe("updateScoringConfig", () => {
   let leagueSlug: string;
-  let leagueId: number;
 
   beforeEach(async () => {
     const league = unwrap(await createLeague("Update Scoring League", "securepass123"));
     leagueSlug = league.slug;
-    leagueId = league.id;
     setAuthContext(league.id, league.slug, league.adminUsername);
   });
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { prisma } from "../db";
 import { requireLeagueAdmin } from "../auth";
 import { logger } from "../logger";
@@ -9,9 +10,11 @@ import {
   generateScheduleForWeeks,
   validateSchedule,
   type Round,
-  type ScheduleResult,
+
 } from "../scheduling/round-robin";
 import { getCourseSideForWeek } from "../scheduling/course-side";
+
+const weekNumberSchema = z.number().int().min(1).max(200);
 
 // --- Types ---
 
@@ -625,6 +628,7 @@ export async function rescheduleMatchup(
   newWeekNumber: number
 ): Promise<ActionResult> {
   try {
+    newWeekNumber = weekNumberSchema.parse(newWeekNumber);
     const session = await requireLeagueAdmin(leagueSlug);
     await requireActiveLeague(session.leagueId);
 
@@ -669,6 +673,9 @@ export async function rescheduleMatchup(
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("rescheduleMatchup failed", error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: "Invalid week number." };
+    }
     return { success: false, error: error instanceof Error ? error.message : "Failed to reschedule matchup." };
   }
 }
@@ -680,6 +687,7 @@ export async function addManualScheduledMatchup(
   teamBId: number | null
 ): Promise<ActionResult> {
   try {
+    weekNumber = weekNumberSchema.parse(weekNumber);
     const session = await requireLeagueAdmin(leagueSlug);
     await requireActiveLeague(session.leagueId);
 
@@ -742,6 +750,9 @@ export async function addManualScheduledMatchup(
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("addManualScheduledMatchup failed", error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: "Invalid week number." };
+    }
     return { success: false, error: error instanceof Error ? error.message : "Failed to add matchup." };
   }
 }
@@ -753,7 +764,9 @@ export async function processByeWeekPoints(
   weekNumber: number
 ): Promise<ActionResult> {
   try {
+    weekNumber = weekNumberSchema.parse(weekNumber);
     const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
 
     // Use interactive transaction to prevent double-processing from concurrent calls
     await prisma.$transaction(async (tx) => {

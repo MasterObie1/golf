@@ -34,7 +34,8 @@ const prisma = new PrismaClient({ adapter });
 
 const LEAGUE_NAME = "Alex's League";
 const LEAGUE_SLUG = "alexs-league";
-const LEAGUE_PASSWORD = "alexleague123";
+// Local E2E default; override with E2E_LEAGUE_PASSWORD. The production guard above/in the seed script prevents use against real databases.
+const LEAGUE_PASSWORD = process.env.E2E_LEAGUE_PASSWORD || "alexleague123";
 const NUM_WEEKS = 10;
 
 const HANDICAP_SETTINGS: HandicapSettings = {

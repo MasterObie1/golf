@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { prisma } from "../db";
 import {
-  calculateHandicap,
+  calculateHandicapFromEntries,
   calculateNetScore,
   calculateStrokePlayPoints,
   type StrokePlayEntry,
@@ -11,10 +11,10 @@ import {
 import { generatePointScale } from "../scoring-utils";
 import { requireLeagueAdmin } from "../auth";
 import { logger } from "../logger";
-import { getTeamPreviousScoresForScoring } from "./teams";
+import { getTeamPreviousScoreEntriesForScoring } from "./teams";
 import { getHandicapSettings } from "./handicap-settings";
 import { requireActiveLeague } from "./leagues";
-import { type ActionResult } from "./shared";
+import { revalidateLeaguePages, type ActionResult } from "./shared";
 
 // --- Types ---
 
@@ -62,18 +62,18 @@ export interface WeeklyScoreRecord {
 // --- Zod Schemas ---
 
 const submitWeeklyScoresSchema = z.object({
-  weekNumber: z.number().int().min(1),
+  weekNumber: z.number().int().min(1).max(200),
   scores: z.array(
     z.object({
       teamId: z.number().int().positive(),
-      grossScore: z.number().min(0),
-      handicap: z.number(),
-      netScore: z.number(),
-      points: z.number(),
-      bonusPoints: z.number(),
+      grossScore: z.number().min(0).max(200),
+      handicap: z.number().min(-100).max(200),
+      netScore: z.number().min(-200).max(400),
+      points: z.number().min(-100).max(1000),
+      bonusPoints: z.number().min(-100).max(1000),
       isSub: z.boolean(),
       isDnp: z.boolean(),
-      position: z.number().int().min(0),
+      position: z.number().int().min(0).max(256),
     })
   ),
 });
@@ -171,8 +171,8 @@ export async function previewWeeklyScores(
       } else if (input.manualHandicap != null) {
         handicap = capManualHandicap(input.manualHandicap);
       } else {
-        const prevScores = await getTeamPreviousScoresForScoring(leagueId, input.teamId, league.scoringType, weekNumber);
-        handicap = calculateHandicap(prevScores, handicapSettings, weekNumber);
+        const prevScores = await getTeamPreviousScoreEntriesForScoring(leagueId, input.teamId, league.scoringType, weekNumber);
+        handicap = calculateHandicapFromEntries(prevScores, handicapSettings, weekNumber);
       }
 
       if (!isFinite(handicap)) {
@@ -210,7 +210,7 @@ export async function previewWeeklyScores(
 
     // Ensure point scale covers all playing teams
     if (pointScale.length < playingCount) {
-      console.warn(`Point scale has ${pointScale.length} entries but ${playingCount} teams are playing. Padding with zeros.`);
+      logger.warn(`Point scale has ${pointScale.length} entries but ${playingCount} teams are playing. Padding with zeros.`);
       while (pointScale.length < playingCount) {
         pointScale.push(0);
       }
@@ -360,6 +360,7 @@ export async function submitWeeklyScores(
       }
     });
 
+    revalidateLeaguePages(leagueSlug);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("submitWeeklyScores failed", error);
@@ -483,6 +484,7 @@ export async function deleteWeeklyScores(
       });
     });
 
+    revalidateLeaguePages(leagueSlug);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("deleteWeeklyScores failed", error);

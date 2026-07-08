@@ -502,9 +502,10 @@ describe("previewWeeklyScores (edge cases)", () => {
     const preview = unwrap(result);
     const subEntry = preview.scores.find((s) => s.teamId === t2.id);
     expect(subEntry).toBeDefined();
-    // Sub with manual handicap on non-week-one triggers isSub && manualHandicap != null path
-    expect(subEntry!.handicap).toBe(10);
-    expect(subEntry!.netScore).toBe(34); // 44 - 10 = 34
+    // Sub with manual handicap on non-week-one triggers isSub && manualHandicap != null path.
+    // Manual entries are capped at the league max handicap (default 9), so 10 becomes 9.
+    expect(subEntry!.handicap).toBe(9);
+    expect(subEntry!.netScore).toBe(35); // 44 - 9 = 35
   });
 
   it("uses manual handicap override on non-week-one for non-sub", async () => {

@@ -17,7 +17,6 @@ interface SeasonsTabProps {
 
 export default function SeasonsTab({
   slug,
-  leagueId,
   seasons: initialSeasons,
   activeSeason: initialActiveSeason,
   onSeasonChanged,

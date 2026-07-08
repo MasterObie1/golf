@@ -152,7 +152,7 @@ export default function ScorecardsTab({
       } catch (error) { console.error("loadCourse error:", error); }
       setCourseLoaded(true);
     })();
-  }, [leagueId]);
+  }, [leagueId, slug]);
 
   // Load scorecards for week
   useEffect(() => {
@@ -169,7 +169,7 @@ export default function ScorecardsTab({
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [leagueId, weekNumber]);
+  }, [leagueId, slug, weekNumber]);
 
   // Load matchups when week changes
   useEffect(() => {

@@ -11,7 +11,8 @@ import { test, expect } from "@playwright/test";
 const LEAGUE_SLUG = "alexs-league";
 const LEAGUE_URL = `/league/${LEAGUE_SLUG}`;
 const NUM_TEAMS = 18;
-const ADMIN_PASSWORD = "alexleague123";
+// Local E2E default; override with E2E_LEAGUE_PASSWORD. The production guard above/in the seed script prevents use against real databases.
+const ADMIN_PASSWORD = process.env.E2E_LEAGUE_PASSWORD || "alexleague123";
 
 test.describe("Alex's League — Home Page", () => {
   test("league home page shows Alex's League", async ({ page }) => {

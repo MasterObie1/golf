@@ -324,7 +324,7 @@ describe("getScheduleStatus", () => {
 
 describe("swapTeamsInMatchup", () => {
   it("swaps teams successfully in a scheduled matchup", async () => {
-    const { league, teamIds } = await setupLeagueWithTeams(4);
+    const { league, teamIds: _teamIds } = await setupLeagueWithTeams(4);
     await generateSchedule(league.slug, {
       type: "single_round_robin",
       totalWeeks: 10,
@@ -400,7 +400,7 @@ describe("swapTeamsInMatchup", () => {
   });
 
   it("returns error when matchup is not in scheduled status", async () => {
-    const { league, teamIds } = await setupLeagueWithTeams(4);
+    const { league, teamIds: _teamIds } = await setupLeagueWithTeams(4);
     await generateSchedule(league.slug, {
       type: "single_round_robin",
       totalWeeks: 10,
@@ -684,7 +684,7 @@ describe("addManualScheduledMatchup", () => {
 describe("processByeWeekPoints", () => {
   it("awards zero points in 'zero' mode", async () => {
     // Use 3 teams to get bye matchups
-    const { league, teamIds } = await setupLeagueWithTeams(3);
+    const { league, teamIds: _teamIds } = await setupLeagueWithTeams(3);
     await generateSchedule(league.slug, {
       type: "single_round_robin",
       totalWeeks: 10,
@@ -724,7 +724,7 @@ describe("processByeWeekPoints", () => {
   });
 
   it("awards flat points in 'flat' mode", async () => {
-    const { league, teamIds } = await setupLeagueWithTeams(3);
+    const { league, teamIds: _teamIds } = await setupLeagueWithTeams(3);
     await generateSchedule(league.slug, {
       type: "single_round_robin",
       totalWeeks: 10,
@@ -822,7 +822,7 @@ describe("processByeWeekPoints", () => {
 describe("addTeamToSchedule", () => {
   it("fills bye slots with fill_byes strategy", async () => {
     // 3 teams => odd number => bye matchups exist
-    const { league, teamIds } = await setupLeagueWithTeams(3);
+    const { league, teamIds: _teamIds } = await setupLeagueWithTeams(3);
     await generateSchedule(league.slug, {
       type: "single_round_robin",
       totalWeeks: 10,
@@ -858,7 +858,7 @@ describe("addTeamToSchedule", () => {
   });
 
   it("regenerates future schedule with start_from_here strategy", async () => {
-    const { league, teamIds } = await setupLeagueWithTeams(4);
+    const { league, teamIds: _teamIds } = await setupLeagueWithTeams(4);
     await generateSchedule(league.slug, {
       type: "single_round_robin",
       totalWeeks: 10,
@@ -894,7 +894,7 @@ describe("addTeamToSchedule", () => {
 
   it("returns error when no bye slots available for fill_byes with even teams", async () => {
     // 4 teams => even number => no byes
-    const { league, teamIds } = await setupLeagueWithTeams(4);
+    const { league, teamIds: _teamIds } = await setupLeagueWithTeams(4);
     await generateSchedule(league.slug, {
       type: "single_round_robin",
       totalWeeks: 10,
@@ -1242,7 +1242,7 @@ describe("cancelled matchups and regeneration", () => {
 
 describe("swapTeamsInMatchup conflict detection", () => {
   it("returns error when swapping in a team that already plays that week", async () => {
-    const { league, teamIds } = await setupLeagueWithTeams(4);
+    const { league, teamIds: _teamIds } = await setupLeagueWithTeams(4);
     await generateSchedule(league.slug, {
       type: "single_round_robin",
       totalWeeks: 10,

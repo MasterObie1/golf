@@ -2,11 +2,12 @@
 
 import { prisma } from "../db";
 import {
-  calculateHandicap,
+  calculateHandicapFromEntries,
   leagueToHandicapSettings,
   type HandicapSettings,
+  type WeeklyGrossEntry,
 } from "../handicap";
-import { getTeamPreviousScores, getTeamPreviousScoresForScoring } from "./teams";
+import { getTeamPreviousScoreEntries, getTeamPreviousScoreEntriesForScoring } from "./teams";
 
 export async function getHandicapSettings(leagueId: number): Promise<HandicapSettings> {
   const league = await prisma.league.findUniqueOrThrow({
@@ -46,11 +47,11 @@ export async function getHandicapSettings(leagueId: number): Promise<HandicapSet
 export async function getTeamHandicap(leagueId: number, teamId: number, weekNumber?: number, scoringType?: string): Promise<number> {
   const [scores, handicapSettings] = await Promise.all([
     scoringType && scoringType !== "match_play"
-      ? getTeamPreviousScoresForScoring(leagueId, teamId, scoringType, weekNumber)
-      : getTeamPreviousScores(leagueId, teamId, weekNumber),
+      ? getTeamPreviousScoreEntriesForScoring(leagueId, teamId, scoringType, weekNumber)
+      : getTeamPreviousScoreEntries(leagueId, teamId, weekNumber),
     getHandicapSettings(leagueId),
   ]);
-  return calculateHandicap(scores, handicapSettings, weekNumber);
+  return calculateHandicapFromEntries(scores, handicapSettings, weekNumber);
 }
 
 export interface HandicapHistoryEntry {
@@ -98,7 +99,7 @@ function buildHandicapHistory(
 
   for (const team of teams) {
     const weeklyHandicaps: { week: number; handicap: number }[] = [];
-    const allGrossScores: number[] = [];
+    const grossEntries: WeeklyGrossEntry[] = [];
 
     for (const week of weekNumbers) {
       const weekMatchup = matchups.find(
@@ -127,15 +128,15 @@ function buildHandicapHistory(
         if (!isSub) {
           // Record the handicap the team actually played with that week
           weeklyHandicaps.push({ week, handicap: recordedHandicap });
-          allGrossScores.push(gross);
+          grossEntries.push({ week, gross });
         }
       }
     }
 
     // Current handicap: what they'd have for the next upcoming week
     const nextWeek = weekNumbers[weekNumbers.length - 1] + 1;
-    const currentHandicap = allGrossScores.length > 0
-      ? calculateHandicap(allGrossScores, settings, nextWeek)
+    const currentHandicap = grossEntries.length > 0
+      ? calculateHandicapFromEntries(grossEntries, settings, nextWeek)
       : null;
 
     result.push({
@@ -283,7 +284,7 @@ async function buildHandicapHistoryFromWeeklyScores(
 
   for (const team of teams) {
     const weeklyHandicaps: { week: number; handicap: number }[] = [];
-    const allGrossScores: number[] = [];
+    const grossEntries: WeeklyGrossEntry[] = [];
 
     for (const week of weekNumbers) {
       const score = weeklyScores.find(
@@ -293,13 +294,13 @@ async function buildHandicapHistoryFromWeeklyScores(
       if (score && !score.isSub) {
         // Record the handicap the team actually played with that week
         weeklyHandicaps.push({ week, handicap: score.handicap });
-        allGrossScores.push(score.grossScore);
+        grossEntries.push({ week, gross: score.grossScore });
       }
     }
 
     const nextWeek = weekNumbers[weekNumbers.length - 1] + 1;
-    const currentHandicap = allGrossScores.length > 0
-      ? calculateHandicap(allGrossScores, settings, nextWeek)
+    const currentHandicap = grossEntries.length > 0
+      ? calculateHandicapFromEntries(grossEntries, settings, nextWeek)
       : null;
 
     result.push({

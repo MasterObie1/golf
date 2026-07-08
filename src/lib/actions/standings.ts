@@ -115,7 +115,6 @@ function resolveHeadToHeadTies<T extends { id: number }>(
       result.push(...group);
     } else {
       // Compute aggregate H2H points within the tied group
-      const groupIds = new Set(group.map(t => t.id));
       const h2hTotal: Record<number, number> = {};
       for (const t of group) h2hTotal[t.id] = 0;
       for (const t of group) {
@@ -479,10 +478,11 @@ function calculateStandingsAtWeek(
     ...stats[team.id],
   }));
 
-  // Dense ranking: teams with the same points share the same rank
+  // Dense ranking: teams share a rank only when tied on the full record
+  // (points AND wins) — a wins tiebreak that reorders them is a real separation
   let currentRank = 1;
   for (let i = 0; i < ranked.length; i++) {
-    if (i > 0 && ranked[i].points === ranked[i - 1].points) {
+    if (i > 0 && ranked[i].points === ranked[i - 1].points && ranked[i].wins === ranked[i - 1].wins) {
       ranked[i].rank = ranked[i - 1].rank;
     } else {
       ranked[i].rank = currentRank;
@@ -533,13 +533,19 @@ function calculateStandingsAtWeekStrokePlay(
     };
   });
 
-  // Dense ranking: teams with the same totalPoints share the same rank
+  // Dense ranking: teams share a rank only when the full comparator considers
+  // them equal — a counting-method or avg-net tiebreak is a real separation
   let currentRank = 1;
   for (let i = 0; i < ranked.length; i++) {
-    const thisPoints = statsMap.get(sortedTeams[i].id)!.totalPoints;
-    const prevPoints = i > 0 ? statsMap.get(sortedTeams[i - 1].id)!.totalPoints : null;
-    if (i > 0 && thisPoints === prevPoints) {
-      ranked[i].rank = ranked[i - 1].rank;
+    if (i > 0) {
+      const thisStats = statsMap.get(sortedTeams[i].id)!;
+      const prevStats = statsMap.get(sortedTeams[i - 1].id)!;
+      const fullyTied =
+        thisStats.totalPoints === prevStats.totalPoints &&
+        compareCountingMethod(thisStats.positionCounts, prevStats.positionCounts) === 0 &&
+        thisStats.avgNet === prevStats.avgNet &&
+        thisStats.bestFinish === prevStats.bestFinish;
+      ranked[i].rank = fullyTied ? ranked[i - 1].rank : currentRank;
     } else {
       ranked[i].rank = currentRank;
     }
@@ -589,15 +595,16 @@ export interface LeaderboardWithMovement {
 
 // Public read — no auth required. Called from public leaderboard/history pages.
 export async function getLeaderboardWithMovement(leagueId: number): Promise<LeaderboardWithMovement[]> {
-  const league = await prisma.league.findUniqueOrThrow({
-    where: { id: leagueId },
-    select: { scoringType: true, strokePlayProRate: true, strokePlayMaxDnp: true, hybridFieldWeight: true },
-  });
-
-  const teams = await prisma.team.findMany({
-    where: { leagueId, status: "approved" },
-    select: safeTeamSelect,
-  });
+  const [league, teams] = await Promise.all([
+    prisma.league.findUniqueOrThrow({
+      where: { id: leagueId },
+      select: { scoringType: true, strokePlayProRate: true, strokePlayMaxDnp: true, hybridFieldWeight: true },
+    }),
+    prisma.team.findMany({
+      where: { leagueId, status: "approved" },
+      select: safeTeamSelect,
+    }),
+  ]);
 
   if (league.scoringType === "stroke_play") {
     return getStrokePlayMovement(teams, leagueId, {
@@ -828,7 +835,11 @@ async function getHybridMovement(
     let prevCurrentRank = 1;
     for (let i = 0; i < prevRanked.length; i++) {
       let rank: number;
-      if (i > 0 && prevRanked[i].totalPoints === prevRanked[i - 1].totalPoints) {
+      if (
+        i > 0 &&
+        prevRanked[i].totalPoints === prevRanked[i - 1].totalPoints &&
+        prevRanked[i].wins === prevRanked[i - 1].wins
+      ) {
         rank = previousRanks.get(prevRanked[i - 1].id)!.rank;
       } else {
         rank = prevCurrentRank;
@@ -838,11 +849,16 @@ async function getHybridMovement(
     }
   }
 
-  // Build current ranks with dense ranking (shared ranks for ties)
+  // Dense ranking: share a rank only when tied on points AND wins — a wins
+  // tiebreak that reorders teams is a real separation
   const currentRanks: number[] = [];
   let curRank = 1;
   for (let i = 0; i < ranked.length; i++) {
-    if (i > 0 && ranked[i].totalPoints === ranked[i - 1].totalPoints) {
+    if (
+      i > 0 &&
+      ranked[i].totalPoints === ranked[i - 1].totalPoints &&
+      ranked[i].wins === ranked[i - 1].wins
+    ) {
       currentRanks.push(currentRanks[i - 1]);
     } else {
       currentRanks.push(curRank);
@@ -899,23 +915,26 @@ export async function getSeasonLeaderboard(seasonId: number) {
     select: { leagueId: true, scoringType: true },
   });
 
-  const league = await prisma.league.findUniqueOrThrow({
-    where: { id: season.leagueId },
-    select: {
-      scoringType: true,
-      strokePlayProRate: true,
-      strokePlayMaxDnp: true,
-      hybridFieldWeight: true,
-    },
-  });
+  // League fetch needs season.leagueId; the teams fetch only needs seasonId,
+  // so it can run concurrently with the league fetch.
+  const [league, teams] = await Promise.all([
+    prisma.league.findUniqueOrThrow({
+      where: { id: season.leagueId },
+      select: {
+        scoringType: true,
+        strokePlayProRate: true,
+        strokePlayMaxDnp: true,
+        hybridFieldWeight: true,
+      },
+    }),
+    prisma.team.findMany({
+      where: { seasonId, status: "approved" },
+      select: safeTeamSelect,
+    }),
+  ]);
 
   // Use season's scoringType for historical accuracy, fall back to league's
   const scoringType = season.scoringType || league.scoringType;
-
-  const teams = await prisma.team.findMany({
-    where: { seasonId, status: "approved" },
-    select: safeTeamSelect,
-  });
 
   if (scoringType === "stroke_play") {
     const weeklyScores = await prisma.weeklyScore.findMany({

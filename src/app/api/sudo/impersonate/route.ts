@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/superadmin-auth";
+import { getSessionSecret } from "@/lib/session-secret";
 import { SignJWT } from "jose";
 import { z } from "zod";
 
@@ -34,8 +35,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "League not found" }, { status: 404 });
     }
 
-    // Create a signed JWT admin session with impersonation marker
-    const secret = new TextEncoder().encode(process.env.SESSION_SECRET!);
+    // Create a signed JWT admin session with impersonation marker.
+    // getSessionSecret() rejects missing/placeholder secrets instead of signing with garbage.
+    const secret = getSessionSecret();
     const sessionToken = await new SignJWT({
       leagueId: league.id,
       leagueSlug: league.slug,

@@ -3,17 +3,16 @@
 import { z } from "zod";
 import { prisma } from "../db";
 import {
-  calculateHandicap,
+  calculateHandicapFromEntries,
   calculateNetScore,
   suggestPoints,
 } from "../handicap";
-import { revalidatePath } from "next/cache";
 import { requireLeagueAdmin } from "../auth";
 import { logger } from "../logger";
-import { getTeamPreviousScores, getTeamPreviousScoresForScoring } from "./teams";
+import { getTeamPreviousScoreEntries, getTeamPreviousScoreEntriesForScoring } from "./teams";
 import { getHandicapSettings } from "./handicap-settings";
 import { requireActiveLeague } from "./leagues";
-import { type ActionResult } from "./shared";
+import { revalidateLeaguePages, type ActionResult } from "./shared";
 
 function classifyWLT(teamAPoints: number, teamBPoints: number) {
   if (teamAPoints > teamBPoints) return { aWin: 1, aLoss: 0, aTie: 0, bWin: 0, bLoss: 1, bTie: 0 };
@@ -135,25 +134,25 @@ export async function previewMatchup(
     teamAHandicap = capManualHandicap(teamAHandicapManual ?? handicapSettings.defaultHandicap);
     teamBHandicap = capManualHandicap(teamBHandicapManual ?? handicapSettings.defaultHandicap);
   } else {
-    if (teamAIsSub && teamAHandicapManual !== null) {
-      teamAHandicap = capManualHandicap(teamAHandicapManual);
-    } else {
-      // Only use scores from weeks before the current week
-      const teamAScores = league.scoringType === "hybrid"
-        ? await getTeamPreviousScoresForScoring(leagueId, teamAId, league.scoringType, weekNumber)
-        : await getTeamPreviousScores(leagueId, teamAId, weekNumber);
-      teamAHandicap = calculateHandicap(teamAScores, handicapSettings, weekNumber);
-    }
+    // Only use scores from weeks before the current week; fetch both teams concurrently
+    const fetchEntries = (teamId: number) =>
+      league.scoringType === "hybrid"
+        ? getTeamPreviousScoreEntriesForScoring(leagueId, teamId, league.scoringType, weekNumber)
+        : getTeamPreviousScoreEntries(leagueId, teamId, weekNumber);
+    const teamAManual = teamAIsSub && teamAHandicapManual !== null ? teamAHandicapManual : null;
+    const teamBManual = teamBIsSub && teamBHandicapManual !== null ? teamBHandicapManual : null;
+    const [teamAScores, teamBScores] = await Promise.all([
+      teamAManual !== null ? Promise.resolve(null) : fetchEntries(teamAId),
+      teamBManual !== null ? Promise.resolve(null) : fetchEntries(teamBId),
+    ]);
 
-    if (teamBIsSub && teamBHandicapManual !== null) {
-      teamBHandicap = capManualHandicap(teamBHandicapManual);
-    } else {
-      // Only use scores from weeks before the current week
-      const teamBScores = league.scoringType === "hybrid"
-        ? await getTeamPreviousScoresForScoring(leagueId, teamBId, league.scoringType, weekNumber)
-        : await getTeamPreviousScores(leagueId, teamBId, weekNumber);
-      teamBHandicap = calculateHandicap(teamBScores, handicapSettings, weekNumber);
-    }
+    teamAHandicap = teamAManual !== null || teamAScores === null
+      ? capManualHandicap(teamAManual ?? handicapSettings.defaultHandicap)
+      : calculateHandicapFromEntries(teamAScores, handicapSettings, weekNumber);
+
+    teamBHandicap = teamBManual !== null || teamBScores === null
+      ? capManualHandicap(teamBManual ?? handicapSettings.defaultHandicap)
+      : calculateHandicapFromEntries(teamBScores, handicapSettings, weekNumber);
   }
 
   const teamANet = calculateNetScore(teamAGross, teamAHandicap);
@@ -235,16 +234,13 @@ export async function submitMatchup(
     const session = await requireLeagueAdmin(leagueSlug);
     await requireActiveLeague(session.leagueId);
 
-    // Get active season for this league
-    const activeSeason = await prisma.season.findFirst({
-      where: { leagueId: session.leagueId, isActive: true },
-    });
-
     // Use transaction to ensure matchup + team stats stay consistent
     const { aWin: teamAWin, aLoss: teamALoss, aTie: teamATie, bWin: teamBWin, bLoss: teamBLoss, bTie: teamBTie } = classifyWLT(validated.teamAPoints, validated.teamBPoints);
 
-    // Verify both teams belong to this league
-    const [teamAExists, teamBExists] = await Promise.all([
+    // Fetch season, league config, and team-ownership checks concurrently
+    const [activeSeason, league, teamAExists, teamBExists] = await Promise.all([
+      prisma.season.findFirst({ where: { leagueId: session.leagueId, isActive: true } }),
+      prisma.league.findUniqueOrThrow({ where: { id: session.leagueId }, select: { scoringType: true } }),
       prisma.team.findFirst({ where: { id: validated.teamAId, leagueId: session.leagueId }, select: { id: true } }),
       prisma.team.findFirst({ where: { id: validated.teamBId, leagueId: session.leagueId }, select: { id: true } }),
     ]);
@@ -265,16 +261,12 @@ export async function submitMatchup(
     }
 
     // Validate points sum to 20 (match_play only; stroke_play/hybrid use variable point totals)
-    const league = await prisma.league.findUniqueOrThrow({
-      where: { id: session.leagueId },
-      select: { scoringType: true },
-    });
     if (league.scoringType === "match_play" && validated.teamAPoints + validated.teamBPoints !== 20) {
       return { success: false, error: "Team points must sum to 20." };
     }
 
     // Create matchup and update stats in a transaction
-    const newMatchup = await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       // Duplicate check inside transaction to prevent concurrent submissions
       const existing = await tx.matchup.findFirst({
         where: {
@@ -382,7 +374,7 @@ export async function submitMatchup(
       return matchup;
     });
 
-    revalidatePath(`/league/${leagueSlug}/history`);
+    revalidateLeaguePages(leagueSlug);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("submitMatchup failed", error);
@@ -552,7 +544,7 @@ export async function updateMatchup(
       });
     });
 
-    revalidatePath(`/league/${leagueSlug}/history`);
+    revalidateLeaguePages(leagueSlug);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("updateMatchup failed", error);
@@ -635,11 +627,11 @@ export async function deleteMatchup(leagueSlug: string, matchupId: number): Prom
       });
     });
 
-    revalidatePath(`/league/${leagueSlug}/history`);
+    revalidateLeaguePages(leagueSlug);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("deleteMatchup failed", error);
-    return { success: false, error: "Failed to delete matchup. Please try again." };
+    return { success: false, error: error instanceof Error ? error.message : "Failed to delete matchup. Please try again." };
   }
 }
 
@@ -764,6 +756,7 @@ export async function submitForfeit(
       }
     });
 
+    revalidateLeaguePages(leagueSlug);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("submitForfeit failed", error);

@@ -287,7 +287,7 @@ describe("getLeaderboardWithMovement (stroke play)", () => {
   it("ranks teams by total points in stroke play mode", async () => {
     const league = unwrap(await createLeague("SP Movement League", "securepass123"));
     setAuthContext(league.id, league.slug, league.adminUsername);
-    const season = unwrap(await createSeason(league.slug, "Season 1", 2025));
+    const _season = unwrap(await createSeason(league.slug, "Season 1", 2025));
 
     // Switch league to stroke_play
     await testPrisma.league.update({
@@ -540,7 +540,7 @@ describe("getAllTimeLeaderboard (stroke play)", () => {
     });
 
     // Season 1
-    const s1 = unwrap(await createSeason(league.slug, "Season 1", 2025));
+    const _s1 = unwrap(await createSeason(league.slug, "Season 1", 2025));
 
     const t1 = unwrap(await createTeam(league.id, "Alpha"));
     const t2 = unwrap(await createTeam(league.id, "Bravo"));

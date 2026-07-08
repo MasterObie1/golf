@@ -69,10 +69,62 @@ export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitR
 }
 
 /**
+ * Durable, DB-backed rate limit check (sliding window over LoginAttempt rows).
+ *
+ * Use for high-value endpoints (logins): serverless instances share the
+ * database, unlike the in-memory limiter which resets on every cold start.
+ * Falls back to the in-memory limiter if the database is unreachable, so an
+ * outage degrades protection rather than blocking logins entirely.
+ */
+export async function checkRateLimitDurable(key: string, config: RateLimitConfig): Promise<RateLimitResult> {
+  const now = Date.now();
+  const windowStart = new Date(now - config.windowSeconds * 1000);
+
+  try {
+    // Lazy import keeps this module usable in contexts without a DB (e.g. tests
+    // that mock it, edge middleware bundles).
+    const { prisma } = await import("./db");
+
+    // Opportunistic cleanup of expired attempts for this key
+    await prisma.loginAttempt.deleteMany({
+      where: { key, createdAt: { lt: windowStart } },
+    });
+
+    const count = await prisma.loginAttempt.count({
+      where: { key, createdAt: { gte: windowStart } },
+    });
+
+    if (count >= config.maxRequests) {
+      const oldest = await prisma.loginAttempt.findFirst({
+        where: { key, createdAt: { gte: windowStart } },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      });
+      const resetAt = (oldest?.createdAt.getTime() ?? now) + config.windowSeconds * 1000;
+      return { allowed: false, remaining: 0, resetAt };
+    }
+
+    await prisma.loginAttempt.create({ data: { key } });
+    return {
+      allowed: true,
+      remaining: config.maxRequests - count - 1,
+      resetAt: now + config.windowSeconds * 1000,
+    };
+  } catch (error) {
+    console.error("Durable rate limit check failed, falling back to in-memory:", error instanceof Error ? error.message : error);
+    return checkRateLimit(key, config);
+  }
+}
+
+/**
  * Extract client IP from request headers.
- * Prefers Vercel's non-spoofable header, falls back to standard proxy headers.
- * Never returns a shared key — hashes User-Agent as last resort to avoid
- * one user's rate limit locking out everyone.
+ *
+ * Only trusts headers that clients cannot spoof: x-vercel-forwarded-for is set
+ * by Vercel's edge. Generic proxy headers (x-forwarded-for, x-real-ip,
+ * cf-connecting-ip) are attacker-controlled unless a trusted proxy sets them,
+ * so they are honored only when TRUST_PROXY_IP_HEADERS=true (self-hosted
+ * deployments behind a reverse proxy). Never returns a shared key — hashes
+ * User-Agent as last resort to avoid one user's rate limit locking out everyone.
  */
 export function getClientIp(request: Request): string {
   const headers = new Headers(request.headers);
@@ -80,14 +132,16 @@ export function getClientIp(request: Request): string {
   const vercelIp = headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
   if (vercelIp) return vercelIp;
 
-  const forwardedFor = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  if (forwardedFor) return forwardedFor;
+  if (process.env.TRUST_PROXY_IP_HEADERS === "true") {
+    const forwardedFor = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+    if (forwardedFor) return forwardedFor;
 
-  const realIp = headers.get("x-real-ip");
-  if (realIp) return realIp;
+    const realIp = headers.get("x-real-ip");
+    if (realIp) return realIp;
 
-  const cfIp = headers.get("cf-connecting-ip");
-  if (cfIp) return cfIp;
+    const cfIp = headers.get("cf-connecting-ip");
+    if (cfIp) return cfIp;
+  }
 
   // Last resort: hash the user-agent to avoid all unknown clients sharing one bucket
   const ua = headers.get("user-agent") || "no-ua";

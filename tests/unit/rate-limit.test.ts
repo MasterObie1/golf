@@ -73,25 +73,46 @@ describe("getClientIp", () => {
     expect(getClientIp(req)).toBe("1.2.3.4");
   });
 
-  it("falls back to x-forwarded-for", () => {
-    const req = new Request("http://localhost", {
-      headers: { "x-forwarded-for": "5.6.7.8, 10.0.0.1" },
+  describe("with TRUST_PROXY_IP_HEADERS=true (self-hosted behind a proxy)", () => {
+    beforeEach(() => {
+      vi.stubEnv("TRUST_PROXY_IP_HEADERS", "true");
     });
-    expect(getClientIp(req)).toBe("5.6.7.8");
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("falls back to x-forwarded-for", () => {
+      const req = new Request("http://localhost", {
+        headers: { "x-forwarded-for": "5.6.7.8, 10.0.0.1" },
+      });
+      expect(getClientIp(req)).toBe("5.6.7.8");
+    });
+
+    it("falls back to x-real-ip", () => {
+      const req = new Request("http://localhost", {
+        headers: { "x-real-ip": "9.8.7.6" },
+      });
+      expect(getClientIp(req)).toBe("9.8.7.6");
+    });
+
+    it("falls back to cf-connecting-ip", () => {
+      const req = new Request("http://localhost", {
+        headers: { "cf-connecting-ip": "11.12.13.14" },
+      });
+      expect(getClientIp(req)).toBe("11.12.13.14");
+    });
   });
 
-  it("falls back to x-real-ip", () => {
+  it("ignores spoofable proxy headers when TRUST_PROXY_IP_HEADERS is not set", () => {
     const req = new Request("http://localhost", {
-      headers: { "x-real-ip": "9.8.7.6" },
+      headers: {
+        "x-forwarded-for": "5.6.7.8",
+        "x-real-ip": "9.8.7.6",
+        "cf-connecting-ip": "11.12.13.14",
+        "user-agent": "TestBrowser/1.0",
+      },
     });
-    expect(getClientIp(req)).toBe("9.8.7.6");
-  });
-
-  it("falls back to cf-connecting-ip", () => {
-    const req = new Request("http://localhost", {
-      headers: { "cf-connecting-ip": "11.12.13.14" },
-    });
-    expect(getClientIp(req)).toBe("11.12.13.14");
+    expect(getClientIp(req)).toMatch(/^anon-/);
   });
 
   it("returns anon hash when no IP headers present", () => {

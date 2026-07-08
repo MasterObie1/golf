@@ -48,6 +48,8 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
 
   useEffect(() => {
     loadCourse();
+    // loadCourse closes over `slug`, which only changes together with leagueId
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagueId]);
 
   async function loadCourse() {

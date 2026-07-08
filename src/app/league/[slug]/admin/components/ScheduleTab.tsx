@@ -20,7 +20,7 @@ import {
   type PreviewResult,
 } from "@/lib/actions/schedule";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import type { Round } from "@/lib/scheduling/round-robin";
+
 import type { AdminTeam } from "@/lib/types/admin";
 
 interface ScheduleTabProps {

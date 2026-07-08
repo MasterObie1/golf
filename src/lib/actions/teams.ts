@@ -7,6 +7,7 @@ import { checkRateLimit, RATE_LIMITS } from "../rate-limit";
 import { logger } from "../logger";
 import { getServerActionIp, type ActionResult } from "./shared";
 import { requireActiveLeague } from "./leagues";
+import { type WeeklyGrossEntry } from "../handicap";
 
 // ==========================================
 // TEAM MANAGEMENT (League-scoped)
@@ -78,7 +79,11 @@ export async function createTeam(leagueId: number, name: string): Promise<Action
   }
 }
 
-export async function getTeamPreviousScores(leagueId: number, teamId: number, beforeWeek?: number): Promise<number[]> {
+export async function getTeamPreviousScoreEntries(
+  leagueId: number,
+  teamId: number,
+  beforeWeek?: number
+): Promise<WeeklyGrossEntry[]> {
   const matchups = await prisma.matchup.findMany({
     where: {
       leagueId,
@@ -88,6 +93,7 @@ export async function getTeamPreviousScores(leagueId: number, teamId: number, be
     },
     orderBy: { weekNumber: "asc" },
     select: {
+      weekNumber: true,
       teamAId: true, teamBId: true,
       teamAGross: true, teamBGross: true,
       teamAIsSub: true, teamBIsSub: true,
@@ -99,7 +105,15 @@ export async function getTeamPreviousScores(leagueId: number, teamId: number, be
       if (m.teamAId === teamId) return !m.teamAIsSub;
       return !m.teamBIsSub;
     })
-    .map((m) => (m.teamAId === teamId ? m.teamAGross : m.teamBGross));
+    .map((m) => ({
+      week: m.weekNumber,
+      gross: m.teamAId === teamId ? m.teamAGross : m.teamBGross,
+    }));
+}
+
+export async function getTeamPreviousScores(leagueId: number, teamId: number, beforeWeek?: number): Promise<number[]> {
+  const entries = await getTeamPreviousScoreEntries(leagueId, teamId, beforeWeek);
+  return entries.map((e) => e.gross);
 }
 
 /**
@@ -107,19 +121,19 @@ export async function getTeamPreviousScores(leagueId: number, teamId: number, be
  * For match_play: pulls from Matchup table (existing behavior).
  * For stroke_play/hybrid: pulls from WeeklyScore table.
  */
-export async function getTeamPreviousScoresForScoring(
+export async function getTeamPreviousScoreEntriesForScoring(
   leagueId: number,
   teamId: number,
   scoringType: string,
   beforeWeek?: number
-): Promise<number[]> {
+): Promise<WeeklyGrossEntry[]> {
   const validScoringTypes = ["match_play", "stroke_play", "hybrid"];
   if (!validScoringTypes.includes(scoringType)) {
     throw new Error(`Invalid scoring type: ${scoringType}`);
   }
 
   if (scoringType === "match_play") {
-    return getTeamPreviousScores(leagueId, teamId, beforeWeek);
+    return getTeamPreviousScoreEntries(leagueId, teamId, beforeWeek);
   }
 
   // Stroke play / hybrid: pull from WeeklyScore
@@ -132,10 +146,20 @@ export async function getTeamPreviousScoresForScoring(
       ...(beforeWeek ? { weekNumber: { lt: beforeWeek } } : {}),
     },
     orderBy: { weekNumber: "asc" },
-    select: { grossScore: true },
+    select: { weekNumber: true, grossScore: true },
   });
 
-  return scores.map((s) => s.grossScore);
+  return scores.map((s) => ({ week: s.weekNumber, gross: s.grossScore }));
+}
+
+export async function getTeamPreviousScoresForScoring(
+  leagueId: number,
+  teamId: number,
+  scoringType: string,
+  beforeWeek?: number
+): Promise<number[]> {
+  const entries = await getTeamPreviousScoreEntriesForScoring(leagueId, teamId, scoringType, beforeWeek);
+  return entries.map((e) => e.gross);
 }
 
 export async function getCurrentWeekNumber(leagueId: number): Promise<number> {
@@ -338,6 +362,7 @@ export async function getAllTeamsWithStatus(leagueSlug: string) {
 export async function approveTeam(leagueSlug: string, teamId: number): Promise<ActionResult<{ teamId: number; scheduleIntegrationNeeded: boolean } | undefined>> {
   try {
     const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
 
     const team = await prisma.team.findUniqueOrThrow({
       where: { id: teamId },
@@ -347,21 +372,26 @@ export async function approveTeam(leagueSlug: string, teamId: number): Promise<A
       return { success: false, error: "Unauthorized: Team does not belong to this league" };
     }
 
-    const league = await prisma.league.findUniqueOrThrow({
-      where: { id: session.leagueId },
-    });
+    // Count and approve inside one transaction so concurrent approvals
+    // cannot both pass the capacity check and exceed maxTeams.
+    await prisma.$transaction(async (tx) => {
+      const league = await tx.league.findUniqueOrThrow({
+        where: { id: session.leagueId },
+        select: { maxTeams: true },
+      });
 
-    const approvedCount = await prisma.team.count({
-      where: { leagueId: session.leagueId, status: "approved" },
-    });
+      const approvedCount = await tx.team.count({
+        where: { leagueId: session.leagueId, status: "approved" },
+      });
 
-    if (approvedCount >= league.maxTeams) {
-      return { success: false, error: `Cannot approve: League is full (${league.maxTeams} teams maximum)` };
-    }
+      if (approvedCount >= league.maxTeams) {
+        throw new Error(`Cannot approve: League is full (${league.maxTeams} teams maximum)`);
+      }
 
-    await prisma.team.update({
-      where: { id: teamId },
-      data: { status: "approved" },
+      await tx.team.update({
+        where: { id: teamId },
+        data: { status: "approved" },
+      });
     });
 
     // Check if a schedule exists for the active season
@@ -383,6 +413,10 @@ export async function approveTeam(leagueSlug: string, teamId: number): Promise<A
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("approveTeam failed", error);
+    // Surface the capacity error thrown inside the transaction
+    if (error instanceof Error && error.message.startsWith("Cannot approve")) {
+      return { success: false, error: error.message };
+    }
     return { success: false, error: "Failed to approve team. Please try again." };
   }
 }
@@ -390,6 +424,7 @@ export async function approveTeam(leagueSlug: string, teamId: number): Promise<A
 export async function rejectTeam(leagueSlug: string, teamId: number): Promise<ActionResult> {
   try {
     const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
 
     const team = await prisma.team.findUniqueOrThrow({
       where: { id: teamId },
@@ -419,6 +454,7 @@ export async function updateTeamContact(
 ): Promise<ActionResult> {
   try {
     const session = await requireLeagueAdmin(leagueSlug);
+    await requireActiveLeague(session.leagueId);
 
     const team = await prisma.team.findFirst({
       where: { id: teamId, leagueId: session.leagueId },

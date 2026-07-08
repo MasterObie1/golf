@@ -3,17 +3,21 @@
 import { z } from "zod";
 import { prisma } from "../db";
 import {
-  calculateHandicap,
+  calculateHandicapFromEntries,
   calculateNetScore,
+  calculateStrokePlayPoints,
   suggestPoints,
   leagueToHandicapSettings,
   type ScoreSelectionMethod,
   type RoundingMethod,
+  type StrokePlayEntry,
+  type WeeklyGrossEntry,
 } from "../handicap";
+import { generatePointScale } from "../scoring-utils";
 import { requireLeagueAdmin } from "../auth";
 import { logger } from "../logger";
 import { requireActiveLeague } from "./leagues";
-import type { ActionResult } from "./shared";
+import { revalidateLeaguePages, type ActionResult } from "./shared";
 
 const updateLeagueSettingsSchema = z.object({
   maxTeams: z.number().int().min(1, "Must have at least 1 team slot").max(256, "Maximum 256 teams"),
@@ -78,8 +82,8 @@ export interface HandicapSettingsInput {
   // Basic Formula
   baseScore: number;
   multiplier: number;
-  underParMultiplier: number | null;
-  underParCap: number | null;
+  underParMultiplier?: number | null;
+  underParCap?: number | null;
   rounding: RoundingMethod;
   defaultHandicap: number;
   maxHandicap: number | null;
@@ -115,9 +119,10 @@ export interface HandicapSettingsInput {
 
 const updateHandicapSettingsSchema = z.object({
   baseScore: z.number().min(0).max(200),
-  multiplier: z.number().min(0).max(5),
-  underParMultiplier: z.number().min(0).max(5).nullable(),
-  underParCap: z.number().min(-100).max(100).nullable(),
+  // gt(0): a multiplier of 0 would zero every handicap in the league on recalc
+  multiplier: z.number().gt(0, "Multiplier must be greater than 0").max(5),
+  underParMultiplier: z.number().min(0).max(5).nullable().default(null),
+  underParCap: z.number().min(-100).max(100).nullable().default(null),
   rounding: z.enum(["floor", "round", "ceil"]),
   defaultHandicap: z.number().min(-50).max(100),
   maxHandicap: z.number().min(0).max(200).nullable(),
@@ -232,6 +237,7 @@ export async function updateHandicapSettings(
     // Recalculate all matchups and team stats with new settings
     await recalculateLeagueStats(session.leagueId);
 
+    revalidateLeaguePages(leagueSlug);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("updateHandicapSettings failed", error);
@@ -252,6 +258,7 @@ export async function recalculateAllMatchups(leagueSlug: string): Promise<Action
     const session = await requireLeagueAdmin(leagueSlug);
     await requireActiveLeague(session.leagueId);
     await recalculateLeagueStats(session.leagueId);
+    revalidateLeaguePages(leagueSlug);
     return { success: true, data: undefined };
   } catch (error) {
     logger.error("recalculateAllMatchups failed", error);
@@ -298,6 +305,14 @@ async function recalculateLeagueStats(leagueId: number) {
         handicapRequireApproval: true,
         byePointsMode: true,
         byePointsFlat: true,
+        scoringType: true,
+        strokePlayPointPreset: true,
+        strokePlayPointScale: true,
+        strokePlayBonusShow: true,
+        strokePlayBonusBeat: true,
+        strokePlayDnpPoints: true,
+        strokePlayTieMode: true,
+        strokePlayDnpPenalty: true,
       },
     });
     const handicapSettings = leagueToHandicapSettings(league);
@@ -309,14 +324,111 @@ async function recalculateLeagueStats(leagueId: number) {
       orderBy: [{ seasonId: "asc" }, { weekNumber: "asc" }, { id: "asc" }],
     });
 
-    // Fetch weekly score points and bye-week points for inclusion in team totals
+    // ---- Recompute WeeklyScore rows (stroke play / hybrid field scores) ----
+    // Replays each week in order: recomputes handicaps from prior weeks' gross
+    // scores, then net scores, then position points for the week. Mirrors the
+    // live previewWeeklyScores/submitWeeklyScores pipeline.
     const weeklyScores = await tx.weeklyScore.findMany({
       where: { leagueId },
-      select: { teamId: true, points: true },
+      orderBy: [{ weekNumber: "asc" }, { id: "asc" }],
+      select: {
+        id: true, teamId: true, weekNumber: true,
+        grossScore: true, handicap: true, isSub: true, isDnp: true,
+      },
     });
+
+    // Non-sub, non-DNP gross history per team, tagged with week numbers
+    const weeklyEntriesByTeam: Record<number, WeeklyGrossEntry[]> = {};
     const weeklyPointsMap: Record<number, number> = {};
-    for (const ws of weeklyScores) {
-      weeklyPointsMap[ws.teamId] = (weeklyPointsMap[ws.teamId] ?? 0) + ws.points;
+
+    const scoreWeeks = [...new Set(weeklyScores.map((ws) => ws.weekNumber))].sort((a, b) => a - b);
+    for (const week of scoreWeeks) {
+      const rows = weeklyScores.filter((ws) => ws.weekNumber === week);
+
+      const recalced: Array<{
+        id: number; teamId: number; grossScore: number;
+        handicap: number; netScore: number; isDnp: boolean;
+      }> = [];
+
+      for (const row of rows) {
+        if (row.isDnp) {
+          recalced.push({ id: row.id, teamId: row.teamId, grossScore: 0, handicap: 0, netScore: 0, isDnp: true });
+          continue;
+        }
+
+        const history = weeklyEntriesByTeam[row.teamId] ?? [];
+        // Subs keep their manually entered handicap; a team's first entry has no
+        // history to calculate from, so its (manual) handicap is preserved too.
+        const handicap = row.isSub || history.length === 0
+          ? row.handicap
+          : calculateHandicapFromEntries(history, handicapSettings, week);
+
+        if (!isFinite(handicap)) {
+          throw new Error(`Invalid handicap calculation for weekly score ${row.id}`);
+        }
+        const netScore = calculateNetScore(row.grossScore, handicap);
+        if (!isFinite(netScore)) {
+          throw new Error(`Invalid net score calculation for weekly score ${row.id}`);
+        }
+
+        recalced.push({ id: row.id, teamId: row.teamId, grossScore: row.grossScore, handicap, netScore, isDnp: false });
+
+        if (!row.isSub) {
+          (weeklyEntriesByTeam[row.teamId] ??= []).push({ week, gross: row.grossScore });
+        }
+      }
+
+      // Position-based points for the week (same scale logic as previewWeeklyScores)
+      const playingCount = recalced.filter((r) => !r.isDnp).length;
+      let pointScale: number[];
+      if (league.strokePlayPointScale) {
+        try {
+          pointScale = JSON.parse(league.strokePlayPointScale) as number[];
+        } catch (error) {
+          logger.error("Failed to parse strokePlayPointScale", error);
+          pointScale = generatePointScale(league.strokePlayPointPreset, playingCount);
+        }
+      } else {
+        pointScale = generatePointScale(league.strokePlayPointPreset, playingCount);
+      }
+      while (pointScale.length < playingCount) {
+        pointScale.push(0);
+      }
+
+      const strokeEntries: StrokePlayEntry[] = recalced.map((r) => ({
+        teamId: r.teamId,
+        netScore: r.netScore,
+        grossScore: r.grossScore,
+        isDnp: r.isDnp,
+      }));
+      const pointResults = calculateStrokePlayPoints(
+        strokeEntries,
+        pointScale,
+        league.strokePlayTieMode as "split" | "same",
+        {
+          showUpBonus: league.strokePlayBonusShow,
+          beatHandicapBonus: league.strokePlayBonusBeat,
+          baseScore: league.handicapBaseScore,
+          dnpPoints: league.strokePlayDnpPoints,
+          dnpPenalty: league.strokePlayDnpPenalty,
+        }
+      );
+      const pointsByTeam = new Map(pointResults.map((r) => [r.teamId, r]));
+
+      for (const r of recalced) {
+        const pts = pointsByTeam.get(r.teamId);
+        const totalPoints = (pts?.points ?? 0) + (pts?.bonusPoints ?? 0);
+        await tx.weeklyScore.update({
+          where: { id: r.id },
+          data: {
+            handicap: r.handicap,
+            netScore: r.netScore,
+            points: totalPoints,
+            position: pts?.position ?? 0,
+          },
+        });
+        weeklyPointsMap[r.teamId] = (weeklyPointsMap[r.teamId] ?? 0) + totalPoints;
+      }
     }
 
     // Calculate bye-week points from completed byes
@@ -349,13 +461,21 @@ async function recalculateLeagueStats(leagueId: number) {
     }
 
     // Initialize score arrays for ALL teams up-front so that teams with only
-    // forfeits (or no matchups at all) still have an entry when calculateHandicap
-    // is called during the aggregation phase.
+    // forfeits (or no matchups at all) still have an entry when the handicap
+    // is calculated during the aggregation phase.
     const allTeams = await tx.team.findMany({ where: { leagueId }, select: { id: true } });
-    const teamScores: Record<number, number[]> = {};
+    const teamScores: Record<number, WeeklyGrossEntry[]> = {};
     for (const team of allTeams) {
       teamScores[team.id] = [];
     }
+
+    // For stroke play / hybrid leagues the live submission path derives matchup
+    // handicaps from WeeklyScore gross history, so the replay must do the same.
+    const useWeeklyHistory = league.scoringType !== "match_play";
+    const priorEntriesFor = (teamId: number, beforeWeek: number): WeeklyGrossEntry[] =>
+      useWeeklyHistory
+        ? (weeklyEntriesByTeam[teamId] ?? []).filter((e) => e.week < beforeWeek)
+        : teamScores[teamId] ?? [];
 
     // Track updated points for aggregation (avoids N+1 re-queries)
     const matchupResults: Array<{
@@ -384,23 +504,23 @@ async function recalculateLeagueStats(leagueId: number) {
 
       // Use "no prior scores" to detect first matchup (works across seasons,
       // unlike checking weekNumber === 1 which would trigger for every season's week 1)
-      const teamAHasHistory = (teamScores[matchup.teamAId]?.length ?? 0) > 0;
-      const teamBHasHistory = (teamScores[matchup.teamBId]?.length ?? 0) > 0;
+      const teamAPrior = priorEntriesFor(matchup.teamAId, matchup.weekNumber);
+      const teamBPrior = priorEntriesFor(matchup.teamBId, matchup.weekNumber);
 
-      if (!teamAHasHistory && !matchup.teamAIsSub) {
+      if (teamAPrior.length === 0 && !matchup.teamAIsSub) {
         teamAHandicap = matchup.teamAHandicap;
       } else {
         teamAHandicap = matchup.teamAIsSub
           ? matchup.teamAHandicap
-          : calculateHandicap(teamScores[matchup.teamAId], handicapSettings, matchup.weekNumber);
+          : calculateHandicapFromEntries(teamAPrior, handicapSettings, matchup.weekNumber);
       }
 
-      if (!teamBHasHistory && !matchup.teamBIsSub) {
+      if (teamBPrior.length === 0 && !matchup.teamBIsSub) {
         teamBHandicap = matchup.teamBHandicap;
       } else {
         teamBHandicap = matchup.teamBIsSub
           ? matchup.teamBHandicap
-          : calculateHandicap(teamScores[matchup.teamBId], handicapSettings, matchup.weekNumber);
+          : calculateHandicapFromEntries(teamBPrior, handicapSettings, matchup.weekNumber);
       }
 
       if (!isFinite(teamAHandicap) || !isFinite(teamBHandicap)) {
@@ -444,10 +564,10 @@ async function recalculateLeagueStats(leagueId: number) {
 
       // Add scores to history for future handicap calculations (non-subs only)
       if (!matchup.teamAIsSub) {
-        teamScores[matchup.teamAId].push(matchup.teamAGross);
+        teamScores[matchup.teamAId].push({ week: matchup.weekNumber, gross: matchup.teamAGross });
       }
       if (!matchup.teamBIsSub) {
-        teamScores[matchup.teamBId].push(matchup.teamBGross);
+        teamScores[matchup.teamBId].push({ week: matchup.weekNumber, gross: matchup.teamBGross });
       }
     }
 

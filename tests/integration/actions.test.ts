@@ -91,7 +91,7 @@ import {
   getActiveSeason,
 } from "@/lib/actions/seasons";
 import { submitMatchup, deleteMatchup } from "@/lib/actions/matchups";
-import { recalculateLeagueStats } from "@/lib/actions/league-settings";
+import { recalculateAllMatchups } from "@/lib/actions/league-settings";
 import { getLeaderboard } from "@/lib/actions/standings";
 import { requireAdmin, requireLeagueAdmin, getAdminSession } from "@/lib/auth";
 
@@ -515,7 +515,7 @@ describe("recalculateLeagueStats", () => {
     });
 
     // Recalculate
-    await recalculateLeagueStats(leagueId);
+    unwrap(await recalculateAllMatchups(leagueSlug));
 
     // Verify stats are correct after recalculation
     const teamA = await testPrisma.team.findUnique({ where: { id: teamAId } });
@@ -541,7 +541,7 @@ describe("recalculateLeagueStats", () => {
     });
 
     // Recalculate with no matchups
-    await recalculateLeagueStats(leagueId);
+    unwrap(await recalculateAllMatchups(leagueSlug));
 
     const teamA = await testPrisma.team.findUnique({ where: { id: teamAId } });
     expect(teamA!.totalPoints).toBe(0);
