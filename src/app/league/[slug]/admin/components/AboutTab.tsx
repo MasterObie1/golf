@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { updateLeagueAbout, getLeagueAbout } from "@/lib/actions/league-about";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
 
 interface AboutTabProps {
   slug: string;
@@ -26,7 +28,6 @@ interface AboutTabProps {
 
 export default function AboutTab({ slug, leagueId, leagueName: fallbackName, initialAbout }: AboutTabProps) {
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // About the League state
   const [leagueName, setLeagueName] = useState(initialAbout.leagueName || "");
@@ -65,7 +66,6 @@ export default function AboutTab({ slug, leagueId, leagueName: fallbackName, ini
 
   async function handleSaveAbout() {
     setLoading(true);
-    setMessage(null);
     try {
       await updateLeagueAbout(slug, {
         leagueName: leagueName || fallbackName,
@@ -84,27 +84,15 @@ export default function AboutTab({ slug, leagueId, leagueName: fallbackName, ini
       });
       const aboutDataResult = await getLeagueAbout(leagueId);
       populateForm(aboutDataResult);
-      setMessage({ type: "success", text: "League information saved successfully!" });
+      notify.success("League information saved successfully!");
     } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to save league information." });
+      notify.error(error instanceof Error ? error.message : "Failed to save league information.");
     }
     setLoading(false);
   }
 
   return (
     <div className="bg-scorecard-paper rounded-lg shadow-lg p-6 border border-scorecard-line/50">
-      {message && (
-        <div
-          className={`mb-4 p-3 rounded-lg font-sans text-sm ${
-            message.type === "success"
-              ? "bg-fairway/10 border border-fairway/30 text-fairway"
-              : "bg-error-bg border border-error-border text-error-text"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
       <h2 className="text-xl font-display font-semibold uppercase tracking-wider mb-6 text-scorecard-pencil">About the League</h2>
 
       <div className="space-y-6">
@@ -239,13 +227,9 @@ export default function AboutTab({ slug, leagueId, leagueName: fallbackName, ini
           </div>
         </div>
 
-        <button
-          onClick={handleSaveAbout}
-          disabled={loading}
-          className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough font-display font-semibold uppercase tracking-wider disabled:opacity-50 transition-colors"
-        >
+        <Button onClick={handleSaveAbout} disabled={loading}>
           {loading ? "Saving..." : "Save League Information"}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getLeagueBySlug } from "@/lib/actions/leagues";
+import { getLeagueCached } from "@/lib/league-cache";
 import { getSeasons, getActiveSeason } from "@/lib/actions/seasons";
 import { getSchedule, getScheduleStatus } from "@/lib/actions/schedule";
 import { getCurrentWeekNumber } from "@/lib/actions/teams";
 import { SeasonSelector } from "@/components/SeasonSelector";
 import { ContourBackground } from "@/components/grounds/ContourBackground";
+import { PageHeader, EmptyState } from "@/components/composite";
 import type { Metadata } from "next";
 
 export const revalidate = 60;
@@ -17,7 +18,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const league = await getLeagueBySlug(slug);
+  const league = await getLeagueCached(slug);
   if (!league) return { title: "Schedule" };
   return {
     title: `Schedule - ${league.name}`,
@@ -29,7 +30,7 @@ export default async function LeagueSchedulePage({ params, searchParams }: Props
   const { slug } = await params;
   const { seasonId } = await searchParams;
 
-  const league = await getLeagueBySlug(slug);
+  const league = await getLeagueCached(slug);
   if (!league) {
     notFound();
   }
@@ -40,14 +41,16 @@ export default async function LeagueSchedulePage({ params, searchParams }: Props
       <div className="min-h-screen bg-surface relative">
         <ContourBackground variant="hills" color="text-fairway" opacity="opacity-[0.04]" />
         <div className="relative max-w-4xl mx-auto px-4 py-8">
-          <div className="mb-6">
-            <Link href={`/league/${slug}`} className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider">
-              &larr; Back to {league.name}
-            </Link>
-          </div>
-          <div className="bg-scorecard-paper rounded-lg shadow-md p-8 text-center border border-scorecard-line/50">
-            <p className="text-text-muted font-sans">This league&apos;s schedule is not publicly available.</p>
-          </div>
+          <PageHeader
+            title="Schedule"
+            subtitle={league.name}
+            backHref={`/league/${slug}`}
+            backLabel={`Back to ${league.name}`}
+          />
+          <EmptyState
+            title="Schedule Under Wraps"
+            description="This league's schedule is not publicly available."
+          />
         </div>
       </div>
     );
@@ -92,26 +95,26 @@ export default async function LeagueSchedulePage({ params, searchParams }: Props
       <ContourBackground variant="hills" color="text-fairway" opacity="opacity-[0.04]" />
 
       <div className="relative max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-6">
-          <Link href={`/league/${slug}`} className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider">
-            &larr; Back to {league.name}
-          </Link>
-        </div>
-
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-3xl font-bold text-scorecard-pencil font-display uppercase tracking-wider">Schedule</h1>
-          {seasons.length > 0 && (
-            <SeasonSelector
-              seasons={seasons}
-              currentSeasonId={currentSeasonId}
-              leagueSlug={slug}
-            />
-          )}
-        </div>
-        <p className="text-text-secondary mb-6 font-sans">
-          {league.name}
-          {currentSeason && ` \u2014 ${currentSeason.name}`}
-        </p>
+        <PageHeader
+          title="Schedule"
+          subtitle={
+            <>
+              {league.name}
+              {currentSeason && ` \u2014 ${currentSeason.name}`}
+            </>
+          }
+          backHref={`/league/${slug}`}
+          backLabel={`Back to ${league.name}`}
+          actions={
+            seasons.length > 0 ? (
+              <SeasonSelector
+                seasons={seasons}
+                currentSeasonId={currentSeasonId}
+                leagueSlug={slug}
+              />
+            ) : undefined
+          }
+        />
 
         {scheduleStatus && scheduleStatus.hasSchedule && (
           <div className="flex gap-4 mb-6 text-sm text-text-muted font-mono">
@@ -122,9 +125,10 @@ export default async function LeagueSchedulePage({ params, searchParams }: Props
         )}
 
         {schedule.length === 0 ? (
-          <div className="bg-scorecard-paper rounded-lg shadow-md p-8 text-center border border-scorecard-line/50">
-            <p className="text-text-muted font-sans">No schedule has been generated for this season yet.</p>
-          </div>
+          <EmptyState
+            title="No Rounds Booked"
+            description="No schedule has been generated for this season yet."
+          />
         ) : (
           <div className="space-y-4">
             {visibleSchedule.map((week) => {

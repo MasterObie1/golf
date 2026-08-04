@@ -28,8 +28,8 @@ export function GolfNews() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-lg p-6 w-full border border-white/80">
-        <h2 className="text-lg font-display font-bold text-scorecard-pencil uppercase tracking-wider mb-4 flex items-center gap-2">
+      <div className="bg-card rounded-lg shadow-lg p-6 w-full border border-border">
+        <h2 className="text-lg font-display font-bold text-card-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
           <NewspaperIcon />
           Golf News
         </h2>
@@ -47,8 +47,8 @@ export function GolfNews() {
 
   if (error || news.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-lg p-6 w-full border border-white/80">
-        <h2 className="text-lg font-display font-bold text-scorecard-pencil uppercase tracking-wider mb-4 flex items-center gap-2">
+      <div className="bg-card rounded-lg shadow-lg p-6 w-full border border-border">
+        <h2 className="text-lg font-display font-bold text-card-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
           <NewspaperIcon />
           Golf News
         </h2>
@@ -60,8 +60,8 @@ export function GolfNews() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6 w-full border border-white/80">
-      <h2 className="text-lg font-display font-bold text-scorecard-pencil uppercase tracking-wider mb-4 flex items-center gap-2">
+    <div className="bg-card rounded-lg shadow-lg p-6 w-full border border-border">
+      <h2 className="text-lg font-display font-bold text-card-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
         <NewspaperIcon />
         Golf News
       </h2>
@@ -74,7 +74,7 @@ export function GolfNews() {
             rel="noopener noreferrer"
             className="block group"
           >
-            <h3 className="text-sm font-medium font-sans text-scorecard-pencil group-hover:text-fairway transition-colors line-clamp-2">
+            <h3 className="text-sm font-medium font-sans text-card-foreground group-hover:text-primary transition-colors line-clamp-2">
               {item.title}
             </h3>
             <p className="text-xs text-text-secondary mt-1 font-sans">
@@ -87,7 +87,7 @@ export function GolfNews() {
         href="https://www.espn.com/golf/"
         target="_blank"
         rel="noopener noreferrer"
-        className="block mt-4 pt-4 border-t border-scorecard-line/40 text-xs text-text-secondary hover:text-fairway transition-colors font-sans"
+        className="block mt-4 pt-4 border-t border-scorecard-line/40 text-xs text-text-secondary hover:text-primary transition-colors font-sans"
       >
         More from ESPN Golf &rarr;
       </a>
@@ -98,7 +98,7 @@ export function GolfNews() {
 function NewspaperIcon() {
   return (
     <svg
-      className="w-5 h-5 text-fairway"
+      className="w-5 h-5 text-primary"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"

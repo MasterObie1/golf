@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Oswald, IBM_Plex_Mono, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
-import { NavigationWrapper } from "@/components/NavigationWrapper";
-import { TimeProvider } from "@/components/grounds/TimeProvider";
+import { Toaster } from "@/components/ui/sonner";
+import { Navigation } from "@/components/Navigation";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { MotionProvider } from "@/components/grounds/MotionProvider";
 const oswald = Oswald({
   variable: "--font-oswald",
@@ -47,23 +48,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${oswald.variable} ${ibmPlexMono.variable} ${sourceSans.variable} antialiased`}
       >
-        <TimeProvider />
-        <MotionProvider>
-          <a
-            href="#main-content"
-            className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-fairway focus:rounded-lg focus:shadow-lg focus:font-semibold"
-          >
-            Skip to main content
-          </a>
-          <NavigationWrapper />
-          <main id="main-content">
-            {children}
-          </main>
-        </MotionProvider>
+        <ThemeProvider>
+          <MotionProvider>
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-card focus:text-fairway focus:rounded-lg focus:shadow-lg focus:font-semibold"
+            >
+              Skip to main content
+            </a>
+            <Navigation />
+            <main id="main-content">
+              {children}
+            </main>
+            <Toaster richColors position="top-center" />
+          </MotionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

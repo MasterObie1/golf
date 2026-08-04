@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { GolfNews } from "@/components/GolfNews";
-import { Logo } from "@/components/Logo";
+import { SiteFooter } from "@/components/SiteFooter";
 import { ContourTerrain } from "@/components/grounds/contours/ContourTerrain";
 
 export const revalidate = 60;
@@ -81,7 +81,7 @@ export default async function Home() {
           Full viewport. Layered terrain silhouette. Atmosphere.
           ═══════════════════════════════════════════════════════ */}
       <section
-        className="relative min-h-screen flex flex-col justify-center overflow-hidden"
+        className="dark relative min-h-screen flex flex-col justify-center overflow-hidden"
         style={{
           background:
             "linear-gradient(180deg, #091a12 0%, #0d2818 40%, #142e1a 65%, #1a3a1a 100%)",
@@ -266,7 +266,7 @@ export default async function Home() {
           THE BOARD — Active leagues tournament scoreboard
           ═══════════════════════════════════════════════════════ */}
       {featuredLeagues.length > 0 && (
-        <section className="relative py-16 md:py-24 bg-board-green overflow-hidden">
+        <section className="dark relative py-16 md:py-24 bg-board-green overflow-hidden">
           <div
             className="absolute inset-0 text-white opacity-[0.03]"
             aria-hidden="true"
@@ -472,7 +472,7 @@ export default async function Home() {
           THE CLUBHOUSE — News + final CTA
           Wood grain warmth. The 19th hole.
           ═══════════════════════════════════════════════════════ */}
-      <section className="relative py-16 md:py-24 overflow-hidden">
+      <section className="dark relative py-16 md:py-24 overflow-hidden">
         <div className="absolute inset-0 wood-grain" />
 
         <div className="relative max-w-5xl mx-auto px-4">
@@ -540,42 +540,7 @@ export default async function Home() {
       {/* ═══════════════════════════════════════════════════════
           FOOTER
           ═══════════════════════════════════════════════════════ */}
-      <footer className="bg-rough text-white py-12">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-            <Link href="/" className="flex items-center gap-3">
-              <Logo variant="contour" size="sm" />
-              <span className="text-xl font-display font-bold text-board-yellow uppercase tracking-wider">
-                LeagueLinks
-              </span>
-            </Link>
-
-            <div className="flex gap-8 text-white/70 text-sm font-sans">
-              <Link
-                href="/leagues"
-                className="hover:text-board-yellow transition-colors"
-              >
-                Find a League
-              </Link>
-              <Link
-                href="/leagues/new"
-                className="hover:text-board-yellow transition-colors"
-              >
-                Create a League
-              </Link>
-            </div>
-
-            <div className="text-sm text-white/60 font-sans">
-              &copy; {new Date().getFullYear()} LeagueLinks
-            </div>
-          </div>
-
-          <div className="border-t border-white/10 mt-8 pt-8 text-center text-white/60 text-sm font-sans">
-            &copy; {new Date().getFullYear()} LeagueLinks Golf. All rights
-            reserved.
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

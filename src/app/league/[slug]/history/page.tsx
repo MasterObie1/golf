@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLeagueBySlug } from "@/lib/actions/leagues";
+import { getLeagueCached } from "@/lib/league-cache";
 import { getSeasons, getActiveSeason } from "@/lib/actions/seasons";
 import { getMatchupHistoryForSeason } from "@/lib/actions/matchups";
 import { getWeeklyScoreHistoryForSeason } from "@/lib/actions/weekly-scores";
@@ -10,6 +9,7 @@ import { MatchupWithScorecards } from "@/components/MatchupWithScorecards";
 import { WeeklyScoreCard } from "@/components/WeeklyScoreCard";
 import { SeasonSelector } from "@/components/SeasonSelector";
 import { ContourBackground } from "@/components/grounds/ContourBackground";
+import { PageHeader, EmptyState } from "@/components/composite";
 import type { Metadata } from "next";
 
 export const revalidate = 60;
@@ -21,7 +21,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const league = await getLeagueBySlug(slug);
+  const league = await getLeagueCached(slug);
   if (!league) return { title: "Match History" };
   const isStrokePlay = league.scoringType === "stroke_play";
   return {
@@ -34,7 +34,7 @@ export default async function LeagueHistoryPage({ params, searchParams }: Props)
   const { slug } = await params;
   const { seasonId } = await searchParams;
 
-  const league = await getLeagueBySlug(slug);
+  const league = await getLeagueCached(slug);
   if (!league) {
     notFound();
   }
@@ -147,42 +147,37 @@ export default async function LeagueHistoryPage({ params, searchParams }: Props)
       <ContourBackground variant="hills" color="text-fairway" opacity="opacity-[0.04]" />
 
       <div className="relative max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-6">
-          <Link
-            href={`/league/${slug}`}
-            className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider transition-colors"
-          >
-            &larr; Back to {league.name}
-          </Link>
-        </div>
-
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-3xl font-bold text-scorecard-pencil font-display uppercase tracking-wider">
-            {pageTitle}
-          </h1>
-          {seasons.length > 0 && (
-            <SeasonSelector
-              seasons={seasons}
-              currentSeasonId={currentSeasonId}
-              leagueSlug={slug}
-            />
-          )}
-        </div>
-        <p className="text-text-secondary mb-8 font-sans">
-          {league.name}
-          {currentSeason && ` \u2014 ${currentSeason.name}`}
-        </p>
+        <PageHeader
+          title={pageTitle}
+          subtitle={
+            <>
+              {league.name}
+              {currentSeason && ` \u2014 ${currentSeason.name}`}
+            </>
+          }
+          backHref={`/league/${slug}`}
+          backLabel={`Back to ${league.name}`}
+          actions={
+            seasons.length > 0 ? (
+              <SeasonSelector
+                seasons={seasons}
+                currentSeasonId={currentSeasonId}
+                leagueSlug={slug}
+              />
+            ) : undefined
+          }
+        />
 
         {seasons.length === 0 ? (
-          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-black/5 p-8 text-center">
-            <p className="text-text-muted font-sans">No seasons have been created yet.</p>
-          </div>
+          <EmptyState
+            title="No Seasons Yet"
+            description="No seasons have been created yet."
+          />
         ) : hasNoData ? (
-          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-black/5 p-8 text-center">
-            <p className="text-text-muted font-sans">
-              No {isStrokePlay ? "scores" : "matches"} have been played yet.
-            </p>
-          </div>
+          <EmptyState
+            title="Nothing on the Card"
+            description={`No ${isStrokePlay ? "scores" : "matches"} have been played yet.`}
+          />
         ) : (
           <div className="space-y-2">
             {/* Match play results */}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getLeaguePublicInfo } from "@/lib/actions/leagues";
+import { getLeaguePublicInfoCached } from "@/lib/league-cache";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -8,7 +8,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const league = await getLeaguePublicInfo(slug);
+  const league = await getLeaguePublicInfoCached(slug);
   if (!league) {
     return { title: "Team Sign Up" };
   }

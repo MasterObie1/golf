@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLeagueBySlug } from "@/lib/actions/leagues";
+import { getLeagueCached } from "@/lib/league-cache";
 import { getSeasons, getActiveSeason } from "@/lib/actions/seasons";
 import { getHandicapHistoryForSeason } from "@/lib/actions/handicap-settings";
 import { SeasonSelector } from "@/components/SeasonSelector";
 import { ContourBackground } from "@/components/grounds/ContourBackground";
+import { PageHeader, EmptyState } from "@/components/composite";
 import type { Metadata } from "next";
 
 export const revalidate = 60;
@@ -16,7 +17,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const league = await getLeagueBySlug(slug);
+  const league = await getLeagueCached(slug);
   if (!league) return { title: "Handicap History" };
   return {
     title: `Handicap History - ${league.name}`,
@@ -28,7 +29,7 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
   const { slug } = await params;
   const { seasonId } = await searchParams;
 
-  const league = await getLeagueBySlug(slug);
+  const league = await getLeagueCached(slug);
   if (!league) {
     notFound();
   }
@@ -93,38 +94,37 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
       <ContourBackground variant="hills" color="text-fairway" opacity="opacity-[0.04]" />
 
       <div className="relative max-w-6xl mx-auto px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
-          <Link
-            href={`/league/${slug}/leaderboard${currentSeasonId ? `?seasonId=${currentSeasonId}` : ""}`}
-            className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider transition-colors"
-          >
-            &larr; Back to Leaderboard
-          </Link>
-        </div>
-
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-3xl font-bold text-scorecard-pencil font-display uppercase tracking-wider">Handicap History</h1>
-          {seasons.length > 0 && (
-            <SeasonSelector
-              seasons={seasons}
-              currentSeasonId={currentSeasonId}
-              leagueSlug={slug}
-            />
-          )}
-        </div>
-        <p className="text-text-secondary mb-8 font-sans">
-          {league.name}
-          {currentSeason && ` \u2014 ${currentSeason.name}`}
-        </p>
+        <PageHeader
+          title="Handicap History"
+          subtitle={
+            <>
+              {league.name}
+              {currentSeason && ` \u2014 ${currentSeason.name}`}
+            </>
+          }
+          backHref={`/league/${slug}/leaderboard${currentSeasonId ? `?seasonId=${currentSeasonId}` : ""}`}
+          backLabel="Back to Leaderboard"
+          actions={
+            seasons.length > 0 ? (
+              <SeasonSelector
+                seasons={seasons}
+                currentSeasonId={currentSeasonId}
+                leagueSlug={slug}
+              />
+            ) : undefined
+          }
+        />
 
         {seasons.length === 0 ? (
-          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-scorecard-line/50 p-8 text-center">
-            <p className="text-text-muted font-sans">No seasons have been created yet.</p>
-          </div>
+          <EmptyState
+            title="No Seasons Yet"
+            description="No seasons have been created yet."
+          />
         ) : handicapHistory.length === 0 || weekNumbers.length === 0 ? (
-          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-scorecard-line/50 p-8 text-center">
-            <p className="text-text-muted font-sans">No handicap data available yet.</p>
-          </div>
+          <EmptyState
+            title="No Strokes Given"
+            description="No handicap data available yet."
+          />
         ) : (
           <div className="bg-scorecard-paper rounded-lg shadow-md overflow-hidden border border-scorecard-line/50">
             <div className="overflow-x-auto">

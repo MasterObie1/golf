@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLeagueBySlug } from "@/lib/actions/leagues";
+import { getLeagueCached } from "@/lib/league-cache";
 import { getSeasons, getActiveSeason } from "@/lib/actions/seasons";
 import {
   getSeasonLeaderboard,
@@ -9,6 +9,8 @@ import {
 import { LeaderboardTable } from "@/components/LeaderboardTable";
 import { SeasonSelector } from "@/components/SeasonSelector";
 import { ContourBackground } from "@/components/grounds/ContourBackground";
+import { PageHeader } from "@/components/composite";
+import { EmptyState } from "@/components/composite";
 import type { Metadata } from "next";
 
 export const revalidate = 60;
@@ -20,7 +22,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const league = await getLeagueBySlug(slug);
+  const league = await getLeagueCached(slug);
   if (!league) return { title: "Leaderboard" };
   return {
     title: `Leaderboard - ${league.name}`,
@@ -32,7 +34,7 @@ export default async function LeagueLeaderboardPage({ params, searchParams }: Pr
   const { slug } = await params;
   const { seasonId, view } = await searchParams;
 
-  const league = await getLeagueBySlug(slug);
+  const league = await getLeagueCached(slug);
   if (!league) {
     notFound();
   }
@@ -127,55 +129,51 @@ export default async function LeagueLeaderboardPage({ params, searchParams }: Pr
       <ContourBackground variant="hills" color="text-fairway" opacity="opacity-[0.04]" />
 
       <div className="relative max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
-          <Link
-            href={`/league/${slug}`}
-            className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider transition-colors"
-          >
-            &larr; Back to {league.name}
-          </Link>
-          <Link
-            href={`/league/${slug}/handicap-history${currentSeasonId ? `?seasonId=${currentSeasonId}` : ""}`}
-            className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider transition-colors"
-          >
-            Handicap History &rarr;
-          </Link>
-        </div>
-
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-3xl font-bold text-scorecard-pencil font-display uppercase tracking-wider">
-            Leaderboard
-          </h1>
-          {seasons.length > 0 && (
-            <SeasonSelector
-              seasons={seasons}
-              currentSeasonId={currentSeasonId}
-              leagueSlug={slug}
-              showAllTime={true}
-            />
-          )}
-        </div>
-        <p className="text-text-secondary mb-8 font-sans">
-          {league.name}
-          {currentSeason && !showAllTime && ` \u2014 ${currentSeason.name}`}
-          {showAllTime && " \u2014 All-Time Stats"}
-        </p>
+        <PageHeader
+          title="Leaderboard"
+          subtitle={
+            <>
+              {league.name}
+              {currentSeason && !showAllTime && ` \u2014 ${currentSeason.name}`}
+              {showAllTime && " \u2014 All-Time Stats"}
+            </>
+          }
+          backHref={`/league/${slug}`}
+          backLabel={`Back to ${league.name}`}
+          topRight={
+            <Link
+              href={`/league/${slug}/handicap-history${currentSeasonId ? `?seasonId=${currentSeasonId}` : ""}`}
+              className="font-display text-sm uppercase tracking-wide text-fairway hover:text-rough dark:text-putting dark:hover:text-foreground transition-colors"
+            >
+              Handicap History &rarr;
+            </Link>
+          }
+          actions={
+            seasons.length > 0 ? (
+              <SeasonSelector
+                seasons={seasons}
+                currentSeasonId={currentSeasonId}
+                leagueSlug={slug}
+                showAllTime={true}
+              />
+            ) : undefined
+          }
+        />
 
         {seasons.length === 0 ? (
-          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-scorecard-line/50 p-8 text-center">
-            <p className="text-text-muted font-sans">No seasons have been created yet.</p>
-            <p className="text-text-light text-sm mt-2 font-sans">
-              The league admin needs to create a season before teams can register.
-            </p>
-          </div>
+          <EmptyState
+            title="No Seasons Yet"
+            description="The league admin needs to create a season before teams can register."
+          />
         ) : teams.length === 0 ? (
-          <div className="bg-scorecard-paper rounded-lg shadow-sm border border-scorecard-line/50 p-8 text-center">
-            <p className="text-text-muted font-sans">
-              {showAllTime
+          <EmptyState
+            title="Nothing on the Board"
+            description={
+              showAllTime
                 ? `No teams have played any ${isStrokePlay ? "rounds" : "matches"} yet.`
-                : "No teams have been approved for this season yet."}
-            </p>
-          </div>
+                : "No teams have been approved for this season yet."
+            }
+          />
         ) : (
           <LeaderboardTable
             teams={teams}

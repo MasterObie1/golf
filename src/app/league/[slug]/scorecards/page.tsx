@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLeaguePublicInfo } from "@/lib/actions/leagues";
+import { getLeaguePublicInfoCached } from "@/lib/league-cache";
 import { getPublicScorecardsForWeek } from "@/lib/actions/scorecards";
 import { getActiveSeason, getCurrentWeekNumberForSeason } from "@/lib/actions/seasons";
 import { getCurrentWeekNumber } from "@/lib/actions/teams";
 import ScorecardGrid from "@/components/ScorecardGrid";
+import { PageHeader, EmptyState } from "@/components/composite";
 import type { Metadata } from "next";
 
 interface Props {
@@ -14,7 +15,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const league = await getLeaguePublicInfo(slug);
+  const league = await getLeaguePublicInfoCached(slug);
   if (!league) {
     return { title: "Scorecards" };
   }
@@ -27,7 +28,7 @@ export default async function PublicScorecardsPage({ params, searchParams }: Pro
   const { slug } = await params;
   const search = await searchParams;
 
-  const league = await getLeaguePublicInfo(slug);
+  const league = await getLeaguePublicInfoCached(slug);
   if (!league) {
     notFound();
   }
@@ -52,19 +53,12 @@ export default async function PublicScorecardsPage({ params, searchParams }: Pro
   return (
     <div className="min-h-screen bg-surface">
       <div className="max-w-4xl mx-auto px-4 py-10">
-        {/* Header */}
-        <div className="mb-8">
-          <Link
-            href={`/league/${slug}`}
-            className="text-fairway hover:text-rough text-sm font-display uppercase tracking-wider transition-colors"
-          >
-            &larr; Back to {league.name}
-          </Link>
-          <h1 className="text-3xl md:text-4xl font-display uppercase tracking-wider text-text-primary mt-2">
-            Scorecards
-          </h1>
-          <p className="text-text-secondary font-sans mt-1">Week {weekNumber}</p>
-        </div>
+        <PageHeader
+          title="Scorecards"
+          subtitle={`Week ${weekNumber}`}
+          backHref={`/league/${slug}`}
+          backLabel={`Back to ${league.name}`}
+        />
 
         {/* Week Navigator */}
         <div className="flex items-center gap-4 mb-8">
@@ -89,9 +83,10 @@ export default async function PublicScorecardsPage({ params, searchParams }: Pro
 
         {/* Scorecards */}
         {scorecards.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-text-muted font-sans">No approved scorecards for this week.</p>
-          </div>
+          <EmptyState
+            title="No Cards Posted"
+            description="No approved scorecards for this week."
+          />
         ) : (
           <div className="space-y-6">
             {scorecards.map((sc) => (

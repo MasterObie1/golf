@@ -1,6 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLeaguePublicInfo } from "@/lib/actions/leagues";
+import {
+  ArrowLeft,
+  Award,
+  Calendar,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  FileSpreadsheet,
+  Mail,
+  Pencil,
+  Phone,
+  Settings,
+  Trophy,
+  Users,
+} from "lucide-react";
+import { getLeaguePublicInfoCached } from "@/lib/league-cache";
+import { leagueNavLinks, type LeagueNavLink } from "@/lib/league-nav";
 import {
   getLeaderboardWithMovement,
   type LeaderboardWithMovement,
@@ -20,7 +36,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const league = await getLeaguePublicInfo(slug);
+  const league = await getLeaguePublicInfoCached(slug);
   if (!league) {
     return { title: "League" };
   }
@@ -30,142 +46,45 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-/* ── Inline SVG Icons ─────────────────────────────────────── */
 
-function IconTrophy({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-      <path d="M4 22h16" />
-      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22" />
-      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22" />
-      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-    </svg>
-  );
-}
-
-function IconClipboard({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-      <path d="M12 11h4" />
-      <path d="M12 16h4" />
-      <path d="M8 11h.01" />
-      <path d="M8 16h.01" />
-    </svg>
-  );
-}
-
-function IconCalendar({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <path d="M16 2v4" />
-      <path d="M8 2v4" />
-      <path d="M3 10h18" />
-    </svg>
-  );
-}
-
-function IconPen({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-    </svg>
-  );
-}
-
-function IconGear({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function IconScorecard({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
-      <rect x="9" y="3" width="6" height="4" rx="1" />
-      <path d="M9 12h6" />
-      <path d="M9 16h6" />
-    </svg>
-  );
-}
-
-function IconClock({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
-function IconUsers({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-
-function IconMail({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-    </svg>
-  );
-}
-
-function IconPhone({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-    </svg>
-  );
-}
-
-function IconAward({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="8" r="6" />
-      <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
-    </svg>
-  );
-}
-
-function IconArrowLeft({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M19 12H5" />
-      <path d="m12 19-7-7 7-7" />
-    </svg>
-  );
-}
-
-function IconChevronRight({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  );
-}
+/* Quick-link icons + accent colors, keyed by shared nav link key */
+const QUICK_LINK_DECOR: Record<
+  LeagueNavLink["key"],
+  { icon: React.ReactNode; accent: string }
+> = {
+  home: { icon: null, accent: "" },
+  leaderboard: {
+    icon: <Trophy className="size-5" strokeWidth={1.75} />,
+    accent: "border-l-board-yellow",
+  },
+  history: {
+    icon: <ClipboardList className="size-5" strokeWidth={1.75} />,
+    accent: "border-l-fairway",
+  },
+  schedule: {
+    icon: <Calendar className="size-5" strokeWidth={1.75} />,
+    accent: "border-l-water",
+  },
+  scorecards: {
+    icon: <FileSpreadsheet className="size-5" strokeWidth={1.75} />,
+    accent: "border-l-putting",
+  },
+  signup: {
+    icon: <Pencil className="size-5" strokeWidth={1.75} />,
+    accent: "border-l-wood",
+  },
+  admin: {
+    icon: <Settings className="size-5" strokeWidth={1.75} />,
+    accent: "border-l-board-yellow",
+  },
+};
 
 /* ── Page Component ───────────────────────────────────────── */
 
 export default async function LeagueHomePage({ params }: Props) {
   const { slug } = await params;
 
-  const league = await getLeaguePublicInfo(slug);
+  const league = await getLeaguePublicInfoCached(slug);
   if (!league) {
     notFound();
   }
@@ -299,50 +218,20 @@ export default async function LeagueHomePage({ params }: Props) {
             Quick Links
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            {[
-              {
-                href: `/league/${slug}/leaderboard`,
-                label: "Leaderboard",
-                icon: <IconTrophy />,
-                accent: "border-l-board-yellow",
-              },
-              {
-                href: `/league/${slug}/history`,
-                label: isStrokePlay ? "Score History" : "Match History",
-                icon: <IconClipboard />,
-                accent: "border-l-fairway",
-              },
-              ...(!isStrokePlay
-                ? [{
-                    href: `/league/${slug}/schedule`,
-                    label: "Schedule",
-                    icon: <IconCalendar />,
-                    accent: "border-l-water",
-                  }]
-                : []),
-              ...(league.scorecardMode !== "disabled"
-                ? [{
-                    href: `/league/${slug}/scorecards`,
-                    label: "Scorecards",
-                    icon: <IconScorecard />,
-                    accent: "border-l-putting",
-                  }]
-                : []),
-              {
-                href: `/league/${slug}/signup`,
-                label: "Team Signup",
-                icon: <IconPen />,
-                accent: "border-l-wood",
-              },
-              ...(isAdmin
-                ? [{
-                    href: `/league/${slug}/admin`,
-                    label: "Admin",
-                    icon: <IconGear />,
-                    accent: "border-l-board-yellow",
-                  }]
-                : []),
-            ].map((link) => (
+            {leagueNavLinks({
+              slug,
+              scoringType: league.scoringType,
+              scorecardMode: league.scorecardMode,
+              isAdmin,
+            })
+              .filter((link) => link.key !== "home")
+              .map((link) => ({
+                ...link,
+                label: link.key === "signup" ? "Team Signup" : link.label,
+                icon: QUICK_LINK_DECOR[link.key].icon,
+                accent: QUICK_LINK_DECOR[link.key].accent,
+              }))
+              .map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -379,7 +268,7 @@ export default async function LeagueHomePage({ params }: Props) {
                       href={`/league/${slug}/leaderboard`}
                       className="text-white/70 hover:text-white text-xs font-display uppercase tracking-wider flex items-center gap-1 transition-colors"
                     >
-                      Full <IconChevronRight className="w-3 h-3" />
+                      Full <ChevronRight className="w-3 h-3" />
                     </Link>
                   </div>
                   <div className="divide-y divide-scorecard-line/30">
@@ -435,7 +324,7 @@ export default async function LeagueHomePage({ params }: Props) {
                           href={`/league/${slug}/schedule`}
                           className="text-fairway/70 hover:text-fairway text-xs font-display uppercase tracking-wider flex items-center gap-1 transition-colors"
                         >
-                          Full <IconChevronRight className="w-3 h-3" />
+                          Full <ChevronRight className="w-3 h-3" />
                         </Link>
                       )}
                     </div>
@@ -464,7 +353,7 @@ export default async function LeagueHomePage({ params }: Props) {
                         href={`/league/${slug}/history`}
                         className="text-fairway/70 hover:text-fairway text-xs font-display uppercase tracking-wider flex items-center gap-1 transition-colors"
                       >
-                        All <IconChevronRight className="w-3 h-3" />
+                        All <ChevronRight className="w-3 h-3" />
                       </Link>
                     </div>
                     <div className="divide-y divide-scorecard-line/50">
@@ -500,7 +389,7 @@ export default async function LeagueHomePage({ params }: Props) {
                         href={`/league/${slug}/history`}
                         className="text-fairway/70 hover:text-fairway text-xs font-display uppercase tracking-wider flex items-center gap-1 transition-colors"
                       >
-                        All <IconChevronRight className="w-3 h-3" />
+                        All <ChevronRight className="w-3 h-3" />
                       </Link>
                     </div>
                     <div className="divide-y divide-scorecard-line/50">
@@ -553,7 +442,7 @@ export default async function LeagueHomePage({ params }: Props) {
           {(league.playDay || league.playTime || league.startDate || league.endDate || league.numberOfWeeks) && (
             <section>
               <h2 className="text-xs font-display uppercase tracking-[0.2em] text-wood mb-3 flex items-center gap-1.5">
-                <IconClock className="w-3.5 h-3.5" />
+                <Clock className="w-3.5 h-3.5" strokeWidth={1.75} />
                 Schedule
               </h2>
               <div className="space-y-1.5 text-sm font-sans">
@@ -593,7 +482,7 @@ export default async function LeagueHomePage({ params }: Props) {
 
           <section>
             <h2 className="text-xs font-display uppercase tracking-[0.2em] text-wood mb-3 flex items-center gap-1.5">
-              <IconUsers className="w-3.5 h-3.5" />
+              <Users className="w-3.5 h-3.5" strokeWidth={1.75} />
               Details
             </h2>
             <div className="space-y-1.5 text-sm font-sans">
@@ -623,7 +512,7 @@ export default async function LeagueHomePage({ params }: Props) {
         {league.prizeInfo && (
           <section className="mb-8">
             <h2 className="text-xs font-display uppercase tracking-[0.2em] text-wood mb-3 flex items-center gap-1.5">
-              <IconAward className="w-3.5 h-3.5" />
+              <Award className="w-3.5 h-3.5" strokeWidth={1.75} />
               Prizes
             </h2>
             <p className="text-text-secondary font-sans text-sm leading-relaxed whitespace-pre-wrap">
@@ -641,13 +530,13 @@ export default async function LeagueHomePage({ params }: Props) {
             <div className="flex flex-col sm:flex-row gap-3 text-sm font-sans">
               {league.contactEmail && (
                 <span className="flex items-center gap-2 text-text-secondary">
-                  <IconMail className="w-4 h-4 text-text-muted" />
+                  <Mail className="w-4 h-4 text-text-muted" strokeWidth={1.75} />
                   {league.contactEmail}
                 </span>
               )}
               {league.contactPhone && (
                 <span className="flex items-center gap-2 text-text-secondary">
-                  <IconPhone className="w-4 h-4 text-text-muted" />
+                  <Phone className="w-4 h-4 text-text-muted" strokeWidth={1.75} />
                   {league.contactPhone}
                 </span>
               )}
@@ -661,7 +550,7 @@ export default async function LeagueHomePage({ params }: Props) {
             href="/leagues"
             className="inline-flex items-center gap-2 text-fairway hover:text-rough font-display text-sm uppercase tracking-wider transition-colors"
           >
-            <IconArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" />
             Browse All Leagues
           </Link>
         </div>

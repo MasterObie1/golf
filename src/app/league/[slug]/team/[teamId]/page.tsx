@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLeagueBySlug } from "@/lib/actions/leagues";
+import { getLeagueCached } from "@/lib/league-cache";
 import { getTeamById, getCurrentWeekNumber } from "@/lib/actions/teams";
 import { getTeamMatchupHistory } from "@/lib/actions/matchups";
 import { getTeamWeeklyScores } from "@/lib/actions/weekly-scores";
@@ -8,6 +8,7 @@ import { getTeamSchedule } from "@/lib/actions/schedule";
 import { ScoreCard } from "@/components/ScoreCard";
 import { WeeklyScoreCard } from "@/components/WeeklyScoreCard";
 import { ContourBackground } from "@/components/grounds/ContourBackground";
+import { PageHeader } from "@/components/composite";
 import { formatPosition } from "@/lib/format-utils";
 import type { Metadata } from "next";
 
@@ -21,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (isNaN(teamIdNum)) return { title: "Team" };
 
   const [league, team] = await Promise.all([
-    getLeagueBySlug(slug),
+    getLeagueCached(slug),
     getTeamById(teamIdNum),
   ]);
   if (!league || !team) return { title: "Team" };
@@ -39,7 +40,7 @@ export default async function TeamHistoryPage({ params }: Props) {
     notFound();
   }
 
-  const league = await getLeagueBySlug(slug);
+  const league = await getLeagueCached(slug);
   if (!league) {
     notFound();
   }
@@ -153,19 +154,12 @@ export default async function TeamHistoryPage({ params }: Props) {
       <ContourBackground variant="hills" color="text-fairway" opacity="opacity-[0.04]" />
 
       <div className="relative max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-6">
-          <Link
-            href={`/league/${slug}/leaderboard`}
-            className="text-fairway hover:text-rough font-display text-sm uppercase tracking-wider transition-colors"
-          >
-            &larr; Back to Leaderboard
-          </Link>
-        </div>
-
-        <h1 className="text-3xl font-bold text-scorecard-pencil font-display uppercase tracking-wider mb-2">
-          {team.name}
-        </h1>
-        <p className="text-text-secondary mb-4 font-sans">{league.name}</p>
+        <PageHeader
+          title={team.name}
+          subtitle={league.name}
+          backHref={`/league/${slug}/leaderboard`}
+          backLabel="Back to Leaderboard"
+        />
 
         {/* Team Stats Summary */}
         <div className="bg-scorecard-paper rounded-lg shadow-md border border-scorecard-line/50 p-6 mb-8">

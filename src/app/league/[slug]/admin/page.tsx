@@ -1,6 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth";
-import { getLeagueBySlug } from "@/lib/actions/leagues";
+import { getLeagueCached } from "@/lib/league-cache";
 import { getTeams, getCurrentWeekNumber, getAllTeamsWithStatus } from "@/lib/actions/teams";
 import { getMatchupHistory, getMatchupHistoryForSeason } from "@/lib/actions/matchups";
 import { getLeagueAbout } from "@/lib/actions/league-about";
@@ -34,7 +34,7 @@ export default async function AdminPage({ params }: Props) {
 
   // Phase 1: League + seasons + allTeams + about (parallel)
   const [league, seasons, activeSeason, allTeams, aboutData] = await Promise.all([
-    getLeagueBySlug(slug),
+    getLeagueCached(slug),
     getSeasons(session.leagueId),
     getActiveSeason(session.leagueId),
     getAllTeamsWithStatus(slug),
