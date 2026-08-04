@@ -8,6 +8,9 @@ import {
   type CourseWithHoles,
   type HoleInput,
 } from "@/lib/actions/courses";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/composite";
 
 interface CourseTabProps {
   slug: string;
@@ -34,7 +37,6 @@ function defaultHoles(count: number): HoleInput[] {
 export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Course data
   const [existingCourse, setExistingCourse] = useState<CourseWithHoles | null>(null);
@@ -118,7 +120,6 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
 
   async function handleSave() {
     setSaving(true);
-    setMessage(null);
     try {
       const data = {
         name,
@@ -136,13 +137,13 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
 
       if (result.success) {
         setExistingCourse(result.data);
-        setMessage({ type: "success", text: existingCourse ? "Course updated!" : "Course created!" });
+        notify.success(existingCourse ? "Course updated!" : "Course created!");
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleSave error:", error);
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to save course." });
+      notify.error(error instanceof Error ? error.message : "Failed to save course.");
     }
     setSaving(false);
   }

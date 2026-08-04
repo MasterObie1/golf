@@ -3,6 +3,7 @@
 import { useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { SubmitButton } from "@/components/composite";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -86,13 +87,9 @@ export default function LeagueAdminLoginPage({ params }: Props) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-fairway text-white py-3 rounded-lg hover:bg-rough transition-colors font-display font-semibold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <SubmitButton pending={loading} size="lg" className="w-full">
             {loading ? "Logging in..." : "Login"}
-          </button>
+          </SubmitButton>
         </form>
 
         <div className="mt-6 text-center">

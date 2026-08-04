@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { CircleCheck, ChevronRight, Loader2 } from "lucide-react";
 import { getPublicScorecardForTeamWeek } from "@/lib/actions/scorecards";
 import type { ScorecardDetail } from "@/lib/actions/scorecards";
 import ScorecardGrid from "./ScorecardGrid";
@@ -24,44 +25,49 @@ interface Matchup {
   teamBId?: number;
 }
 
-interface MatchupWithScorecardsProps {
+interface MatchupResultsProps {
   weekNumber: number;
   matchups: Matchup[];
-  leagueId: number;
-  scorecardAvailabilityRaw: { weekNumber: number; teamId: number }[];
+  /** When provided, team rows with available scorecards become expandable. */
+  scorecards?: {
+    leagueId: number;
+    availability: { weekNumber: number; teamId: number }[];
+  };
 }
 
-export function MatchupWithScorecards({
+export function MatchupResults({
   weekNumber,
   matchups,
-  leagueId,
-  scorecardAvailabilityRaw,
-}: MatchupWithScorecardsProps) {
+  scorecards,
+}: MatchupResultsProps) {
   // Convert raw availability to a Set for O(1) lookups
   const availableSet = useMemo(() => {
     const set = new Set<string>();
-    for (const item of scorecardAvailabilityRaw) {
+    for (const item of scorecards?.availability ?? []) {
       set.add(`${item.weekNumber}-${item.teamId}`);
     }
     return set;
-  }, [scorecardAvailabilityRaw]);
+  }, [scorecards?.availability]);
 
-  // Track which team row is expanded: "matchupId-teamAId" or "matchupId-teamBId"
+  // Track which team row is expanded: "matchupId-teamId"
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   // Cache fetched scorecards by "weekNumber-teamId"
   const [scorecardCache, setScorecardCache] = useState<Record<string, ScorecardDetail>>({});
   const [loading, setLoading] = useState<string | null>(null);
 
+  const leagueId = scorecards?.leagueId;
+
   const hasScorecard = useCallback(
     (teamId: number | undefined) => {
-      if (!teamId) return false;
+      if (!teamId || leagueId === undefined) return false;
       return availableSet.has(`${weekNumber}-${teamId}`);
     },
-    [availableSet, weekNumber]
+    [availableSet, weekNumber, leagueId]
   );
 
   const handleToggle = useCallback(
     async (matchupId: number, teamId: number) => {
+      if (leagueId === undefined) return;
       const key = `${matchupId}-${teamId}`;
       if (expandedKey === key) {
         setExpandedKey(null);
@@ -105,9 +111,9 @@ export function MatchupWithScorecards({
         <div
           className={`flex items-center justify-between py-3 px-4 ${
             isTop
-              ? "bg-bunker/20 rounded-t-lg border border-b-0 border-scorecard-line/30"
+              ? "bg-bunker/20 dark:bg-white/5 rounded-t-lg border border-b-0 border-scorecard-line/30"
               : "bg-scorecard-paper rounded-b-lg border border-scorecard-line/30"
-          } ${teamHasScorecard ? "cursor-pointer hover:bg-bunker/30 transition-colors" : ""}`}
+          } ${teamHasScorecard ? "cursor-pointer hover:bg-bunker/30 dark:hover:bg-white/10 transition-colors" : ""}`}
           onClick={
             teamHasScorecard && teamId
               ? () => handleToggle(matchup.id, teamId)
@@ -116,17 +122,13 @@ export function MatchupWithScorecards({
         >
           <div className="flex items-center gap-3">
             {teamHasScorecard && (
-              <svg
-                className={`w-4 h-4 text-fairway transition-transform duration-200 ${
+              <ChevronRight
+                className={`w-4 h-4 text-primary transition-transform duration-200 ${
                   isExpanded ? "rotate-90" : ""
                 }`}
-                fill="none"
-                viewBox="0 0 24 24"
                 strokeWidth={2.5}
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
+                aria-hidden
+              />
             )}
             <span className="font-medium text-scorecard-pencil font-sans">
               {team.name}
@@ -137,8 +139,8 @@ export function MatchupWithScorecards({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-6 text-sm">
-            <div className="text-center">
+          <div className="flex items-center gap-3 sm:gap-6 text-sm">
+            <div className="hidden sm:block text-center">
               <div className="text-text-light text-xs font-display uppercase tracking-wider">Gross</div>
               <div className="font-mono font-medium tabular-nums">{team.gross}</div>
             </div>
@@ -152,7 +154,7 @@ export function MatchupWithScorecards({
             </div>
             <div className="text-center min-w-[50px]">
               <div className="text-text-light text-xs font-display uppercase tracking-wider">Pts</div>
-              <div className="font-mono font-bold text-fairway text-lg tabular-nums">
+              <div className="font-mono font-bold text-primary text-lg tabular-nums">
                 {team.points}
               </div>
             </div>
@@ -164,19 +166,7 @@ export function MatchupWithScorecards({
           <div className="border-x border-scorecard-line/30 bg-surface/50 px-4 py-3">
             {isLoading ? (
               <div className="flex items-center justify-center py-6">
-                <svg
-                  className="animate-spin h-5 w-5 text-fairway"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
+                <Loader2 className="animate-spin h-5 w-5 text-primary" aria-hidden />
                 <span className="ml-2 text-sm text-text-secondary font-sans">Loading scorecard...</span>
               </div>
             ) : cachedScorecard ? (
@@ -204,7 +194,7 @@ export function MatchupWithScorecards({
   return (
     <div className="bg-scorecard-paper rounded-lg shadow-md overflow-hidden border border-scorecard-line/50 mb-6">
       {/* Week Header */}
-      <div className="bg-rough text-board-yellow px-6 py-3">
+      <div className="dark bg-rough text-board-yellow px-6 py-3">
         <h2 className="text-lg font-display font-semibold uppercase tracking-wider">
           Round {weekNumber}
         </h2>
@@ -229,10 +219,10 @@ export function MatchupWithScorecards({
                         </span>
                         <div className="mt-2 space-y-1">
                           <p className="font-medium text-scorecard-pencil font-sans">
-                            <span className="text-fairway">{winner.name}</span>
+                            <span className="text-primary">{winner.name}</span>
                             {" wins by forfeit (20 pts)"}
                           </p>
-                          <p className="text-sm text-board-red font-sans">
+                          <p className="text-sm text-board-red dark:text-error font-sans">
                             {forfeiter.name} forfeited (0 pts)
                           </p>
                         </div>
@@ -250,9 +240,7 @@ export function MatchupWithScorecards({
                 {matchup.teamA.points !== matchup.teamB.points && (
                   <div className="mt-2 text-center">
                     <span className="inline-flex items-center gap-1 px-3 py-1 bg-board-yellow/15 text-scorecard-pencil text-sm rounded-full font-sans font-medium">
-                      <svg className="w-4 h-4 text-fairway" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
+                      <CircleCheck className="w-4 h-4 text-primary" aria-hidden />
                       {matchup.teamA.points > matchup.teamB.points
                         ? matchup.teamA.name
                         : matchup.teamB.name}{" "}
@@ -262,7 +250,7 @@ export function MatchupWithScorecards({
                 )}
                 {matchup.teamA.points === matchup.teamB.points && (
                   <div className="mt-2 text-center">
-                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-bunker/20 text-text-muted text-sm rounded-full font-sans font-medium">
+                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-bunker/20 dark:bg-white/10 text-text-muted text-sm rounded-full font-sans font-medium">
                       Tie
                     </span>
                   </div>

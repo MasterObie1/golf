@@ -235,10 +235,9 @@ export default async function LeagueHomePage({ params }: Props) {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded border border-scorecard-line/50 border-l-2 ${link.accent} bg-surface-white hover:bg-surface-warm group`}
-                style={{ transition: "background-color 200ms cubic-bezier(0.22, 0.68, 0.36, 1)" }}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded border border-scorecard-line/50 border-l-2 ${link.accent} bg-surface-white hover:bg-surface-warm transition-colors group`}
               >
-                <span className="text-text-muted group-hover:text-fairway" style={{ transition: "color 200ms" }}>
+                <span className="text-text-muted group-hover:text-primary transition-colors">
                   {link.icon}
                 </span>
                 <span className="font-display uppercase tracking-wider text-xs text-scorecard-pencil">

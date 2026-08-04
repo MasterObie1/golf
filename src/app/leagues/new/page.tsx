@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Check } from "lucide-react";
 import { createLeague } from "@/lib/actions/leagues";
+import { SubmitButton } from "@/components/composite";
 
 export default function NewLeaguePage() {
   const [name, setName] = useState("");
@@ -54,9 +56,7 @@ export default function NewLeaguePage() {
         <div className="max-w-md w-full bg-scorecard-paper rounded-lg shadow-lg p-8 border border-scorecard-line/50">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-fairway/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-fairway" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-8 h-8 text-primary" aria-hidden />
             </div>
             <h1 className="text-2xl font-display font-bold text-scorecard-pencil uppercase tracking-wider">League Created!</h1>
           </div>
@@ -197,13 +197,14 @@ export default function NewLeaguePage() {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading || name.trim().length < 3 || password.length < 8 || password !== confirmPassword}
-            className="w-full bg-fairway text-white py-3 rounded-lg hover:bg-rough transition-colors font-display font-semibold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+          <SubmitButton
+            pending={loading}
+            disabled={name.trim().length < 3 || password.length < 8 || password !== confirmPassword}
+            size="lg"
+            className="w-full"
           >
             {loading ? "Creating..." : "Create League"}
-          </button>
+          </SubmitButton>
         </form>
 
         <div className="mt-6 text-center">

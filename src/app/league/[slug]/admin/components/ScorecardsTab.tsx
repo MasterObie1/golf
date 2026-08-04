@@ -23,7 +23,6 @@ import { getSchedule, type ScheduleWeek } from "@/lib/actions/schedule";
 import WeekPillSelector from "@/components/WeekPillSelector";
 import { getCourseWithHoles, type CourseWithHoles } from "@/lib/actions/courses";
 import ScorecardGrid from "@/components/ScorecardGrid";
-import AdminScorecardGrid from "@/components/AdminScorecardGrid";
 import ScorecardSummaryCard from "@/components/ScorecardSummary";
 import type { AdminTeam } from "@/lib/types/admin";
 
@@ -847,17 +846,19 @@ export default function ScorecardsTab({
 
               {expandedId === sc.id && expandedDetail && (
                 <div className="border-t border-scorecard-line/50 p-4 bg-surface">
-                  {/* Show AdminScorecardGrid if editing, otherwise read-only ScorecardGrid */}
+                  {/* Editable grid while editing, otherwise read-only */}
                   {editingId === sc.id && editingDetail ? (
-                    <AdminScorecardGrid
+                    <ScorecardGrid
+                      key={`edit-${sc.id}`}
                       holes={editingDetail.course.holes}
                       holeScores={editingDetail.holeScores}
                       courseName={editingDetail.course.name}
                       totalPar={editingDetail.course.totalPar}
-                      onSaveHoleScore={(holeNumber, strokes) =>
-                        handleAdminSaveHoleScore(sc.id, holeNumber, strokes)
-                      }
-                      saving={savingScore}
+                      editable={{
+                        onSaveHoleScore: (holeNumber, strokes) =>
+                          handleAdminSaveHoleScore(sc.id, holeNumber, strokes),
+                        saving: savingScore,
+                      }}
                     />
                   ) : (
                     <ScorecardGrid

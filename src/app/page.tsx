@@ -211,11 +211,7 @@ export default async function Home() {
           <div className="flex flex-col sm:flex-row gap-4 mb-14">
             <Link
               href="/leagues/new"
-              className="inline-flex items-center justify-center px-8 py-4 bg-board-yellow text-rough font-display font-bold uppercase tracking-wider rounded hover:bg-[#FFE066] text-lg"
-              style={{
-                transition:
-                  "background-color 200ms cubic-bezier(0.22, 0.68, 0.36, 1)",
-              }}
+              className="inline-flex items-center justify-center px-8 py-4 bg-board-yellow text-rough font-display font-bold uppercase tracking-wider rounded hover:bg-wood hover:text-white transition-colors text-lg"
             >
               Create Your League
             </Link>
@@ -309,10 +305,6 @@ export default async function Home() {
                     key={league.id}
                     href={`/league/${league.slug}`}
                     className="flex items-center justify-between px-6 py-4 hover:bg-board-green-dark/20 group"
-                    style={{
-                      transition:
-                        "background-color 200ms cubic-bezier(0.22, 0.68, 0.36, 1)",
-                    }}
                   >
                     <div className="flex items-center gap-4">
                       <span
@@ -508,7 +500,7 @@ export default async function Home() {
                   </p>
                   <Link
                     href="/leagues/new"
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-board-yellow text-rough font-display font-bold uppercase tracking-wider rounded hover:bg-[#FFE066]"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-board-yellow text-rough font-display font-bold uppercase tracking-wider rounded hover:bg-wood hover:text-white transition-colors"
                     style={{
                       transition:
                         "background-color 200ms cubic-bezier(0.22, 0.68, 0.36, 1)",

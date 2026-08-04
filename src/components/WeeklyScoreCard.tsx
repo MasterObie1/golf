@@ -44,7 +44,7 @@ export function WeeklyScoreCard({ weekNumber, scores }: WeeklyScoreCardProps) {
             <tr>
               <th className="py-3 px-4 text-left font-display font-semibold text-scorecard-pencil text-xs uppercase tracking-wider w-16">Pos</th>
               <th className="py-3 px-4 text-left font-display font-semibold text-scorecard-pencil text-xs uppercase tracking-wider">Team</th>
-              <th className="py-3 px-4 text-center font-display font-semibold text-scorecard-pencil text-xs uppercase tracking-wider">Gross</th>
+              <th className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold text-scorecard-pencil text-xs uppercase tracking-wider">Gross</th>
               <th className="py-3 px-4 text-center font-display font-semibold text-scorecard-pencil text-xs uppercase tracking-wider">Hcp</th>
               <th className="py-3 px-4 text-center font-display font-semibold text-scorecard-pencil text-xs uppercase tracking-wider">Net</th>
               <th className="py-3 px-4 text-center font-display font-semibold text-scorecard-pencil text-xs uppercase tracking-wider">Points</th>
@@ -89,7 +89,7 @@ export function WeeklyScoreCard({ weekNumber, scores }: WeeklyScoreCardProps) {
                       </span>
                     )}
                   </td>
-                  <td className="py-3 px-4 text-center font-mono tabular-nums">
+                  <td className="hidden sm:table-cell py-3 px-4 text-center font-mono tabular-nums">
                     {score.isDnp ? "\u2014" : score.grossScore}
                   </td>
                   <td className="py-3 px-4 text-center font-mono tabular-nums">

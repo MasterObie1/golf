@@ -10,7 +10,8 @@ export default function Icon() {
         style={{
           width: 32,
           height: 32,
-          background: "linear-gradient(135deg, #166534 0%, #15803d 50%, #22c55e 100%)",
+          // Brand greens: rough → fairway → putting ("The Grounds" palette)
+          background: "linear-gradient(135deg, #1A3A1A 0%, #2D5A27 50%, #4A7C59 100%)",
           borderRadius: 8,
           display: "flex",
           alignItems: "center",
@@ -35,7 +36,7 @@ export default function Icon() {
             position: "absolute",
             width: 0,
             height: 0,
-            borderLeft: "8px solid #fbbf24",
+            borderLeft: "8px solid #FFD700",
             borderTop: "4px solid transparent",
             borderBottom: "4px solid transparent",
             top: 4,

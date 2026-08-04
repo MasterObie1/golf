@@ -5,7 +5,7 @@ import { getTeamById, getCurrentWeekNumber } from "@/lib/actions/teams";
 import { getTeamMatchupHistory } from "@/lib/actions/matchups";
 import { getTeamWeeklyScores } from "@/lib/actions/weekly-scores";
 import { getTeamSchedule } from "@/lib/actions/schedule";
-import { ScoreCard } from "@/components/ScoreCard";
+import { MatchupResults } from "@/components/MatchupResults";
 import { WeeklyScoreCard } from "@/components/WeeklyScoreCard";
 import { ContourBackground } from "@/components/grounds/ContourBackground";
 import { PageHeader } from "@/components/composite";
@@ -249,7 +249,7 @@ export default async function TeamHistoryPage({ params }: Props) {
             ) : (
               <div className="space-y-2 mb-8">
                 {matchupWeekNumbers.map((weekNumber) => (
-                  <ScoreCard
+                  <MatchupResults
                     key={weekNumber}
                     weekNumber={weekNumber}
                     matchups={matchupsByWeek[weekNumber]}

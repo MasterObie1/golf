@@ -4,8 +4,7 @@ import { getSeasons, getActiveSeason } from "@/lib/actions/seasons";
 import { getMatchupHistoryForSeason } from "@/lib/actions/matchups";
 import { getWeeklyScoreHistoryForSeason } from "@/lib/actions/weekly-scores";
 import { getScorecardAvailabilityForSeason } from "@/lib/actions/scorecards";
-import { ScoreCard } from "@/components/ScoreCard";
-import { MatchupWithScorecards } from "@/components/MatchupWithScorecards";
+import { MatchupResults } from "@/components/MatchupResults";
 import { WeeklyScoreCard } from "@/components/WeeklyScoreCard";
 import { SeasonSelector } from "@/components/SeasonSelector";
 import { ContourBackground } from "@/components/grounds/ContourBackground";
@@ -188,23 +187,18 @@ export default async function LeagueHistoryPage({ params, searchParams }: Props)
                     Match Results
                   </h2>
                 )}
-                {matchupWeekNumbers.map((weekNumber) =>
-                  scorecardsEnabled && scorecardAvailability.length > 0 ? (
-                    <MatchupWithScorecards
-                      key={`matchup-${weekNumber}`}
-                      weekNumber={weekNumber}
-                      matchups={matchupsByWeek[weekNumber]}
-                      leagueId={league.id}
-                      scorecardAvailabilityRaw={scorecardAvailability}
-                    />
-                  ) : (
-                    <ScoreCard
-                      key={`matchup-${weekNumber}`}
-                      weekNumber={weekNumber}
-                      matchups={matchupsByWeek[weekNumber]}
-                    />
-                  )
-                )}
+                {matchupWeekNumbers.map((weekNumber) => (
+                  <MatchupResults
+                    key={`matchup-${weekNumber}`}
+                    weekNumber={weekNumber}
+                    matchups={matchupsByWeek[weekNumber]}
+                    scorecards={
+                      scorecardsEnabled && scorecardAvailability.length > 0
+                        ? { leagueId: league.id, availability: scorecardAvailability }
+                        : undefined
+                    }
+                  />
+                ))}
               </>
             )}
 

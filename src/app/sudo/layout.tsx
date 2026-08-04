@@ -28,7 +28,7 @@ export default function SudoLayout({
   };
 
   return (
-    <div className="min-h-screen bg-rough">
+    <div className="dark min-h-screen bg-rough">
       {/* Top bar */}
       <header className="bg-board-green border-b border-board-green/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

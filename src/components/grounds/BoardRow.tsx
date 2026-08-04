@@ -1,7 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { boardRow } from "@/lib/animation";
 import { MedalBadge } from "./MedalBadge";
 import { MovementArrow } from "./MovementArrow";
 import { formatPosition } from "@/lib/format-utils";
@@ -44,13 +42,11 @@ export function BoardRow({
   const rowBg = index % 2 === 0 ? "bg-scorecard-paper" : "bg-bunker/10";
 
   return (
-    <motion.tr
-      custom={index}
-      variants={boardRow}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true }}
-      className={`border-b border-scorecard-line/30 transition-colors hover:bg-bunker/20 ${rowBg}`}
+    // Time-gated CSS entrance (never visibility-gated): rows must always
+    // become visible even when no IntersectionObserver fires.
+    <tr
+      className={`board-row-in border-b border-scorecard-line/30 transition-colors hover:bg-bunker/20 dark:hover:bg-white/5 ${rowBg}`}
+      style={{ animationDelay: `${Math.min(index * 40, 600)}ms` }}
     >
       {/* Rank */}
       <td className="py-3 px-4">
@@ -67,12 +63,12 @@ export function BoardRow({
         {team.id > 0 ? (
           <Link
             href={`/league/${leagueSlug}/team/${team.id}`}
-            className="font-sans font-medium text-fairway hover:text-rough hover:underline transition-colors"
+            className="font-sans font-medium text-primary hover:text-rough dark:hover:text-board-yellow hover:underline transition-colors"
           >
             {team.name}
           </Link>
         ) : (
-          <span className="font-sans font-medium text-fairway">
+          <span className="font-sans font-medium text-primary">
             {team.name}
           </span>
         )}
@@ -95,13 +91,13 @@ export function BoardRow({
       </td>
 
       {/* Rounds */}
-      <td className="py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
+      <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
         {team.roundsPlayed}
       </td>
 
       {/* Points — highlighted */}
-      <td className="py-3 px-4 text-center bg-fairway/10">
-        <span className="font-mono font-bold text-fairway tabular-nums text-lg">
+      <td className="py-3 px-4 text-center bg-fairway/10 dark:bg-board-yellow/10">
+        <span className="font-mono font-bold text-primary tabular-nums text-lg">
           {team.totalPoints}
         </span>
       </td>
@@ -109,46 +105,46 @@ export function BoardRow({
       {/* Scoring-type-specific columns */}
       {isMatchPlay && (
         <>
-          <td className="py-3 px-4 text-center font-mono text-fairway tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-primary tabular-nums">
             {team.wins}
           </td>
-          <td className="py-3 px-4 text-center font-mono text-board-red tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-board-red dark:text-error tabular-nums">
             {team.losses}
           </td>
-          <td className="py-3 px-4 text-center font-mono text-text-muted tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-text-muted tabular-nums">
             {team.ties}
           </td>
         </>
       )}
       {isStrokePlay && (
         <>
-          <td className="py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
             {team.avgNet ?? "\u2014"}
           </td>
-          <td className="py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
             {team.bestFinish != null && team.bestFinish > 0 ? formatPosition(team.bestFinish) : "\u2014"}
           </td>
         </>
       )}
       {isHybrid && (
         <>
-          <td className="py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
             {team.matchPoints ?? 0}
           </td>
-          <td className="py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-scorecard-pencil tabular-nums">
             {team.fieldPoints ?? 0}
           </td>
-          <td className="py-3 px-4 text-center font-mono text-fairway tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-primary tabular-nums">
             {team.wins}
           </td>
-          <td className="py-3 px-4 text-center font-mono text-board-red tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-board-red dark:text-error tabular-nums">
             {team.losses}
           </td>
-          <td className="py-3 px-4 text-center font-mono text-text-muted tabular-nums">
+          <td className="hidden sm:table-cell py-3 px-4 text-center font-mono text-text-muted tabular-nums">
             {team.ties}
           </td>
         </>
       )}
-    </motion.tr>
+    </tr>
   );
 }

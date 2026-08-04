@@ -6,6 +6,9 @@ import {
   setActiveSeason,
   type SeasonInfo,
 } from "@/lib/actions/seasons";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/composite";
 
 interface SeasonsTabProps {
   slug: string;
@@ -22,7 +25,6 @@ export default function SeasonsTab({
   onSeasonChanged,
 }: SeasonsTabProps) {
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [newSeasonName, setNewSeasonName] = useState("");
   const [newSeasonYear, setNewSeasonYear] = useState(new Date().getFullYear());
   const [seasons, setSeasons] = useState<SeasonInfo[]>(initialSeasons);
@@ -39,14 +41,14 @@ export default function SeasonsTab({
 
   async function handleCreateSeason() {
     if (!newSeasonName.trim()) {
-      setMessage({ type: "error", text: "Please enter a season name." });
+      notify.error("Please enter a season name.");
       return;
     }
     setLoading(true);
     try {
       const result = await createSeason(slug, newSeasonName, newSeasonYear);
       if (!result.success) {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
         setLoading(false);
         return;
       }
@@ -57,12 +59,12 @@ export default function SeasonsTab({
         ...prev.map((s) => ({ ...s, isActive: false })),
       ]);
       setNewSeasonName("");
-      setMessage({ type: "success", text: `Season "${newSeasonName}" created and set as active!` });
+      notify.success(`Season "${newSeasonName}" created and set as active!`);
       // Let the parent re-fetch all data (teams, matchups, etc.)
       onSeasonChanged();
     } catch (error) {
       console.error("handleCreateSeason error:", error);
-      setMessage({ type: "error", text: "Failed to create season." });
+      notify.error("Failed to create season.");
     }
     setLoading(false);
   }
@@ -72,7 +74,7 @@ export default function SeasonsTab({
     try {
       const result = await setActiveSeason(slug, seasonId);
       if (!result.success) {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
         setLoading(false);
         return;
       }
@@ -83,36 +85,23 @@ export default function SeasonsTab({
         setSeasons((prev) =>
           prev.map((s) => ({ ...s, isActive: s.id === seasonId }))
         );
-        setMessage({ type: "success", text: `Active season changed to "${targetSeason.name}".` });
+        notify.success(`Active season changed to "${targetSeason.name}".`);
       }
       // Let the parent re-fetch all data (teams, matchups, etc.)
       onSeasonChanged();
     } catch (error) {
       console.error("handleSetActiveSeason error:", error);
-      setMessage({ type: "error", text: "Failed to set active season." });
+      notify.error("Failed to set active season.");
     }
     setLoading(false);
   }
 
   return (
     <div className="space-y-6">
-      {/* Message Banner */}
-      {message && (
-        <div
-          className={`p-4 rounded-lg font-sans text-sm ${
-            message.type === "success"
-              ? "bg-fairway/10 border border-fairway/30 text-fairway"
-              : "bg-error-bg border border-error-border text-error-text"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
       {/* Active Season Indicator */}
       {activeSeason && (
         <div className="bg-fairway/10 border border-fairway/30 rounded-lg p-4">
-          <p className="text-fairway font-sans">
+          <p className="text-primary font-sans">
             <span className="font-display font-medium uppercase tracking-wider">Active Season:</span> {activeSeason.name}
           </p>
           <p className="text-sm text-putting mt-1 font-sans">
@@ -148,13 +137,14 @@ export default function SeasonsTab({
               className="pencil-input w-24"
             />
           </div>
-          <button
+          <SubmitButton
+            type="button"
+            pending={loading}
             onClick={handleCreateSeason}
             disabled={loading || !newSeasonName.trim()}
-            className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough font-display font-semibold uppercase tracking-wider disabled:opacity-50 transition-colors"
           >
             {loading ? "Creating..." : "Create Season"}
-          </button>
+          </SubmitButton>
         </div>
         <p className="mt-2 text-sm text-text-muted font-sans">
           Creating a new season will automatically set it as the active season.
@@ -196,13 +186,14 @@ export default function SeasonsTab({
                     </div>
                   </div>
                   {!season.isActive && (
-                    <button
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => handleSetActiveSeason(season.id)}
                       disabled={loading}
-                      className="px-4 py-2 text-sm bg-surface-white text-text-secondary border border-border rounded-lg hover:bg-surface font-display font-medium uppercase tracking-wider disabled:opacity-50 transition-colors"
                     >
                       Set Active
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>

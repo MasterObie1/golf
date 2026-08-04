@@ -127,9 +127,9 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
           />
         ) : (
           <div className="bg-scorecard-paper rounded-lg shadow-md overflow-hidden border border-scorecard-line/50">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[75vh] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="bg-rough text-white">
+                <thead className="bg-rough text-white sticky top-0 z-20">
                   <tr>
                     <th className="py-3 px-4 text-left font-display font-semibold uppercase tracking-wider text-xs sticky left-0 bg-rough z-10">
                       Team
@@ -155,7 +155,7 @@ export default async function HandicapHistoryPage({ params, searchParams }: Prop
                       <td className="py-3 px-4 font-medium font-sans sticky left-0 bg-inherit z-10">
                         <Link
                           href={`/league/${slug}/team/${team.teamId}`}
-                          className="text-fairway hover:text-rough hover:underline transition-colors"
+                          className="text-primary hover:text-rough dark:hover:text-board-yellow hover:underline transition-colors"
                         >
                           {team.teamName}
                         </Link>

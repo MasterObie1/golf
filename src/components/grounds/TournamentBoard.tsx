@@ -61,7 +61,7 @@ export function TournamentBoard({
               <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">
                 Hcp
               </th>
-              <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">
+              <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">
                 Rds
               </th>
               <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs bg-fairway">
@@ -69,24 +69,24 @@ export function TournamentBoard({
               </th>
               {isMatchPlay && (
                 <>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">W</th>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">L</th>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">T</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">W</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">L</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">T</th>
                 </>
               )}
               {isStrokePlay && (
                 <>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">Avg Net</th>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">Best</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">Avg Net</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">Best</th>
                 </>
               )}
               {isHybrid && (
                 <>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">Match</th>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">Field</th>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">W</th>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">L</th>
-                  <th scope="col" className="py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">T</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">Match</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">Field</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">W</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">L</th>
+                  <th scope="col" className="hidden sm:table-cell py-3 px-4 text-center font-display font-semibold uppercase tracking-wider text-xs">T</th>
                 </>
               )}
             </tr>

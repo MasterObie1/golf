@@ -127,7 +127,7 @@ export default function LeagueManagementPage({ params }: Props) {
   if (error || !league) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-board-red/20 border border-board-red/50 text-board-red px-4 py-3 rounded-lg font-sans">
+        <div className="bg-error-bg border border-error-border text-error-text px-4 py-3 rounded-lg font-sans">
           {error || "League not found"}
         </div>
         <Link
@@ -172,7 +172,7 @@ export default function LeagueManagementPage({ params }: Props) {
       </div>
 
       {error && (
-        <div className="mb-6 bg-board-red/20 border border-board-red/50 text-board-red px-4 py-3 rounded-lg font-sans">
+        <div className="mb-6 bg-error-bg border border-error-border text-error-text px-4 py-3 rounded-lg font-sans">
           {error}
         </div>
       )}
@@ -302,7 +302,7 @@ export default function LeagueManagementPage({ params }: Props) {
             <button
               onClick={() => handleStatusChange("active")}
               disabled={actionLoading}
-              className="px-4 py-2 bg-fairway text-white rounded-lg hover:bg-fairway/90 disabled:opacity-50 text-sm font-display font-semibold uppercase tracking-wider"
+              className="px-4 py-2 bg-fairway text-white rounded-lg hover:bg-tee disabled:opacity-50 text-sm font-display font-semibold uppercase tracking-wider transition-colors"
             >
               Activate
             </button>

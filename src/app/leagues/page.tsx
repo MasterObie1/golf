@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { Loader2, Search } from "lucide-react";
 import { searchLeagues, getAllLeagues } from "@/lib/actions/leagues";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/composite";
+import { buttonVariants } from "@/components/ui/button";
 
 interface LeagueResult {
   id: number;
@@ -54,10 +58,7 @@ export default function LeaguesPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-display font-bold text-scorecard-pencil uppercase tracking-wider">Find a League</h1>
-          <Link
-            href="/leagues/new"
-            className="bg-fairway text-white px-4 py-2 rounded-lg hover:bg-rough transition-colors font-display font-semibold uppercase tracking-wider text-sm"
-          >
+          <Link href="/leagues/new" className={buttonVariants()}>
             Create League
           </Link>
         </div>
@@ -75,23 +76,40 @@ export default function LeaguesPage() {
 
         {/* Results */}
         {loading ? (
-          <div className="text-center py-12 text-text-muted font-sans">Loading leagues...</div>
-        ) : results.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-text-muted mb-4 font-sans">
-              {query ? "No leagues found matching your search." : "No leagues yet."}
-            </p>
-            <Link
-              href="/leagues/new"
-              className="text-fairway hover:text-rough font-display font-semibold uppercase tracking-wider text-sm"
-            >
-              Create the first league
-            </Link>
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-card rounded-lg border border-border-light p-6 space-y-3">
+                <Skeleton className="h-6 w-56" />
+                <Skeleton className="h-4 w-72" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            ))}
           </div>
+        ) : results.length === 0 ? (
+          <EmptyState
+            icon={Search}
+            title={query ? "No Leagues Found" : "No Leagues Yet"}
+            description={
+              query
+                ? "No leagues match your search. Try a different name."
+                : "Be the first — create your league and invite your crew."
+            }
+            action={
+              <Link
+                href="/leagues/new"
+                className="text-fairway hover:text-rough font-display font-semibold uppercase tracking-wider text-sm"
+              >
+                Create the first league
+              </Link>
+            }
+          />
         ) : (
           <div className="space-y-4">
             {searching && (
-              <div className="text-sm text-text-muted mb-2 font-sans">Searching...</div>
+              <div className="flex items-center gap-2 text-sm text-text-muted mb-2 font-sans">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                Searching...
+              </div>
             )}
             {results.map((league) => (
               <Link

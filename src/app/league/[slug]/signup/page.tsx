@@ -1,5 +1,6 @@
 "use client";
 
+import { SubmitButton, PageSkeleton } from "@/components/composite";
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { registerTeam } from "@/lib/actions/teams";
@@ -102,11 +103,7 @@ export default function LeagueSignupPage({ params }: Props) {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="text-text-muted font-sans">Loading...</div>
-      </div>
-    );
+    return <PageSkeleton variant="cards" rows={4} />;
   }
 
   if (success) {
@@ -321,13 +318,9 @@ export default function LeagueSignupPage({ params }: Props) {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-fairway text-white py-3 rounded-lg hover:bg-rough transition-colors font-display font-semibold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <SubmitButton pending={submitting} size="lg" className="w-full">
               {submitting ? "Submitting..." : "Register Team"}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>

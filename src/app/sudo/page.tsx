@@ -85,10 +85,10 @@ export default async function SudoDashboard() {
                   <th className="px-4 py-3 text-left text-xs font-display font-medium text-putting/70 uppercase tracking-wider">
                     Teams
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-display font-medium text-putting/70 uppercase tracking-wider">
+                  <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-display font-medium text-putting/70 uppercase tracking-wider">
                     Matchups
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-display font-medium text-putting/70 uppercase tracking-wider">
+                  <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-display font-medium text-putting/70 uppercase tracking-wider">
                     Created
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-display font-medium text-putting/70 uppercase tracking-wider">
@@ -132,10 +132,10 @@ export default async function SudoDashboard() {
                     <td className="px-4 py-4 text-putting/70 font-mono tabular-nums">
                       {league._count.teams}
                     </td>
-                    <td className="px-4 py-4 text-putting/70 font-mono tabular-nums">
+                    <td className="hidden md:table-cell px-4 py-4 text-putting/70 font-mono tabular-nums">
                       {league._count.matchups}
                     </td>
-                    <td className="px-4 py-4 text-putting/60 text-sm font-sans">
+                    <td className="hidden md:table-cell px-4 py-4 text-putting/60 text-sm font-sans">
                       {new Date(league.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4">

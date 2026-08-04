@@ -159,8 +159,8 @@ export default function AdminDashboard({
 
   return (
     <div className="min-h-screen bg-surface">
-      {/* Header Bar */}
-      <div className="bg-rough">
+      {/* Header Bar — theme-invariant dark canvas */}
+      <div className="dark bg-rough">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div>
@@ -188,7 +188,7 @@ export default function AdminDashboard({
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Tab Navigation — Filing Cabinet Style */}
         <div
-          className="flex gap-1 mb-6 flex-wrap -mt-3"
+          className="flex gap-1 mb-6 -mt-3 overflow-x-auto snap-x md:flex-wrap md:overflow-visible [scrollbar-width:thin]"
           role="tablist"
           aria-label="Admin sections"
           onKeyDown={(e) => {
@@ -212,7 +212,7 @@ export default function AdminDashboard({
               aria-controls={`tabpanel-${tab.key}`}
               tabIndex={activeTab === tab.key ? 0 : -1}
               onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={`px-5 py-2.5 font-display font-semibold text-sm uppercase tracking-wider rounded-t-lg transition-all border border-b-0 ${
+              className={`shrink-0 snap-start px-5 py-2.5 font-display font-semibold text-sm uppercase tracking-wider rounded-t-lg transition-all border border-b-0 ${
                 activeTab === tab.key
                   ? "bg-scorecard-paper text-scorecard-pencil border-scorecard-line/50 relative z-10 translate-y-px shadow-sm"
                   : "bg-bunker/40 text-text-muted hover:bg-bunker/60 border-transparent hover:text-scorecard-pencil"
