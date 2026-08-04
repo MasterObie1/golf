@@ -19,6 +19,22 @@ import {
 import { generatePointScale, getPointScalePresets } from "@/lib/scoring-utils";
 import { DEFAULT_HANDICAP_SETTINGS, HANDICAP_PRESETS } from "@/lib/handicap";
 import type { AdminLeague } from "@/lib/types/admin";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/composite";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+
+const accordionItemClass =
+  "mb-4 overflow-hidden rounded-lg border border-scorecard-line/50 last:border-b";
+const accordionTriggerClass =
+  "items-center rounded-none bg-surface px-4 py-3 font-display text-base font-medium uppercase tracking-wider text-scorecard-pencil transition-colors hover:bg-bunker/20 hover:no-underline";
+const selectClass = "h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground";
+const checkboxClass = "w-4 h-4 accent-[var(--color-primary)]";
 
 interface SettingsTabProps {
   slug: string;
@@ -30,7 +46,6 @@ interface SettingsTabProps {
 
 export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeasonData, onDataRefresh }: SettingsTabProps) {
   const [loadingSection, setLoadingSection] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Basic settings
   const [maxTeamsInput, setMaxTeamsInput] = useState(league.maxTeams);
@@ -135,7 +150,6 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
   // Preview and UI
   const [handicapPreviewAvg, setHandicapPreviewAvg] = useState(42);
   const [selectedPreset, setSelectedPreset] = useState<string>("custom");
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["basic"]));
 
   // H5: Re-sync handicap-related state when parent passes updated league data (render-time adjustment)
   const [syncedLeague, setSyncedLeague] = useState(league);
@@ -188,15 +202,6 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
     return result;
   }
 
-  function toggleSection(section: string) {
-    setExpandedSections(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(section)) newSet.delete(section);
-      else newSet.add(section);
-      return newSet;
-    });
-  }
-
   function applyPreset(presetName: string) {
     setSelectedPreset(presetName);
     if (presetName === "custom") return;
@@ -244,16 +249,16 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
     try {
       const result = await updateLeagueSettings(slug, maxTeamsInput, registrationOpenInput);
       if (!result.success) {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
         setLoadingSection(null);
         return;
       }
       const leagueData = await getLeagueBySlug(slug);
       onDataRefresh({ league: leagueData });
-      setMessage({ type: "success", text: "Settings saved successfully!" });
+      notify.success("Settings saved successfully!");
     } catch (error) {
       console.error("handleSaveSettings error:", error);
-      setMessage({ type: "error", text: "Failed to save settings." });
+      notify.error("Failed to save settings.");
     }
     setLoadingSection(null);
   }
@@ -262,11 +267,11 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
     // Blank numeric inputs coerce to 0; a 0 multiplier would zero every handicap
     // on recalc and a 0 base score would explode them. Block the save instead.
     if (!isFinite(handicapMultiplier) || handicapMultiplier <= 0) {
-      setMessage({ type: "error", text: "Multiplier must be greater than 0." });
+      notify.error("Multiplier must be greater than 0.");
       return;
     }
     if (!isFinite(handicapBaseScore) || handicapBaseScore <= 0) {
-      setMessage({ type: "error", text: "Base score must be greater than 0." });
+      notify.error("Base score must be greater than 0.");
       return;
     }
     setLoadingSection("handicap");
@@ -303,7 +308,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
         requireApproval: handicapRequireApproval,
       });
       if (!result.success) {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
         setLoadingSection(null);
         return;
       }
@@ -313,10 +318,10 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
         getTeams(league.id),
       ]);
       onDataRefresh({ league: leagueData, matchups: matchupsResult.matchups, teams: teamsData });
-      setMessage({ type: "success", text: "Handicap formula saved and all stats recalculated!" });
+      notify.success("Handicap formula saved and all stats recalculated!");
     } catch (error) {
       console.error("handleSaveHandicapSettings error:", error);
-      setMessage({ type: "error", text: "Failed to save handicap settings." });
+      notify.error("Failed to save handicap settings.");
     }
     setLoadingSection(null);
   }
@@ -327,7 +332,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
     try {
       const result = await recalculateAllMatchups(slug);
       if (!result.success) {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
         setLoadingSection(null);
         return;
       }
@@ -337,10 +342,10 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
         getTeams(league.id),
       ]);
       onDataRefresh({ league: leagueData, matchups: matchupsResult.matchups, teams: teamsData });
-      setMessage({ type: "success", text: "All matchups recalculated." });
+      notify.success("All matchups recalculated.");
     } catch (error) {
       console.error("handleRecalculateAll error:", error);
-      setMessage({ type: "error", text: "Failed to recalculate matchups." });
+      notify.error("Failed to recalculate matchups.");
     }
     setLoadingSection(null);
   }
@@ -366,13 +371,13 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
       if (result.success) {
         const leagueData = await getLeagueBySlug(slug);
         onDataRefresh({ league: leagueData });
-        setMessage({ type: "success", text: "Scoring configuration saved!" });
+        notify.success("Scoring configuration saved!");
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleSaveScoringConfig error:", error);
-      setMessage({ type: "error", text: "Failed to save scoring configuration." });
+      notify.error("Failed to save scoring configuration.");
     }
     setLoadingSection(null);
   }
@@ -397,13 +402,13 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
       if (result.success) {
         const leagueData = await getLeagueBySlug(slug);
         onDataRefresh({ league: leagueData });
-        setMessage({ type: "success", text: "Schedule configuration saved!" });
+        notify.success("Schedule configuration saved!");
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleSaveScheduleConfig error:", error);
-      setMessage({ type: "error", text: "Failed to save schedule configuration." });
+      notify.error("Failed to save schedule configuration.");
     }
     setLoadingSection(null);
   }
@@ -421,11 +426,6 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
           Some scoring configuration data was corrupted and has been reset to defaults. Save your settings to fix this.
         </div>
       )}
-      {message && (
-        <div className={`mb-6 p-4 rounded-lg font-sans ${message.type === "success" ? "bg-fairway/10 border border-fairway/30 text-fairway" : "bg-error-bg border border-error-border text-error-text"}`}>
-          {message.text}
-        </div>
-      )}
 
       <h2 className="text-xl font-display font-semibold mb-6 text-scorecard-pencil uppercase tracking-wider">League Settings</h2>
 
@@ -438,25 +438,22 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
 
         <div>
           <label htmlFor="settings-registration-open" className="flex items-center gap-3 cursor-pointer">
-            <input id="settings-registration-open" type="checkbox" checked={registrationOpenInput} onChange={(e) => setRegistrationOpenInput(e.target.checked)} className="w-5 h-5 text-fairway border-scorecard-line rounded focus:ring-fairway" />
+            <input id="settings-registration-open" type="checkbox" checked={registrationOpenInput} onChange={(e) => setRegistrationOpenInput(e.target.checked)} className={checkboxClass} />
             <span className="text-scorecard-pencil font-display font-medium uppercase tracking-wider">Registration Open</span>
           </label>
         </div>
 
-        <button onClick={handleSaveSettings} disabled={loadingSection !== null} className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors">
-          {loadingSection === "basic" ? "Saving..." : "Save Settings"}
-        </button>
+        <SubmitButton type="button" onClick={handleSaveSettings} disabled={loadingSection !== null} pending={loadingSection === "basic"}>
+          Save Settings
+        </SubmitButton>
       </div>
 
       {/* Scoring Format Section */}
       <div className="mt-8 pt-8 border-t border-scorecard-line/50">
-        <div className="mb-4 border border-scorecard-line/50 rounded-lg overflow-hidden">
-          <button onClick={() => toggleSection("scoring")} className="w-full px-4 py-3 bg-surface text-left font-display font-medium text-scorecard-pencil uppercase tracking-wider flex justify-between items-center hover:bg-bunker/20 transition-colors">
-            <span>Scoring Format</span>
-            <span className="text-text-muted">{expandedSections.has("scoring") ? "\u2212" : "+"}</span>
-          </button>
-          {expandedSections.has("scoring") && (
-            <div className="p-4 border-t border-scorecard-line/50 space-y-6">
+        <Accordion type="multiple">
+          <AccordionItem value="scoring" className={accordionItemClass}>
+            <AccordionTrigger className={accordionTriggerClass}>Scoring Format</AccordionTrigger>
+            <AccordionContent className="p-4 border-t border-scorecard-line/50 space-y-6">
               {/* Scoring Type Selector */}
               <div>
                 <label id="settings-scoring-type-label" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">Scoring Type</label>
@@ -468,7 +465,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                           ? "bg-info-bg text-info-text"
                           : scoringType === "hybrid"
                           ? "bg-bunker/30 text-wood"
-                          : "bg-fairway/10 text-fairway"
+                          : "bg-fairway/10 text-primary"
                       }`}>
                         {scoringType === "stroke_play" ? "Stroke Play"
                           : scoringType === "hybrid" ? "Hybrid"
@@ -497,7 +494,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                               : "border-scorecard-line/50 hover:border-putting/50"
                           }`}
                         >
-                          <div className={`text-sm font-display font-semibold uppercase tracking-wider ${scoringType === option.value ? "text-fairway" : "text-scorecard-pencil"}`}>
+                          <div className={`text-sm font-display font-semibold uppercase tracking-wider ${scoringType === option.value ? "text-primary" : "text-scorecard-pencil"}`}>
                             {option.label}
                           </div>
                           <div className="text-xs font-sans text-text-muted mt-1">{option.desc}</div>
@@ -581,7 +578,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="settings-tie-mode" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Tie Handling</label>
-                      <select id="settings-tie-mode" value={strokePlayTieMode} onChange={(e) => setStrokePlayTieMode(e.target.value)} className="pencil-input w-full max-w-xs font-sans">
+                      <select id="settings-tie-mode" value={strokePlayTieMode} onChange={(e) => setStrokePlayTieMode(e.target.value)} className={`${selectClass} max-w-xs`}>
                         <option value="split">Split Points (average tied positions)</option>
                         <option value="same">Same Points (all get higher value)</option>
                       </select>
@@ -608,7 +605,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
 
                   <div>
                     <label htmlFor="settings-pro-rate" className="flex items-center gap-2 cursor-pointer">
-                      <input id="settings-pro-rate" type="checkbox" checked={strokePlayProRate} onChange={(e) => setStrokePlayProRate(e.target.checked)} className="w-4 h-4 text-fairway rounded border-scorecard-line focus:ring-fairway" />
+                      <input id="settings-pro-rate" type="checkbox" checked={strokePlayProRate} onChange={(e) => setStrokePlayProRate(e.target.checked)} className={checkboxClass} />
                       <span className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">Pro-Rate Standings for Missed Weeks</span>
                     </label>
                     <p className="text-xs font-sans text-text-muted mt-1 ml-6">Use points-per-week average instead of total for teams with fewer rounds</p>
@@ -639,23 +636,20 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                 </div>
               )}
 
-              <button onClick={handleSaveScoringConfig} disabled={loadingSection !== null} className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors">
-                {loadingSection === "scoring" ? "Saving..." : "Save Scoring Config"}
-              </button>
-            </div>
-          )}
-        </div>
+              <SubmitButton type="button" onClick={handleSaveScoringConfig} disabled={loadingSection !== null} pending={loadingSection === "scoring"}>
+                Save Scoring Config
+              </SubmitButton>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
 
       {/* Schedule Settings Section */}
       <div className="mt-8 pt-8 border-t border-scorecard-line/50">
-        <div className="mb-4 border border-scorecard-line/50 rounded-lg overflow-hidden">
-          <button onClick={() => toggleSection("schedule")} className="w-full px-4 py-3 bg-surface text-left font-display font-medium text-scorecard-pencil uppercase tracking-wider flex justify-between items-center hover:bg-bunker/20 transition-colors">
-            <span>Schedule Settings</span>
-            <span className="text-text-muted">{expandedSections.has("schedule") ? "\u2212" : "+"}</span>
-          </button>
-          {expandedSections.has("schedule") && (
-            <div className="p-4 border-t border-scorecard-line/50 space-y-6">
+        <Accordion type="multiple">
+          <AccordionItem value="schedule" className={accordionItemClass}>
+            <AccordionTrigger className={accordionTriggerClass}>Schedule Settings</AccordionTrigger>
+            <AccordionContent className="p-4 border-t border-scorecard-line/50 space-y-6">
               {/* Course Play Mode */}
               <div>
                 <label id="settings-play-mode-label" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-2">Holes Per Week</label>
@@ -676,7 +670,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                             : "border-scorecard-line/50 hover:border-putting/50"
                         }`}
                       >
-                        <div className={`text-xs font-display font-semibold uppercase tracking-wider ${isSelected ? "text-fairway" : "text-scorecard-pencil"}`}>
+                        <div className={`text-xs font-display font-semibold uppercase tracking-wider ${isSelected ? "text-primary" : "text-scorecard-pencil"}`}>
                           {opt.label}
                         </div>
                         <div className="text-xs font-sans text-text-muted mt-1">{opt.desc}</div>
@@ -690,8 +684,8 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                     <div className="grid grid-cols-3 gap-2">
                       {([
                         { value: "nine_hole_alternating", label: "Alternating", desc: "Front one week, back the next" },
-                        { value: "nine_hole_front", label: "Front 9 Always", desc: "Always play holes 1\u20139" },
-                        { value: "nine_hole_back", label: "Back 9 Always", desc: "Always play holes 10\u201318" },
+                        { value: "nine_hole_front", label: "Front 9 Always", desc: "Always play holes 1–9" },
+                        { value: "nine_hole_back", label: "Back 9 Always", desc: "Always play holes 10–18" },
                       ] as const).map((opt) => (
                         <button
                           key={opt.value}
@@ -703,7 +697,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                               : "border-scorecard-line/50 hover:border-putting/50"
                           }`}
                         >
-                          <div className={`text-xs font-display font-semibold uppercase tracking-wider ${playMode === opt.value ? "text-fairway" : "text-scorecard-pencil"}`}>
+                          <div className={`text-xs font-display font-semibold uppercase tracking-wider ${playMode === opt.value ? "text-primary" : "text-scorecard-pencil"}`}>
                             {opt.label}
                           </div>
                           <div className="text-xs font-sans text-text-muted mt-1">{opt.desc}</div>
@@ -724,7 +718,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                               onClick={() => setPlayModeFirstWeekSide(opt.value)}
                               className={`px-4 py-2 rounded-lg border-2 text-sm font-display font-semibold uppercase tracking-wider transition-colors ${
                                 playModeFirstWeekSide === opt.value
-                                  ? "border-fairway bg-fairway/10 text-fairway"
+                                  ? "border-fairway bg-fairway/10 text-primary"
                                   : "border-scorecard-line/50 text-text-secondary hover:border-putting/50"
                               }`}
                             >
@@ -741,7 +735,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
 
               <div>
                 <label htmlFor="settings-schedule-visibility" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Schedule Visibility</label>
-                <select id="settings-schedule-visibility" value={scheduleVisibility} onChange={(e) => setScheduleVisibility(e.target.value)} className="pencil-input w-full max-w-xs font-sans">
+                <select id="settings-schedule-visibility" value={scheduleVisibility} onChange={(e) => setScheduleVisibility(e.target.value)} className={`${selectClass} max-w-xs`}>
                   <option value="full">Full Schedule (show all weeks)</option>
                   <option value="current_week">Current Week Only</option>
                   <option value="hidden">Hidden (admin only)</option>
@@ -751,7 +745,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="settings-bye-points-mode" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Bye Week Points</label>
-                  <select id="settings-bye-points-mode" value={byePointsMode} onChange={(e) => setByePointsMode(e.target.value)} className="pencil-input w-full font-sans">
+                  <select id="settings-bye-points-mode" value={byePointsMode} onChange={(e) => setByePointsMode(e.target.value)} className={selectClass}>
                     <option value="zero">Zero Points</option>
                     <option value="flat">Flat Amount</option>
                     <option value="league_average">League Average</option>
@@ -768,7 +762,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
 
               <div>
                 <label htmlFor="settings-extra-weeks" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Extra Weeks Handling</label>
-                <select id="settings-extra-weeks" value={scheduleExtraWeeks} onChange={(e) => setScheduleExtraWeeks(e.target.value)} className="pencil-input w-full max-w-xs font-sans">
+                <select id="settings-extra-weeks" value={scheduleExtraWeeks} onChange={(e) => setScheduleExtraWeeks(e.target.value)} className={`${selectClass} max-w-xs`}>
                   <option value="flex">Flex (allow manual matchups beyond schedule)</option>
                   <option value="continue_round">Continue Round Robin</option>
                 </select>
@@ -778,7 +772,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="settings-mid-season-add" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Mid-Season Team Addition</label>
-                  <select id="settings-mid-season-add" value={midSeasonAddDefault} onChange={(e) => setMidSeasonAddDefault(e.target.value)} className="pencil-input w-full font-sans">
+                  <select id="settings-mid-season-add" value={midSeasonAddDefault} onChange={(e) => setMidSeasonAddDefault(e.target.value)} className={selectClass}>
                     <option value="start_from_here">Start From Current Week</option>
                     <option value="fill_byes">Fill Bye Slots</option>
                     <option value="pro_rate">Pro-Rate Standings</option>
@@ -787,7 +781,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                 </div>
                 <div>
                   <label htmlFor="settings-mid-season-remove" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Team Removal Action</label>
-                  <select id="settings-mid-season-remove" value={midSeasonRemoveAction} onChange={(e) => setMidSeasonRemoveAction(e.target.value)} className="pencil-input w-full font-sans">
+                  <select id="settings-mid-season-remove" value={midSeasonRemoveAction} onChange={(e) => setMidSeasonRemoveAction(e.target.value)} className={selectClass}>
                     <option value="bye_opponents">Give Opponents Bye Points</option>
                     <option value="regenerate">Regenerate Schedule</option>
                   </select>
@@ -810,7 +804,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                       </div>
                       <div>
                         <label htmlFor="settings-playoff-format" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Playoff Format</label>
-                        <select id="settings-playoff-format" value={playoffFormat} onChange={(e) => setPlayoffFormat(e.target.value)} className="pencil-input w-full font-sans">
+                        <select id="settings-playoff-format" value={playoffFormat} onChange={(e) => setPlayoffFormat(e.target.value)} className={selectClass}>
                           <option value="single_elimination">Single Elimination</option>
                           <option value="double_elimination">Double Elimination</option>
                           <option value="round_robin">Round Robin</option>
@@ -821,23 +815,20 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                 </div>
               </div>
 
-              <button onClick={handleSaveScheduleConfig} disabled={loadingSection !== null} className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors">
-                {loadingSection === "schedule" ? "Saving..." : "Save Schedule Settings"}
-              </button>
-            </div>
-          )}
-        </div>
+              <SubmitButton type="button" onClick={handleSaveScheduleConfig} disabled={loadingSection !== null} pending={loadingSection === "schedule"}>
+                Save Schedule Settings
+              </SubmitButton>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
 
       {/* Scorecard Entry Settings */}
       <div className="mt-8 pt-8 border-t border-scorecard-line/50">
-        <div className="mb-4 border border-scorecard-line/50 rounded-lg overflow-hidden">
-          <button onClick={() => toggleSection("scorecard")} className="w-full px-4 py-3 bg-surface text-left font-display font-medium text-scorecard-pencil uppercase tracking-wider flex justify-between items-center hover:bg-bunker/20 transition-colors">
-            <span>Scorecard Entry</span>
-            <span className="text-text-muted">{expandedSections.has("scorecard") ? "\u2212" : "+"}</span>
-          </button>
-          {expandedSections.has("scorecard") && (
-            <div className="p-4 border-t border-scorecard-line/50 space-y-4">
+        <Accordion type="multiple">
+          <AccordionItem value="scorecard" className={accordionItemClass}>
+            <AccordionTrigger className={accordionTriggerClass}>Scorecard Entry</AccordionTrigger>
+            <AccordionContent className="p-4 border-t border-scorecard-line/50 space-y-4">
               <p className="text-sm font-sans text-text-muted">
                 Enable hole-by-hole scorecard entry so players can enter their own scores from their phone.
                 Completed scorecards provide gross totals that pre-fill into your matchup/weekly score forms.
@@ -860,7 +851,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                           : "border-scorecard-line/50 hover:border-putting/50"
                       }`}
                     >
-                      <div className={`text-sm font-display font-semibold uppercase tracking-wider ${scorecardMode === opt.value ? "text-fairway" : "text-scorecard-pencil"}`}>
+                      <div className={`text-sm font-display font-semibold uppercase tracking-wider ${scorecardMode === opt.value ? "text-primary" : "text-scorecard-pencil"}`}>
                         {opt.label}
                       </div>
                       <div className="text-xs font-sans text-text-muted mt-1">{opt.desc}</div>
@@ -876,7 +867,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                       type="checkbox"
                       checked={scorecardRequireApproval}
                       onChange={(e) => setScorecardRequireApproval(e.target.checked)}
-                      className="w-5 h-5 text-fairway border-scorecard-line rounded focus:ring-fairway"
+                      className={checkboxClass}
                     />
                     <div>
                       <span className="text-scorecard-pencil font-display font-medium uppercase tracking-wider text-sm">Require Admin Approval</span>
@@ -885,33 +876,34 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                   </label>
                 </div>
               )}
-              <button
+              <SubmitButton
+                type="button"
                 onClick={async () => {
                   setLoadingSection("scorecard");
                   try {
                     const result = await updateScorecardSettings(slug, scorecardMode as "disabled" | "optional" | "required", scorecardRequireApproval);
                     if (!result.success) {
-                      setMessage({ type: "error", text: result.error });
+                      notify.error(result.error);
                       setLoadingSection(null);
                       return;
                     }
                     const leagueData = await getLeagueBySlug(slug);
                     onDataRefresh({ league: leagueData });
-                    setMessage({ type: "success", text: "Scorecard settings saved!" });
+                    notify.success("Scorecard settings saved!");
                   } catch (error) {
                     console.error("saveScorecardSettings error:", error);
-                    setMessage({ type: "error", text: "Failed to save scorecard settings." });
+                    notify.error("Failed to save scorecard settings.");
                   }
                   setLoadingSection(null);
                 }}
                 disabled={loadingSection !== null}
-                className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors"
+                pending={loadingSection === "scorecard"}
               >
-                {loadingSection === "scorecard" ? "Saving..." : "Save Scorecard Settings"}
-              </button>
-            </div>
-          )}
-        </div>
+                Save Scorecard Settings
+              </SubmitButton>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
 
       {/* Password Change Section */}
@@ -924,19 +916,19 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
             const currentPw = (form.elements.namedItem("currentPassword") as HTMLInputElement).value;
             const newPw = (form.elements.namedItem("newPassword") as HTMLInputElement).value;
             const confirmPw = (form.elements.namedItem("confirmNewPassword") as HTMLInputElement).value;
-            if (newPw !== confirmPw) { setMessage({ type: "error", text: "New passwords do not match" }); return; }
-            if (newPw.length < 8) { setMessage({ type: "error", text: "New password must be at least 8 characters" }); return; }
+            if (newPw !== confirmPw) { notify.error("New passwords do not match"); return; }
+            if (newPw.length < 8) { notify.error("New password must be at least 8 characters"); return; }
             try {
               const result = await changeLeaguePassword(slug, currentPw, newPw);
               if (result.success) {
-                setMessage({ type: "success", text: "Password changed successfully" });
+                notify.success("Password changed successfully");
                 form.reset();
               } else {
-                setMessage({ type: "error", text: result.error });
+                notify.error(result.error);
               }
             } catch (error) {
               console.error("changePassword error:", error);
-              setMessage({ type: "error", text: "Failed to change password. Please try again." });
+              notify.error("Failed to change password. Please try again.");
             }
           }}
           className="space-y-4 max-w-md"
@@ -953,7 +945,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
             <label htmlFor="confirmNewPassword" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Confirm New Password</label>
             <input type="password" name="confirmNewPassword" id="confirmNewPassword" required minLength={8} className="pencil-input w-full" />
           </div>
-          <button type="submit" className="px-6 py-2 bg-board-yellow text-scorecard-pencil rounded-lg hover:bg-wood hover:text-white font-display font-semibold uppercase tracking-wider transition-colors">Change Password</button>
+          <Button type="submit" variant="accent">Change Password</Button>
         </form>
       </div>
 
@@ -986,14 +978,11 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
           <p className="text-xs text-text-muted mt-1">Applying a preset will reset all handicap settings to the preset values.</p>
         </div>
 
-        {/* Basic Formula Section */}
-        <div className="mb-4 border border-scorecard-line/50 rounded-lg overflow-hidden">
-          <button onClick={() => toggleSection("basic")} className="w-full px-4 py-3 bg-surface text-left font-display font-medium text-scorecard-pencil uppercase tracking-wider flex justify-between items-center hover:bg-bunker/20 transition-colors">
-            <span>Basic Formula</span>
-            <span className="text-text-muted">{expandedSections.has("basic") ? "\u2212" : "+"}</span>
-          </button>
-          {expandedSections.has("basic") && (
-            <div className="p-4 border-t border-scorecard-line/50">
+        <Accordion type="multiple" defaultValue={["basic"]}>
+          {/* Basic Formula Section */}
+          <AccordionItem value="basic" className={accordionItemClass}>
+            <AccordionTrigger className={accordionTriggerClass}>Basic Formula</AccordionTrigger>
+            <AccordionContent className="p-4 border-t border-scorecard-line/50">
               <p className="text-sm font-sans text-text-muted mb-4">Formula: (Average Score - Base Score) x Multiplier</p>
               <div className="grid md:grid-cols-3 gap-4">
                 <div>
@@ -1006,7 +995,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                 </div>
                 <div>
                   <label htmlFor="hc-rounding" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Rounding</label>
-                  <select id="hc-rounding" value={handicapRounding} onChange={(e) => { setHandicapRounding(e.target.value as "floor" | "round" | "ceil"); setSelectedPreset("custom"); }} className="pencil-input w-full font-sans">
+                  <select id="hc-rounding" value={handicapRounding} onChange={(e) => { setHandicapRounding(e.target.value as "floor" | "round" | "ceil"); setSelectedPreset("custom"); }} className={selectClass}>
                     <option value="floor">Floor (round down)</option>
                     <option value="round">Round (nearest)</option>
                     <option value="ceil">Ceiling (round up)</option>
@@ -1037,18 +1026,13 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                   <p className="text-xs font-sans text-text-muted mt-1">Max handicap when avg &le; par (e.g. -1)</p>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            </AccordionContent>
+          </AccordionItem>
 
-        {/* Score Selection Section */}
-        <div className="mb-4 border border-scorecard-line/50 rounded-lg overflow-hidden">
-          <button onClick={() => toggleSection("selection")} className="w-full px-4 py-3 bg-surface text-left font-display font-medium text-scorecard-pencil uppercase tracking-wider flex justify-between items-center hover:bg-bunker/20 transition-colors">
-            <span>Score Selection</span>
-            <span className="text-text-muted">{expandedSections.has("selection") ? "\u2212" : "+"}</span>
-          </button>
-          {expandedSections.has("selection") && (
-            <div className="p-4 border-t border-scorecard-line/50">
+          {/* Score Selection Section */}
+          <AccordionItem value="selection" className={accordionItemClass}>
+            <AccordionTrigger className={accordionTriggerClass}>Score Selection</AccordionTrigger>
+            <AccordionContent className="p-4 border-t border-scorecard-line/50">
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label htmlFor="hc-selection-method" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Selection Method</label>
@@ -1066,7 +1050,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                     if (newValue !== "last_n") {
                       setHandicapScoreCount("");
                     }
-                  }} className="pencil-input w-full max-w-xs font-sans">
+                  }} className={`${selectClass} max-w-xs`}>
                     <option value="all">Use All Scores</option>
                     <option value="last_n">Use Last N Scores</option>
                     <option value="best_of_last">Best X of Last Y Scores</option>
@@ -1112,21 +1096,16 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                   <p className="text-xs font-sans text-text-muted mt-1">Remove best rounds</p>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            </AccordionContent>
+          </AccordionItem>
 
-        {/* Score Weighting Section */}
-        <div className="mb-4 border border-scorecard-line/50 rounded-lg overflow-hidden">
-          <button onClick={() => toggleSection("weighting")} className="w-full px-4 py-3 bg-surface text-left font-display font-medium text-scorecard-pencil uppercase tracking-wider flex justify-between items-center hover:bg-bunker/20 transition-colors">
-            <span>Score Weighting</span>
-            <span className="text-text-muted">{expandedSections.has("weighting") ? "\u2212" : "+"}</span>
-          </button>
-          {expandedSections.has("weighting") && (
-            <div className="p-4 border-t border-scorecard-line/50">
+          {/* Score Weighting Section */}
+          <AccordionItem value="weighting" className={accordionItemClass}>
+            <AccordionTrigger className={accordionTriggerClass}>Score Weighting</AccordionTrigger>
+            <AccordionContent className="p-4 border-t border-scorecard-line/50">
               <div className="mb-4">
                 <label htmlFor="hc-use-weighting" className="flex items-center gap-2 cursor-pointer">
-                  <input id="hc-use-weighting" type="checkbox" checked={handicapUseWeighting} onChange={(e) => { setHandicapUseWeighting(e.target.checked); setSelectedPreset("custom"); }} className="w-4 h-4 text-fairway rounded border-scorecard-line focus:ring-fairway" />
+                  <input id="hc-use-weighting" type="checkbox" checked={handicapUseWeighting} onChange={(e) => { setHandicapUseWeighting(e.target.checked); setSelectedPreset("custom"); }} className={checkboxClass} />
                   <span className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">Enable Recency Weighting</span>
                 </label>
                 <p className="text-xs font-sans text-text-muted mt-1 ml-6">Recent scores count more towards handicap</p>
@@ -1147,7 +1126,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
               )}
               <div className="mt-4 pt-4 border-t border-scorecard-line/40">
                 <label htmlFor="hc-cap-exceptional" className="flex items-center gap-2 cursor-pointer">
-                  <input id="hc-cap-exceptional" type="checkbox" checked={handicapCapExceptional} onChange={(e) => { setHandicapCapExceptional(e.target.checked); setSelectedPreset("custom"); }} className="w-4 h-4 text-fairway rounded border-scorecard-line focus:ring-fairway" />
+                  <input id="hc-cap-exceptional" type="checkbox" checked={handicapCapExceptional} onChange={(e) => { setHandicapCapExceptional(e.target.checked); setSelectedPreset("custom"); }} className={checkboxClass} />
                   <span className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">Cap Exceptional Scores</span>
                 </label>
                 <p className="text-xs font-sans text-text-muted mt-1 ml-6">Limit very high scores before averaging</p>
@@ -1159,18 +1138,13 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                   <p className="text-xs font-sans text-text-muted mt-1">Scores above this are reduced to this value</p>
                 </div>
               )}
-            </div>
-          )}
-        </div>
+            </AccordionContent>
+          </AccordionItem>
 
-        {/* Time-Based Rules Section */}
-        <div className="mb-4 border border-scorecard-line/50 rounded-lg overflow-hidden">
-          <button onClick={() => toggleSection("timebased")} className="w-full px-4 py-3 bg-surface text-left font-display font-medium text-scorecard-pencil uppercase tracking-wider flex justify-between items-center hover:bg-bunker/20 transition-colors">
-            <span>Time-Based Rules</span>
-            <span className="text-text-muted">{expandedSections.has("timebased") ? "\u2212" : "+"}</span>
-          </button>
-          {expandedSections.has("timebased") && (
-            <div className="p-4 border-t border-scorecard-line/50">
+          {/* Time-Based Rules Section */}
+          <AccordionItem value="timebased" className={accordionItemClass}>
+            <AccordionTrigger className={accordionTriggerClass}>Time-Based Rules</AccordionTrigger>
+            <AccordionContent className="p-4 border-t border-scorecard-line/50">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="hc-prov-weeks" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Provisional Period (Weeks)</label>
@@ -1192,7 +1166,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
               </div>
               <div className="mt-4 pt-4 border-t border-scorecard-line/40">
                 <label htmlFor="hc-use-trend" className="flex items-center gap-2 cursor-pointer">
-                  <input id="hc-use-trend" type="checkbox" checked={handicapUseTrend} onChange={(e) => { setHandicapUseTrend(e.target.checked); setSelectedPreset("custom"); }} className="w-4 h-4 text-fairway rounded border-scorecard-line focus:ring-fairway" />
+                  <input id="hc-use-trend" type="checkbox" checked={handicapUseTrend} onChange={(e) => { setHandicapUseTrend(e.target.checked); setSelectedPreset("custom"); }} className={checkboxClass} />
                   <span className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">Enable Trend Adjustment</span>
                 </label>
                 <p className="text-xs font-sans text-text-muted mt-1 ml-6">Adjust handicap based on improvement/decline trend</p>
@@ -1206,14 +1180,14 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
               )}
               <div className="mt-4 pt-4 border-t border-scorecard-line/40">
                 <label htmlFor="hc-require-approval" className="flex items-center gap-2 cursor-pointer">
-                  <input id="hc-require-approval" type="checkbox" checked={handicapRequireApproval} onChange={(e) => { setHandicapRequireApproval(e.target.checked); setSelectedPreset("custom"); }} className="w-4 h-4 text-fairway rounded border-scorecard-line focus:ring-fairway" />
+                  <input id="hc-require-approval" type="checkbox" checked={handicapRequireApproval} onChange={(e) => { setHandicapRequireApproval(e.target.checked); setSelectedPreset("custom"); }} className={checkboxClass} />
                   <span className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">Require Admin Approval for Handicap Changes</span>
                 </label>
                 <p className="text-xs font-sans text-text-muted mt-1 ml-6">Manual review before handicap adjustments take effect</p>
               </div>
-            </div>
-          )}
-        </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
 
         {/* Preview Calculator */}
         <div className="mt-6 p-4 bg-surface rounded-lg border border-scorecard-line/50">
@@ -1226,7 +1200,7 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
             <div className="text-text-light">=</div>
             <div className="bg-scorecard-paper px-4 py-2 rounded-lg border border-fairway/30">
               <span className="text-xs font-display text-text-muted uppercase tracking-wider">Applied Handicap: </span>
-              <span className="text-lg font-mono tabular-nums font-bold text-fairway">{calculatePreviewHandicap(handicapPreviewAvg)}</span>
+              <span className="text-lg font-mono tabular-nums font-bold text-primary">{calculatePreviewHandicap(handicapPreviewAvg)}</span>
               {handicapMax !== "" && calculatePreviewHandicap(handicapPreviewAvg) >= handicapMax && <span className="ml-2 text-xs font-display text-warning-text font-medium uppercase tracking-wider">(max capped)</span>}
               {handicapMin !== "" && calculatePreviewHandicap(handicapPreviewAvg) <= handicapMin && <span className="ml-2 text-xs font-display text-info-text font-medium uppercase tracking-wider">(min capped)</span>}
             </div>
@@ -1237,12 +1211,19 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
         </div>
 
         <div className="mt-6 flex gap-3 flex-wrap">
-          <button onClick={handleSaveHandicapSettings} disabled={loadingSection !== null || handicapHasErrors} className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors">
-            {loadingSection === "handicap" ? "Saving..." : "Save Handicap Settings"}
-          </button>
-          <button onClick={handleRecalculateAll} disabled={loadingSection !== null} className="px-6 py-2 bg-scorecard-pencil text-white rounded-lg hover:bg-scorecard-pencil/80 disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors" title="Recompute all matchup handicaps, net scores, points, and team totals from current settings. Week-1 manual entries are preserved.">
-            {loadingSection === "recalc" ? "Recalculating..." : "Recalculate All Matchups"}
-          </button>
+          <SubmitButton type="button" onClick={handleSaveHandicapSettings} disabled={loadingSection !== null || handicapHasErrors} pending={loadingSection === "handicap"}>
+            Save Handicap Settings
+          </SubmitButton>
+          <SubmitButton
+            type="button"
+            variant="secondary"
+            onClick={handleRecalculateAll}
+            disabled={loadingSection !== null}
+            pending={loadingSection === "recalc"}
+            title="Recompute all matchup handicaps, net scores, points, and team totals from current settings. Week-1 manual entries are preserved."
+          >
+            Recalculate All Matchups
+          </SubmitButton>
         </div>
       </div>
     </div>
