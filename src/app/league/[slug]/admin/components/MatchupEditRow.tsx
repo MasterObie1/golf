@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { updateMatchup } from "@/lib/actions/matchups";
 import { calculateNetScore, suggestPoints } from "@/lib/handicap";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/composite";
 import type { AdminMatchup } from "@/lib/types/admin";
 
 interface MatchupEditRowProps {
@@ -24,7 +27,6 @@ export default function MatchupEditRow({ matchup, slug, onSaved, onCancel }: Mat
   const [subB, setSubB] = useState(matchup.teamBIsSub);
 
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const netA = grossA !== "" && handicapA !== "" ? calculateNetScore(grossA, handicapA) : null;
   const netB = grossB !== "" && handicapB !== "" ? calculateNetScore(grossB, handicapB) : null;
@@ -38,12 +40,11 @@ export default function MatchupEditRow({ matchup, slug, onSaved, onCancel }: Mat
 
   async function handleSave() {
     if (grossA === "" || handicapA === "" || pointsA === "" || grossB === "" || handicapB === "" || pointsB === "") {
-      setError("All fields are required.");
+      notify.error("All fields are required.");
       return;
     }
 
     setSaving(true);
-    setError(null);
     try {
       const result = await updateMatchup(slug, {
         matchupId: matchup.id,
@@ -59,11 +60,11 @@ export default function MatchupEditRow({ matchup, slug, onSaved, onCancel }: Mat
       if (result.success) {
         onSaved();
       } else {
-        setError(result.error);
+        notify.error(result.error);
       }
     } catch (err) {
       console.error("handleSave error:", err);
-      setError("Failed to save. Please try again.");
+      notify.error("Failed to save. Please try again.");
     }
     setSaving(false);
   }
@@ -78,24 +79,15 @@ export default function MatchupEditRow({ matchup, slug, onSaved, onCancel }: Mat
             <h3 className="font-display font-semibold uppercase tracking-wider text-sm text-text-primary">
               Edit Matchup — Week {matchup.weekNumber}
             </h3>
-            <button
-              onClick={onCancel}
-              className="text-sm font-display font-medium uppercase tracking-wider text-text-secondary hover:text-text-primary"
-            >
+            <Button variant="ghost" size="sm" onClick={onCancel}>
               Cancel
-            </button>
+            </Button>
           </div>
-
-          {error && (
-            <div className="mb-4 p-3 bg-error-bg border border-error-border rounded-lg text-sm font-sans text-error-text">
-              {error}
-            </div>
-          )}
 
           <div className="grid md:grid-cols-2 gap-4">
             {/* Team A */}
             <div className="space-y-3 p-3 bg-surface rounded-lg border border-border">
-              <h4 className="font-display font-semibold uppercase tracking-wider text-sm text-fairway">
+              <h4 className="font-display font-semibold uppercase tracking-wider text-sm text-primary">
                 {matchup.teamA.name}
               </h4>
               <div className="grid grid-cols-2 gap-3">
@@ -129,7 +121,7 @@ export default function MatchupEditRow({ matchup, slug, onSaved, onCancel }: Mat
                     id={`editSubA-${matchup.id}`}
                     checked={subA}
                     onChange={(e) => setSubA(e.target.checked)}
-                    className="w-3.5 h-3.5 text-fairway accent-fairway"
+                    className="w-3.5 h-3.5 text-primary accent-fairway"
                   />
                   <label htmlFor={`editSubA-${matchup.id}`} className="text-xs font-sans text-text-secondary">Sub</label>
                 </div>
@@ -148,7 +140,7 @@ export default function MatchupEditRow({ matchup, slug, onSaved, onCancel }: Mat
 
             {/* Team B */}
             <div className="space-y-3 p-3 bg-surface rounded-lg border border-border">
-              <h4 className="font-display font-semibold uppercase tracking-wider text-sm text-fairway">
+              <h4 className="font-display font-semibold uppercase tracking-wider text-sm text-primary">
                 {matchup.teamB.name}
               </h4>
               <div className="grid grid-cols-2 gap-3">
@@ -182,7 +174,7 @@ export default function MatchupEditRow({ matchup, slug, onSaved, onCancel }: Mat
                     id={`editSubB-${matchup.id}`}
                     checked={subB}
                     onChange={(e) => setSubB(e.target.checked)}
-                    className="w-3.5 h-3.5 text-fairway accent-fairway"
+                    className="w-3.5 h-3.5 text-primary accent-fairway"
                   />
                   <label htmlFor={`editSubB-${matchup.id}`} className="text-xs font-sans text-text-secondary">Sub</label>
                 </div>
@@ -202,15 +194,17 @@ export default function MatchupEditRow({ matchup, slug, onSaved, onCancel }: Mat
 
           {/* Points total & recalculate */}
           <div className="mt-3 flex items-center justify-between">
-            <button
+            <Button
+              variant="link"
+              size="sm"
+              className="px-0 normal-case font-sans font-normal text-info-text"
               onClick={handleRecalculatePoints}
               disabled={netA === null || netB === null}
-              className="text-sm font-sans text-info-text hover:underline disabled:opacity-50 disabled:no-underline"
             >
               Recalculate points from net scores
-            </button>
+            </Button>
             {pointsTotal !== null && (
-              <span className={`text-sm font-mono tabular-nums ${pointsTotal === 20 ? "text-fairway" : "text-error-text"}`}>
+              <span className={`text-sm font-mono tabular-nums ${pointsTotal === 20 ? "text-primary" : "text-error-text"}`}>
                 Total: {pointsTotal} / 20
               </span>
             )}
@@ -218,19 +212,18 @@ export default function MatchupEditRow({ matchup, slug, onSaved, onCancel }: Mat
 
           {/* Actions */}
           <div className="mt-4 flex gap-3">
-            <button
-              onClick={onCancel}
-              className="flex-1 py-2 bg-bunker/20 text-text-primary font-display font-semibold uppercase tracking-wider text-sm rounded-lg hover:bg-bunker/30"
-            >
+            <Button variant="secondary" className="flex-1" onClick={onCancel}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <SubmitButton
+              type="button"
+              pending={saving}
               onClick={handleSave}
               disabled={saving || grossA === "" || grossB === "" || handicapA === "" || handicapB === "" || pointsA === "" || pointsB === ""}
-              className="flex-1 py-2 bg-fairway text-white font-display font-semibold uppercase tracking-wider text-sm rounded-lg hover:bg-rough disabled:opacity-50"
+              className="flex-1"
             >
               {saving ? "Saving..." : "Save Changes"}
-            </button>
+            </SubmitButton>
           </div>
         </div>
       </td>
