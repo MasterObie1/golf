@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { Check, CircleCheck, Mail, TriangleAlert } from "lucide-react";
 import {
   generateScorecardLink,
   generateAllScorecardLinks,
@@ -24,6 +25,9 @@ import WeekPillSelector from "@/components/WeekPillSelector";
 import { getCourseWithHoles, type CourseWithHoles } from "@/lib/actions/courses";
 import ScorecardGrid from "@/components/ScorecardGrid";
 import ScorecardSummaryCard from "@/components/ScorecardSummary";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/composite";
 import type { AdminTeam } from "@/lib/types/admin";
 
 interface MatchupOption {
@@ -56,7 +60,6 @@ export default function ScorecardsTab({
   const initialDefaultApplied = useRef(false);
   const [scorecards, setScorecards] = useState<ScorecardSummaryType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [filter, setFilter] = useState<"all" | "in_progress" | "completed" | "approved">("all");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedDetail, setExpandedDetail] = useState<ScorecardDetail | null>(null);
@@ -198,7 +201,6 @@ export default function ScorecardsTab({
   }
 
   async function handleGenerateLink(teamId: number) {
-    setMessage(null);
     setLinkCopied(-1); // Use -1 as a "generating..." sentinel
 
     // Reserve clipboard write NOW, in the user gesture context.
@@ -245,61 +247,59 @@ export default function ScorecardsTab({
         if (clipboardOk) {
           setLinkCopied(teamId);
           linkTimerRef.current = setTimeout(() => setLinkCopied(null), 3000);
-          setMessage({ type: "success", text: "Scorecard link copied to clipboard!" });
+          notify.success("Scorecard link copied to clipboard!");
         } else {
           setLinkCopied(null);
-          setMessage({ type: "success", text: fullUrl });
+          notify.success(fullUrl);
         }
         await loadScorecards();
       } else {
         rejectUrl(new Error(result.error));
         setLinkCopied(null);
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleGenerateLink error:", error);
       rejectUrl(new Error("Failed to generate link."));
       setLinkCopied(null);
-      setMessage({ type: "error", text: "Failed to generate link." });
+      notify.error("Failed to generate link.");
     }
   }
 
   async function handleEmailLink(teamId: number) {
-    setMessage(null);
     setEmailSending(teamId);
     try {
       const result = await emailScorecardLink(slug, teamId, weekNumber, activeSeason?.id);
       if (result.success) {
         setEmailSent(teamId);
         emailTimerRef.current = setTimeout(() => setEmailSent(null), 3000);
-        setMessage({ type: "success", text: "Scorecard link emailed!" });
+        notify.success("Scorecard link emailed!");
         await loadScorecards();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleEmailLink error:", error);
-      setMessage({ type: "error", text: "Failed to send email." });
+      notify.error("Failed to send email.");
     }
     setEmailSending(null);
   }
 
   async function handleGenerateAllLinks() {
-    setMessage(null);
     setBulkGenerating(true);
     setBulkResults(null);
     try {
       const result = await generateAllScorecardLinks(slug, weekNumber, activeSeason?.id);
       if (result.success) {
         setBulkResults(result.data);
-        setMessage({ type: "success", text: `Generated scorecard links for ${result.data.filter((r) => r.url).length} teams.` });
+        notify.success(`Generated scorecard links for ${result.data.filter((r) => r.url).length} teams.`);
         await loadScorecards();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleGenerateAllLinks error:", error);
-      setMessage({ type: "error", text: "Failed to generate links." });
+      notify.error("Failed to generate links.");
     }
     setBulkGenerating(false);
   }
@@ -323,7 +323,7 @@ export default function ScorecardsTab({
       setBulkLinksCopied(true);
       bulkTimerRef.current = setTimeout(() => setBulkLinksCopied(false), 3000);
     } catch {
-      setMessage({ type: "error", text: "Copy failed — please select and copy manually." });
+      notify.error("Copy failed — please select and copy manually.");
     }
   }
 
@@ -346,52 +346,49 @@ export default function ScorecardsTab({
       }
     } catch (error) {
       console.error("handleExpand error:", error);
-      setMessage({ type: "error", text: "Failed to load scorecard details." });
+      notify.error("Failed to load scorecard details.");
     }
   }
 
   async function handleApprove(scorecardId: number) {
-    setMessage(null);
     try {
       const result = await approveScorecard(slug, scorecardId);
       if (result.success) {
-        setMessage({ type: "success", text: "Scorecard approved!" });
+        notify.success("Scorecard approved!");
         setExpandedId(null);
         setExpandedDetail(null);
         setEditingId(null);
         setEditingDetail(null);
         await loadScorecards();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleApprove error:", error);
-      setMessage({ type: "error", text: "Failed to approve scorecard." });
+      notify.error("Failed to approve scorecard.");
     }
   }
 
   async function handleReject(scorecardId: number) {
-    setMessage(null);
     try {
       const result = await rejectScorecard(slug, scorecardId);
       if (result.success) {
-        setMessage({ type: "success", text: "Scorecard rejected. Player can edit and resubmit." });
+        notify.success("Scorecard rejected. Player can edit and resubmit.");
         setExpandedId(null);
         setExpandedDetail(null);
         await loadScorecards();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleReject error:", error);
-      setMessage({ type: "error", text: "Failed to reject scorecard." });
+      notify.error("Failed to reject scorecard.");
     }
   }
 
   // Manual entry: create scorecard and enter editing mode
   async function handleManualCreate() {
     if (!manualTeamId) return;
-    setMessage(null);
     setCreating(true);
     try {
       const result = await adminCreateScorecard(
@@ -404,7 +401,7 @@ export default function ScorecardsTab({
         manualPlayerName || null
       );
       if (result.success) {
-        setMessage({ type: "success", text: "Scorecard created. Enter scores below." });
+        notify.success("Scorecard created. Enter scores below.");
         // Enter editing mode
         setEditingId(result.data.id);
         setEditingDetail(result.data);
@@ -417,11 +414,11 @@ export default function ScorecardsTab({
         setShowManualEntry(false);
         await loadScorecards();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleManualCreate error:", error);
-      setMessage({ type: "error", text: "Failed to create scorecard." });
+      notify.error("Failed to create scorecard.");
     }
     setCreating(false);
   }
@@ -438,7 +435,7 @@ export default function ScorecardsTab({
       }
     } catch (error) {
       console.error("handleStartEditing error:", error);
-      setMessage({ type: "error", text: "Failed to load scorecard for editing." });
+      notify.error("Failed to load scorecard for editing.");
     }
   }
 
@@ -448,43 +445,41 @@ export default function ScorecardsTab({
     try {
       const result = await adminSaveHoleScore(slug, scorecardId, holeNumber, strokes);
       if (!result.success) {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleAdminSaveHoleScore error:", error);
-      setMessage({ type: "error", text: "Failed to save score." });
+      notify.error("Failed to save score.");
     }
     setSavingScore(false);
   }
 
   // Complete and approve in one step
   async function handleCompleteAndApprove(scorecardId: number) {
-    setMessage(null);
     try {
       const result = await adminCompleteAndApproveScorecard(slug, scorecardId);
       if (result.success) {
-        setMessage({ type: "success", text: "Scorecard completed and approved!" });
+        notify.success("Scorecard completed and approved!");
         setEditingId(null);
         setEditingDetail(null);
         setExpandedId(null);
         setExpandedDetail(null);
         await loadScorecards();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleCompleteAndApprove error:", error);
-      setMessage({ type: "error", text: "Failed to complete scorecard." });
+      notify.error("Failed to complete scorecard.");
     }
   }
 
   // Link/unlink a scorecard to a matchup
   async function handleLinkMatchup(scorecardId: number, matchupId: number | null) {
-    setMessage(null);
     try {
       const result = await adminLinkScorecardToMatchup(slug, scorecardId, matchupId, null);
       if (result.success) {
-        setMessage({ type: "success", text: matchupId ? "Scorecard linked to matchup." : "Matchup link removed." });
+        notify.success(matchupId ? "Scorecard linked to matchup." : "Matchup link removed.");
         await loadScorecards();
         // Refresh expanded detail if this is the expanded card
         if (expandedId === scorecardId) {
@@ -492,11 +487,11 @@ export default function ScorecardsTab({
           if (detail.success) setExpandedDetail(detail.data);
         }
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleLinkMatchup error:", error);
-      setMessage({ type: "error", text: "Failed to link matchup." });
+      notify.error("Failed to link matchup.");
     }
   }
 
@@ -515,16 +510,6 @@ export default function ScorecardsTab({
 
   return (
     <div>
-      {message && (
-        <div className={`mb-6 p-4 rounded-lg font-sans text-sm ${
-          message.type === "success"
-            ? "bg-fairway/10 border border-fairway/30 text-fairway"
-            : "bg-error-bg border border-error-border text-error-text"
-        }`}>
-          {message.text}
-        </div>
-      )}
-
       <div className="mb-6 space-y-3">
         <h2 className="text-xl font-display font-semibold uppercase tracking-wider text-scorecard-pencil">
           Scorecards
@@ -540,14 +525,11 @@ export default function ScorecardsTab({
       {/* Filter Bar */}
       <div className="flex gap-2 mb-4">
         {(["all", "in_progress", "completed", "approved"] as const).map((f) => (
-          <button
+          <Button
             key={f}
+            size="sm"
+            variant={filter === f ? "default" : "secondary"}
             onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 text-xs font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
-              filter === f
-                ? "bg-fairway text-white"
-                : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
-            }`}
           >
             {f === "all" ? "All" : f === "in_progress" ? "In Progress" : f === "completed" ? "Completed" : "Approved"}
             {f !== "all" && (
@@ -555,7 +537,7 @@ export default function ScorecardsTab({
                 ({scorecards.filter((sc) => sc.status === f).length})
               </span>
             )}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -573,13 +555,14 @@ export default function ScorecardsTab({
             {/* Generate All Links button */}
             {teamsWithoutScorecard.length > 0 && (
               <div className="flex items-center gap-2">
-                <button
+                <SubmitButton
+                  type="button"
+                  pending={bulkGenerating}
                   onClick={handleGenerateAllLinks}
                   disabled={bulkGenerating}
-                  className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider bg-fairway text-white rounded-lg hover:bg-rough transition-colors disabled:opacity-50"
                 >
                   {bulkGenerating ? "Generating..." : "Generate All Links"}
-                </button>
+                </SubmitButton>
                 <span className="text-xs font-sans text-text-muted">
                   {teamsWithoutScorecard.length} team{teamsWithoutScorecard.length !== 1 ? "s" : ""} remaining
                 </span>
@@ -593,23 +576,20 @@ export default function ScorecardsTab({
                   <span className="text-xs font-display font-semibold uppercase tracking-wider text-text-secondary">
                     Generated Links
                   </span>
-                  <button
+                  <Button
+                    size="sm"
+                    variant={bulkLinksCopied ? "default" : "outline"}
                     onClick={handleCopyAllLinks}
-                    className={`px-3 py-1 text-xs font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
-                      bulkLinksCopied
-                        ? "bg-fairway text-white"
-                        : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
-                    }`}
                   >
                     {bulkLinksCopied ? "Copied!" : "Copy All Links"}
-                  </button>
+                  </Button>
                 </div>
                 <div className="space-y-1">
                   {bulkResults.map((r) => (
                     <div key={r.teamId} className="flex items-center gap-2 text-sm font-sans">
                       <span className="font-display font-medium text-text-primary min-w-[120px]">{r.teamName}</span>
                       {r.url ? (
-                        <span className="text-fairway text-xs truncate">Link ready</span>
+                        <span className="text-primary text-xs truncate">Link ready</span>
                       ) : (
                         <span className="text-error-text text-xs">Failed</span>
                       )}
@@ -622,12 +602,14 @@ export default function ScorecardsTab({
                     </div>
                   ))}
                 </div>
-                <button
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="text-text-muted hover:text-text-secondary"
                   onClick={() => setBulkResults(null)}
-                  className="text-xs font-display text-text-muted hover:text-text-secondary uppercase tracking-wider"
                 >
                   Dismiss
-                </button>
+                </Button>
               </div>
             )}
 
@@ -637,44 +619,38 @@ export default function ScorecardsTab({
                 const hasScorecard = teamsWithScorecard.has(team.id);
                 return (
                   <div key={team.id} className="flex items-center gap-1">
-                    <button
+                    <Button
+                      size="sm"
+                      variant={linkCopied === team.id ? "default" : "outline"}
                       onClick={() => handleGenerateLink(team.id)}
                       disabled={linkCopied === -1}
-                      className={`px-3 py-1.5 text-sm font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
-                        linkCopied === team.id
-                          ? "bg-fairway text-white"
-                          : linkCopied === -1
-                            ? "bg-bunker/20 text-text-muted animate-pulse"
-                            : hasScorecard
-                              ? "bg-fairway/10 border border-fairway/30 text-fairway hover:bg-fairway/20"
-                              : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
+                      className={`${linkCopied === -1 ? "animate-pulse" : ""} ${
+                        hasScorecard && linkCopied !== team.id ? "text-primary border-primary/30" : ""
                       }`}
                     >
                       {linkCopied === team.id ? "Copied!" : linkCopied === -1 ? "..." : team.name}
-                    </button>
+                    </Button>
                     {emailEnabled && team.email && (
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => handleEmailLink(team.id)}
                         disabled={emailSending === team.id}
                         title={`Email scorecard link to ${team.email}`}
-                        className={`p-1.5 rounded-lg transition-colors ${
+                        className={
                           emailSent === team.id
-                            ? "text-fairway"
+                            ? "text-primary"
                             : emailSending === team.id
                               ? "text-text-muted animate-pulse"
-                              : "text-text-muted hover:text-fairway hover:bg-fairway/10"
-                        }`}
+                              : "text-text-muted hover:text-primary"
+                        }
                       >
                         {emailSent === team.id ? (
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
+                          <CircleCheck className="size-4" strokeWidth={1.75} aria-hidden />
                         ) : (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                          </svg>
+                          <Mail className="size-4" strokeWidth={1.75} aria-hidden />
                         )}
-                      </button>
+                      </Button>
                     )}
                   </div>
                 );
@@ -690,19 +666,14 @@ export default function ScorecardsTab({
           <h3 className="text-sm font-display font-semibold uppercase tracking-wider text-text-secondary">
             Manual Entry
           </h3>
-          <button
+          <Button
+            size="sm"
+            variant={showManualEntry ? "default" : "outline"}
             onClick={() => setShowManualEntry(!showManualEntry)}
             disabled={!courseLoaded || !course}
-            className={`px-3 py-1.5 text-xs font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
-              showManualEntry
-                ? "bg-fairway text-white"
-                : !course
-                  ? "bg-bunker/10 text-text-muted cursor-not-allowed"
-                  : "bg-scorecard-paper border border-scorecard-line/50 text-text-secondary hover:border-fairway hover:text-fairway"
-            }`}
           >
             {showManualEntry ? "Close" : "Enter Scores"}
-          </button>
+          </Button>
         </div>
 
         {!courseLoaded ? (
@@ -722,7 +693,7 @@ export default function ScorecardsTab({
                 <select
                   value={manualTeamId}
                   onChange={(e) => setManualTeamId(e.target.value ? parseInt(e.target.value) : "")}
-                  className="pencil-input w-full"
+                  className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
                 >
                   <option value="">Select team...</option>
                   {teams.map((t) => (
@@ -755,7 +726,7 @@ export default function ScorecardsTab({
                 <select
                   value={manualMatchupId}
                   onChange={(e) => setManualMatchupId(e.target.value ? parseInt(e.target.value) : "")}
-                  className="pencil-input w-full"
+                  className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
                 >
                   <option value="">No matchup</option>
                   {weekMatchups.map((m) => (
@@ -767,13 +738,14 @@ export default function ScorecardsTab({
               </div>
             )}
 
-            <button
+            <SubmitButton
+              type="button"
+              pending={creating}
               onClick={handleManualCreate}
               disabled={!manualTeamId || creating}
-              className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider bg-fairway text-white rounded-lg hover:bg-rough transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {creating ? "Creating..." : "Create & Start Entering"}
-            </button>
+            </SubmitButton>
           </div>
         ) : null}
       </div>
@@ -828,15 +800,15 @@ export default function ScorecardsTab({
                     if (matchupGross == null) return null;
                     if (sc.grossTotal === matchupGross) {
                       return (
-                        <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-sans font-medium text-fairway bg-fairway/10 rounded-full border border-fairway/20">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-sans font-medium text-primary bg-fairway/10 rounded-full border border-fairway/20">
+                          <Check className="size-3" strokeWidth={1.75} aria-hidden />
                           Matchup {matchupGross}
                         </span>
                       );
                     }
                     return (
                       <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-sans font-bold text-error-text bg-error-bg rounded-full border border-error-border">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                        <TriangleAlert className="size-3" strokeWidth={1.75} aria-hidden />
                         Matchup has {matchupGross}
                       </span>
                     );
@@ -884,13 +856,13 @@ export default function ScorecardsTab({
                     if (matchupGross == null) return null;
                     const matches = expandedDetail.grossTotal === matchupGross;
                     return matches ? (
-                      <div className="mt-3 flex items-center gap-1.5 text-sm font-sans text-fairway">
-                        <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      <div className="mt-3 flex items-center gap-1.5 text-sm font-sans text-primary">
+                        <Check className="size-4 flex-shrink-0" strokeWidth={1.75} aria-hidden />
                         <span>Matches matchup score</span>
                       </div>
                     ) : (
                       <div className="mt-3 p-3 flex items-start gap-2.5 text-sm font-sans font-medium text-error-text bg-error-bg border border-error-border rounded-lg">
-                        <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                        <TriangleAlert className="size-4 flex-shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden />
                         <span>Score mismatch — scorecard gross is <strong className="font-mono tabular-nums">{expandedDetail.grossTotal}</strong>, matchup has <strong className="font-mono tabular-nums">{matchupGross}</strong></span>
                       </div>
                     );
@@ -908,7 +880,7 @@ export default function ScorecardsTab({
                           const val = e.target.value ? parseInt(e.target.value) : null;
                           handleLinkMatchup(sc.id, val);
                         }}
-                        className="pencil-input text-sm py-1"
+                        className="h-9 w-auto rounded-md border border-input bg-card px-2 text-sm text-foreground"
                       >
                         <option value="">None</option>
                         {weekMatchups.map((m) => (
@@ -928,89 +900,67 @@ export default function ScorecardsTab({
                   <div className="mt-4 flex flex-wrap gap-3">
                     {/* Edit Scores button — for non-approved scorecards */}
                     {sc.status !== "approved" && editingId !== sc.id && (
-                      <button
-                        onClick={() => handleStartEditing(sc.id)}
-                        className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider bg-board-yellow/20 text-board-yellow border border-board-yellow/30 rounded-lg hover:bg-board-yellow/30 transition-colors"
-                      >
+                      <Button variant="accent" onClick={() => handleStartEditing(sc.id)}>
                         Edit Scores
-                      </button>
+                      </Button>
                     )}
 
                     {/* Complete & Approve button — when editing */}
                     {editingId === sc.id && (
                       <>
-                        <button
-                          onClick={() => handleCompleteAndApprove(sc.id)}
-                          className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider bg-fairway text-white rounded-lg hover:bg-rough transition-colors"
-                        >
+                        <Button onClick={() => handleCompleteAndApprove(sc.id)}>
                           Complete & Approve
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="secondary"
                           onClick={() => {
                             setEditingId(null);
                             setEditingDetail(null);
                             // Refresh the detail to show updated scores in read-only mode
                             handleExpand(sc.id);
                           }}
-                          className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider bg-bunker/20 text-text-secondary rounded-lg hover:bg-bunker/30 transition-colors"
                         >
                           Done Editing
-                        </button>
+                        </Button>
                       </>
                     )}
 
                     {/* Regenerate Link */}
                     {editingId !== sc.id && (
-                      <button
+                      <Button
+                        variant={linkCopied === sc.teamId ? "default" : "secondary"}
                         onClick={() => handleGenerateLink(sc.teamId)}
                         disabled={linkCopied === -1}
-                        className={`px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
-                          linkCopied === sc.teamId
-                            ? "bg-fairway text-white"
-                            : linkCopied === -1
-                              ? "bg-bunker/20 text-text-muted animate-pulse"
-                              : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
-                        }`}
+                        className={linkCopied === -1 ? "animate-pulse" : ""}
                       >
                         {linkCopied === sc.teamId ? "Copied!" : linkCopied === -1 ? "Generating..." : "Copy Link"}
-                      </button>
+                      </Button>
                     )}
 
                     {/* Email Link */}
                     {editingId !== sc.id && emailEnabled && teamEmailMap.get(sc.teamId) && (
-                      <button
+                      <Button
+                        variant={emailSent === sc.teamId ? "default" : "secondary"}
                         onClick={() => handleEmailLink(sc.teamId)}
                         disabled={emailSending === sc.teamId}
-                        className={`px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider rounded-lg transition-colors ${
-                          emailSent === sc.teamId
-                            ? "bg-fairway text-white"
-                            : emailSending === sc.teamId
-                              ? "bg-bunker/20 text-text-muted animate-pulse"
-                              : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
-                        }`}
+                        className={emailSending === sc.teamId ? "animate-pulse" : ""}
                       >
                         {emailSent === sc.teamId
                           ? "Sent!"
                           : emailSending === sc.teamId
                             ? "Sending..."
                             : "Email Link"}
-                      </button>
+                      </Button>
                     )}
 
                     {sc.status === "completed" && editingId !== sc.id && (
                       <>
-                        <button
-                          onClick={() => handleApprove(sc.id)}
-                          className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider bg-fairway text-white rounded-lg hover:bg-rough transition-colors"
-                        >
+                        <Button onClick={() => handleApprove(sc.id)}>
                           Approve
-                        </button>
-                        <button
-                          onClick={() => handleReject(sc.id)}
-                          className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider bg-board-red/80 text-white rounded-lg hover:bg-board-red transition-colors"
-                        >
+                        </Button>
+                        <Button variant="destructive" onClick={() => handleReject(sc.id)}>
                           Reject
-                        </button>
+                        </Button>
                       </>
                     )}
 
@@ -1021,10 +971,8 @@ export default function ScorecardsTab({
                     )}
 
                     {sc.status === "approved" && editingId !== sc.id && (
-                      <span className="px-4 py-2 text-sm font-sans text-fairway flex items-center gap-1">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
+                      <span className="px-4 py-2 text-sm font-sans text-primary flex items-center gap-1">
+                        <CircleCheck className="size-4" strokeWidth={1.75} aria-hidden />
                         Approved — gross total available for matchup/score entry
                       </span>
                     )}
