@@ -20,7 +20,7 @@ export default async function LeagueLayout({
     isLeagueAdmin(slug),
   ]);
   if (!league) {
-    return children; // TEMP-TEST: let page-level notFound fire instead
+    notFound();
   }
 
   const links = leagueNavLinks({
