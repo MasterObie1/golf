@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { Check, CircleCheck, TriangleAlert } from "lucide-react";
 import {
   previewMatchup,
   submitMatchup,
@@ -18,7 +19,19 @@ import {
 } from "@/lib/actions/schedule";
 import { getApprovedScorecardScoresForWeek } from "@/lib/actions/scorecards";
 import WeekPillSelector from "@/components/WeekPillSelector";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { notify } from "@/lib/toast";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { SubmitButton } from "@/components/composite";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { AdminTeam, AdminMatchup } from "@/lib/types/admin";
 
 interface MatchupsTabProps {
@@ -71,7 +84,6 @@ export default function MatchupsTab({
 
   // UI state
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; matchupId: number }>({ open: false, matchupId: 0 });
   const [editingMatchupId, setEditingMatchupId] = useState<number | null>(null);
 
@@ -95,7 +107,6 @@ export default function MatchupsTab({
     setIsForfeitMode(false);
     setWinningTeamId("");
     setForfeitingTeamId("");
-    setMessage(null);
   }
 
   // Load schedule for current week
@@ -197,7 +208,6 @@ export default function MatchupsTab({
     setTeamBIsSub(false);
     setPreview(null);
     setIsForfeitMode(false);
-    setMessage(null);
     setTimeout(() => {
       entryFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
@@ -205,28 +215,27 @@ export default function MatchupsTab({
 
   async function handlePreview() {
     if (teamAId === "" || teamBId === "" || teamAGross === "" || teamBGross === "") {
-      setMessage({ type: "error", text: "Please fill in all required fields." });
+      notify.error("Please fill in all required fields.");
       return;
     }
     if (teamAId === teamBId) {
-      setMessage({ type: "error", text: "Please select two different teams." });
+      notify.error("Please select two different teams.");
       return;
     }
     if (isWeekOne && (teamAHandicapManual === "" || teamBHandicapManual === "")) {
-      setMessage({ type: "error", text: "Week 1 requires manual handicap entry." });
+      notify.error("Week 1 requires manual handicap entry.");
       return;
     }
     if (teamAIsSub && teamAHandicapManual === "") {
-      setMessage({ type: "error", text: "Substitute players require manual handicap entry." });
+      notify.error("Substitute players require manual handicap entry.");
       return;
     }
     if (teamBIsSub && teamBHandicapManual === "") {
-      setMessage({ type: "error", text: "Substitute players require manual handicap entry." });
+      notify.error("Substitute players require manual handicap entry.");
       return;
     }
 
     setLoading(true);
-    setMessage(null);
     try {
       const result = await previewMatchup(
         slug,
@@ -245,11 +254,11 @@ export default function MatchupsTab({
         setTeamAPointsOverride(result.data.teamAPoints);
         setTeamBPointsOverride(result.data.teamBPoints);
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handlePreview error:", error);
-      setMessage({ type: "error", text: "Failed to generate preview. Please try again." });
+      notify.error("Failed to generate preview. Please try again.");
     }
     setLoading(false);
   }
@@ -311,7 +320,7 @@ export default function MatchupsTab({
         preview.teamBIsSub
       );
       if (result.success) {
-        setMessage({ type: "success", text: "Matchup submitted successfully!" });
+        notify.success("Matchup submitted successfully!");
         setPreview(null);
         setTeamAId("");
         setTeamBId("");
@@ -323,46 +332,44 @@ export default function MatchupsTab({
         setTeamBIsSub(false);
         await refreshData();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleSubmit error:", error);
-      setMessage({ type: "error", text: "Failed to submit matchup. Please try again." });
+      notify.error("Failed to submit matchup. Please try again.");
     }
     setLoading(false);
   }
 
   function handleCancelPreview() {
     setPreview(null);
-    setMessage(null);
   }
 
   async function handleSubmitForfeit() {
     if (winningTeamId === "" || forfeitingTeamId === "") {
-      setMessage({ type: "error", text: "Please select both teams." });
+      notify.error("Please select both teams.");
       return;
     }
     if (winningTeamId === forfeitingTeamId) {
-      setMessage({ type: "error", text: "Please select two different teams." });
+      notify.error("Please select two different teams.");
       return;
     }
 
     setLoading(true);
-    setMessage(null);
     try {
       const result = await submitForfeit(slug, weekNumber, winningTeamId as number, forfeitingTeamId as number);
       if (result.success) {
-        setMessage({ type: "success", text: "Forfeit recorded successfully!" });
+        notify.success("Forfeit recorded successfully!");
         setWinningTeamId("");
         setForfeitingTeamId("");
         setIsForfeitMode(false);
         await refreshData();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleSubmitForfeit error:", error);
-      setMessage({ type: "error", text: "Failed to record forfeit. Please try again." });
+      notify.error("Failed to record forfeit. Please try again.");
     }
     setLoading(false);
   }
@@ -378,29 +385,46 @@ export default function MatchupsTab({
     try {
       const result = await deleteMatchup(slug, matchupId);
       if (result.success) {
-        setMessage({ type: "success", text: "Matchup deleted successfully!" });
+        notify.success("Matchup deleted successfully!");
         await refreshData();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("executeDeleteMatchup error:", error);
-      setMessage({ type: "error", text: "Failed to delete matchup. Please try again." });
+      notify.error("Failed to delete matchup. Please try again.");
     }
     setLoading(false);
   }
 
   return (
     <>
-      <ConfirmDialog
+      <AlertDialog
         open={deleteConfirm.open}
-        title="Delete Matchup"
-        message="Are you sure you want to delete this matchup? Team stats will be reversed."
-        confirmLabel="Delete"
-        variant="danger"
-        onConfirm={executeDeleteMatchup}
-        onCancel={() => setDeleteConfirm({ open: false, matchupId: 0 })}
-      />
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirm({ open: false, matchupId: 0 });
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Matchup</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this matchup? Team stats will be reversed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirm({ open: false, matchupId: 0 })}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "destructive" })}
+              onClick={executeDeleteMatchup}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* Week Selector */}
       <div className="mb-6">
         <WeekPillSelector
@@ -415,19 +439,6 @@ export default function MatchupsTab({
           </p>
         )}
       </div>
-
-      {/* Message Banner */}
-      {message && (
-        <div
-          className={`mb-6 p-4 rounded-lg font-sans ${
-            message.type === "success"
-              ? "bg-fairway/10 border border-fairway/30 text-fairway"
-              : "bg-error-bg border border-error-border text-error-text"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
 
       {/* Schedule Context */}
       {scheduleMatches.length > 0 && !preview && (
@@ -456,9 +467,7 @@ export default function MatchupsTab({
               >
                 <div className="flex items-center gap-2">
                   {match.status === "completed" && (
-                    <svg className="w-5 h-5 text-fairway" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
+                    <CircleCheck className="size-4 text-primary" strokeWidth={1.75} aria-hidden />
                   )}
                   <span className="font-sans font-medium text-text-primary">
                     {match.teamA.name}
@@ -476,18 +485,15 @@ export default function MatchupsTab({
                     </span>
                   )}
                   {match.status === "completed" && match.matchup && (
-                    <span className="text-sm font-mono tabular-nums text-fairway ml-2">
+                    <span className="text-sm font-mono tabular-nums text-primary ml-2">
                       ({match.matchup.teamAPoints} - {match.matchup.teamBPoints})
                     </span>
                   )}
                 </div>
                 {match.status === "scheduled" && match.teamB && (
-                  <button
-                    onClick={() => handleEnterScores(match)}
-                    className="px-3 py-1.5 text-sm font-display font-semibold uppercase tracking-wider bg-fairway text-white rounded-lg hover:bg-rough"
-                  >
+                  <Button size="sm" onClick={() => handleEnterScores(match)}>
                     Enter Scores
-                  </button>
+                  </Button>
                 )}
                 {match.status === "cancelled" && (
                   <span className="text-xs font-display font-medium uppercase tracking-wider text-text-light">CANCELLED</span>
@@ -505,19 +511,14 @@ export default function MatchupsTab({
             <h2 className="text-xl font-display font-semibold uppercase tracking-wider text-text-primary">
               {isForfeitMode ? "Record Forfeit" : "Enter Matchup Results"}
             </h2>
-            <button
+            <Button
+              variant={isForfeitMode ? "destructive" : "secondary"}
               onClick={() => {
                 setIsForfeitMode(!isForfeitMode);
-                setMessage(null);
               }}
-              className={`px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider rounded-lg ${
-                isForfeitMode
-                  ? "bg-error-bg text-board-red hover:bg-error-bg/80"
-                  : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
-              }`}
             >
               {isForfeitMode ? "Cancel Forfeit" : "Record Forfeit"}
-            </button>
+            </Button>
           </div>
 
           {/* Off-schedule warning */}
@@ -539,13 +540,13 @@ export default function MatchupsTab({
 
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="p-4 bg-success-bg rounded-lg border border-success-border">
-                  <label className="block font-display font-medium text-fairway uppercase tracking-wider text-sm mb-2">
+                  <label className="block font-display font-medium text-primary uppercase tracking-wider text-sm mb-2">
                     Winning Team (receives 20 pts)
                   </label>
                   <select
                     value={winningTeamId}
                     onChange={(e) => setWinningTeamId(e.target.value ? parseInt(e.target.value) : "")}
-                    className="w-full pencil-input"
+                    className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
                   >
                     <option value="">-- Select Team --</option>
                     {teams.map((team) => (
@@ -561,7 +562,7 @@ export default function MatchupsTab({
                   <select
                     value={forfeitingTeamId}
                     onChange={(e) => setForfeitingTeamId(e.target.value ? parseInt(e.target.value) : "")}
-                    className="w-full pencil-input"
+                    className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
                   >
                     <option value="">-- Select Team --</option>
                     {teams.map((team) => (
@@ -571,20 +572,23 @@ export default function MatchupsTab({
                 </div>
               </div>
 
-              <button
+              <SubmitButton
+                type="button"
+                variant="destructive"
+                pending={loading}
                 onClick={handleSubmitForfeit}
                 disabled={loading || teams.length < 2}
-                className="w-full py-3 bg-board-red text-white font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-board-red/90 disabled:opacity-50"
+                className="w-full"
               >
                 {loading ? "Recording..." : "Record Forfeit"}
-              </button>
+              </SubmitButton>
             </div>
           ) : (
             <>
               <div className="grid md:grid-cols-2 gap-8">
                 {/* Team A */}
                 <div className="space-y-4 p-4 bg-surface rounded-lg border border-border">
-                  <h3 className="font-display font-semibold text-lg uppercase tracking-wider text-fairway">Team A</h3>
+                  <h3 className="font-display font-semibold text-lg uppercase tracking-wider text-primary">Team A</h3>
                   <div>
                     <label className="block font-display font-medium text-text-secondary uppercase tracking-wider text-sm mb-1">
                       Select Team
@@ -592,7 +596,7 @@ export default function MatchupsTab({
                     <select
                       value={teamAId}
                       onChange={(e) => setTeamAId(e.target.value ? parseInt(e.target.value) : "")}
-                      className="w-full pencil-input"
+                      className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
                     >
                       <option value="">-- Select Team --</option>
                       {teams.map((team) => (
@@ -616,13 +620,13 @@ export default function MatchupsTab({
                           />
                           {teamAId !== "" && teamAGross !== "" && scorecardScores[teamAId as number] != null && (
                             teamAGross === scorecardScores[teamAId as number] ? (
-                              <div className="mt-1 flex items-center gap-1 text-xs font-sans text-fairway">
-                                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                              <div className="mt-1 flex items-center gap-1 text-xs font-sans text-primary">
+                                <Check className="size-3.5 flex-shrink-0" strokeWidth={1.75} aria-hidden />
                                 <span>Matches scorecard</span>
                               </div>
                             ) : (
                               <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-sans font-medium text-error-text bg-error-bg border border-error-border rounded-lg">
-                                <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                                <TriangleAlert className="size-4 flex-shrink-0" strokeWidth={1.75} aria-hidden />
                                 <span>Score mismatch — scorecard has <strong className="font-mono tabular-nums">{scorecardScores[teamAId as number]}</strong></span>
                               </div>
                             )
@@ -650,7 +654,7 @@ export default function MatchupsTab({
                       id="teamAIsSub"
                       checked={teamAIsSub}
                       onChange={(e) => setTeamAIsSub(e.target.checked)}
-                      className="w-4 h-4 text-fairway accent-fairway"
+                      className="w-4 h-4 text-primary accent-fairway"
                     />
                     <label htmlFor="teamAIsSub" className="text-sm font-sans text-text-secondary">
                       Substitute played
@@ -660,7 +664,7 @@ export default function MatchupsTab({
 
                 {/* Team B */}
                 <div className="space-y-4 p-4 bg-surface rounded-lg border border-border">
-                  <h3 className="font-display font-semibold text-lg uppercase tracking-wider text-fairway">Team B</h3>
+                  <h3 className="font-display font-semibold text-lg uppercase tracking-wider text-primary">Team B</h3>
                   <div>
                     <label className="block font-display font-medium text-text-secondary uppercase tracking-wider text-sm mb-1">
                       Select Team
@@ -668,7 +672,7 @@ export default function MatchupsTab({
                     <select
                       value={teamBId}
                       onChange={(e) => setTeamBId(e.target.value ? parseInt(e.target.value) : "")}
-                      className="w-full pencil-input"
+                      className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
                     >
                       <option value="">-- Select Team --</option>
                       {teams.map((team) => (
@@ -692,13 +696,13 @@ export default function MatchupsTab({
                           />
                           {teamBId !== "" && teamBGross !== "" && scorecardScores[teamBId as number] != null && (
                             teamBGross === scorecardScores[teamBId as number] ? (
-                              <div className="mt-1 flex items-center gap-1 text-xs font-sans text-fairway">
-                                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                              <div className="mt-1 flex items-center gap-1 text-xs font-sans text-primary">
+                                <Check className="size-3.5 flex-shrink-0" strokeWidth={1.75} aria-hidden />
                                 <span>Matches scorecard</span>
                               </div>
                             ) : (
                               <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-sans font-medium text-error-text bg-error-bg border border-error-border rounded-lg">
-                                <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                                <TriangleAlert className="size-4 flex-shrink-0" strokeWidth={1.75} aria-hidden />
                                 <span>Score mismatch — scorecard has <strong className="font-mono tabular-nums">{scorecardScores[teamBId as number]}</strong></span>
                               </div>
                             )
@@ -726,7 +730,7 @@ export default function MatchupsTab({
                       id="teamBIsSub"
                       checked={teamBIsSub}
                       onChange={(e) => setTeamBIsSub(e.target.checked)}
-                      className="w-4 h-4 text-fairway accent-fairway"
+                      className="w-4 h-4 text-primary accent-fairway"
                     />
                     <label htmlFor="teamBIsSub" className="text-sm font-sans text-text-secondary">
                       Substitute played
@@ -736,13 +740,15 @@ export default function MatchupsTab({
               </div>
 
               <div className="mt-8">
-                <button
+                <SubmitButton
+                  type="button"
+                  pending={loading}
                   onClick={handlePreview}
                   disabled={loading || teams.length < 2}
-                  className="w-full py-3 bg-fairway text-white font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-rough disabled:opacity-50"
+                  className="w-full"
                 >
                   {loading ? "Loading..." : "Preview Results"}
-                </button>
+                </SubmitButton>
               </div>
             </>
           )}
@@ -811,7 +817,7 @@ export default function MatchupsTab({
           {teamAPointsOverride !== "" && teamBPointsOverride !== "" && (
             <div className={`mt-4 p-3 rounded-lg font-mono tabular-nums ${
               Number(teamAPointsOverride) + Number(teamBPointsOverride) === 20
-                ? "bg-fairway/10 border border-fairway/30 text-fairway"
+                ? "bg-fairway/10 border border-fairway/30 text-primary"
                 : "bg-error-bg border border-error-border text-error-text"
             }`}>
               Total: {Number(teamAPointsOverride) + Number(teamBPointsOverride)} / 20 points
@@ -833,7 +839,7 @@ export default function MatchupsTab({
             if (mismatches.length === 0) return null;
             return (
               <div className="mt-4 p-4 bg-error-bg border-2 border-error-border rounded-lg flex items-start gap-3">
-                <svg className="w-6 h-6 flex-shrink-0 text-board-red mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                <TriangleAlert className="size-5 flex-shrink-0 text-board-red mt-0.5" strokeWidth={1.75} aria-hidden />
                 <div>
                   <div className="font-display font-bold uppercase tracking-wider text-sm text-error-text mb-1">Score Mismatch</div>
                   <div className="text-sm font-sans text-error-text space-y-0.5">
@@ -846,13 +852,13 @@ export default function MatchupsTab({
           })()}
 
           <div className="mt-6 flex gap-4">
-            <button
-              onClick={handleCancelPreview}
-              className="flex-1 py-3 bg-bunker/20 text-text-primary font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-bunker/30"
-            >
+            <Button variant="secondary" className="flex-1" onClick={handleCancelPreview}>
               Back to Edit
-            </button>
-            <button
+            </Button>
+            <SubmitButton
+              type="button"
+              variant="accent"
+              pending={loading}
               onClick={handleSubmit}
               disabled={
                 loading ||
@@ -860,10 +866,10 @@ export default function MatchupsTab({
                 teamBPointsOverride === "" ||
                 Number(teamAPointsOverride) + Number(teamBPointsOverride) !== 20
               }
-              className="flex-1 py-3 bg-board-yellow text-text-primary font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-wood hover:text-white disabled:opacity-50"
+              className="flex-1"
             >
               {loading ? "Submitting..." : "Submit Matchup"}
-            </button>
+            </SubmitButton>
           </div>
         </div>
       )}
@@ -910,22 +916,22 @@ export default function MatchupsTab({
                       {matchup.teamA.name}
                       {teamAMismatch && (
                         <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-sans font-bold text-error-text bg-error-bg border border-error-border rounded" title={`Matchup gross (${matchup.teamAGross}) differs from scorecard (${teamAScorecard})`}>
-                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                          <TriangleAlert className="size-3.5" strokeWidth={1.75} aria-hidden />
                           Card: {teamAScorecard}
                         </span>
                       )}
                     </td>
-                    <td className="py-2 px-3 text-center font-mono tabular-nums font-semibold text-fairway">{matchup.teamAPoints}</td>
+                    <td className="py-2 px-3 text-center font-mono tabular-nums font-semibold text-primary">{matchup.teamAPoints}</td>
                     <td className="py-2 px-3 font-sans font-medium text-text-primary">
                       {matchup.teamB.name}
                       {teamBMismatch && (
                         <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-sans font-bold text-error-text bg-error-bg border border-error-border rounded" title={`Matchup gross (${matchup.teamBGross}) differs from scorecard (${teamBScorecard})`}>
-                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                          <TriangleAlert className="size-3.5" strokeWidth={1.75} aria-hidden />
                           Card: {teamBScorecard}
                         </span>
                       )}
                     </td>
-                    <td className="py-2 px-3 text-center font-mono tabular-nums font-semibold text-fairway">{matchup.teamBPoints}</td>
+                    <td className="py-2 px-3 text-center font-mono tabular-nums font-semibold text-primary">{matchup.teamBPoints}</td>
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-2">
                         {isForfeit ? (
@@ -936,21 +942,25 @@ export default function MatchupsTab({
                             Edit
                           </span>
                         ) : (
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-info-text hover:text-info-text/80"
                             onClick={() => setEditingMatchupId(editingMatchupId === matchup.id ? null : matchup.id)}
                             disabled={loading}
-                            className="text-info-text hover:text-info-text/80 text-sm font-display font-medium uppercase tracking-wider disabled:opacity-50"
                           >
                             {editingMatchupId === matchup.id ? "Close" : "Edit"}
-                          </button>
+                          </Button>
                         )}
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
                           onClick={() => handleDeleteMatchup(matchup.id)}
                           disabled={loading}
-                          className="text-board-red hover:text-board-red/90 text-sm font-display font-medium uppercase tracking-wider disabled:opacity-50"
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

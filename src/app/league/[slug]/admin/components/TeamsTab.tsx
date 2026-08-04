@@ -14,7 +14,27 @@ import {
   addTeamToSchedule,
   type AddTeamStrategy,
 } from "@/lib/actions/schedule";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/composite";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { AdminTeam } from "@/lib/types/admin";
 
 interface TeamsTabProps {
@@ -42,7 +62,6 @@ const STRATEGY_DESCRIPTIONS: Record<AddTeamStrategy, string> = {
 
 export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeasonAddDefault, onTeamsChanged }: TeamsTabProps) {
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [confirmState, setConfirmState] = useState<{
     open: boolean;
     action: "reject" | "delete";
@@ -81,7 +100,6 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
 
   async function handleApproveTeam(teamId: number) {
     setLoading(true);
-    setMessage(null);
     try {
       // Capture pre-approval state: odd count means adding one team makes it even (fills byes)
       const preApprovalFillByes = approvedTeams.length % 2 === 1;
@@ -106,31 +124,30 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
           });
           setSelectedStrategy((midSeasonAddDefault as AddTeamStrategy) || "start_from_here");
         } else {
-          setMessage({ type: "success", text: "Team approved!" });
+          notify.success("Team approved!");
         }
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleApproveTeam error:", error);
-      setMessage({ type: "error", text: "Failed to approve team. Please try again." });
+      notify.error("Failed to approve team. Please try again.");
     }
     setLoading(false);
   }
 
   async function handleScheduleIntegration() {
     setScheduleLoading(true);
-    setMessage(null);
     try {
       const result = await addTeamToSchedule(slug, scheduleDialog.teamId, selectedStrategy);
       if (result.success) {
-        setMessage({ type: "success", text: `Team "${scheduleDialog.teamName}" approved and added to schedule using "${STRATEGY_LABELS[selectedStrategy]}" strategy.` });
+        notify.success(`Team "${scheduleDialog.teamName}" approved and added to schedule using "${STRATEGY_LABELS[selectedStrategy]}" strategy.`);
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleScheduleIntegration error:", error);
-      setMessage({ type: "error", text: "Failed to add team to schedule. Team was approved but schedule was not updated." });
+      notify.error("Failed to add team to schedule. Team was approved but schedule was not updated.");
     }
     setScheduleDialog({ open: false, teamId: 0, teamName: "", fillByesAvailable: false });
     setScheduleLoading(false);
@@ -138,7 +155,7 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
 
   function handleSkipScheduleIntegration() {
     setScheduleDialog({ open: false, teamId: 0, teamName: "", fillByesAvailable: false });
-    setMessage({ type: "success", text: "Team approved! Schedule was not modified — you can add the team to the schedule later from the Schedule tab." });
+    notify.success("Team approved! Schedule was not modified — you can add the team to the schedule later from the Schedule tab.");
   }
 
   function handleRejectTeam(teamId: number) {
@@ -153,7 +170,6 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
     const { action, teamId, teamName } = confirmState;
     setConfirmState((prev) => ({ ...prev, open: false }));
     setLoading(true);
-    setMessage(null);
 
     try {
       let result;
@@ -164,19 +180,19 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
       }
 
       if (result.success) {
-        setMessage({ type: "success", text: action === "reject" ? "Team rejected." : `Team "${teamName}" deleted.` });
+        notify.success(action === "reject" ? "Team rejected." : `Team "${teamName}" deleted.`);
         const [teamsData, allTeamsData] = await Promise.all([
           getTeams(leagueId),
           getAllTeamsWithStatus(slug),
         ]);
         onTeamsChanged(teamsData, allTeamsData);
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("executeConfirmedAction error:", error);
       const fallback = action === "reject" ? "Failed to reject team." : "Failed to delete team.";
-      setMessage({ type: "error", text: fallback });
+      notify.error(fallback);
     }
     setLoading(false);
   }
@@ -185,11 +201,10 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
     e.preventDefault();
     if (!quickAddName.trim()) return;
     setQuickAddLoading(true);
-    setMessage(null);
     try {
       const result = await adminQuickAddTeam(slug, quickAddName, quickAddCaptain || undefined, quickAddEmail || undefined, quickAddPhone || undefined);
       if (result.success) {
-        setMessage({ type: "success", text: `Team "${result.data.name}" added!` });
+        notify.success(`Team "${result.data.name}" added!`);
         setQuickAddName("");
         setQuickAddCaptain("");
         setQuickAddEmail("");
@@ -200,11 +215,11 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
         ]);
         onTeamsChanged(teamsData, allTeamsData);
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleQuickAddTeam error:", error);
-      setMessage({ type: "error", text: "Failed to add team." });
+      notify.error("Failed to add team.");
     }
     setQuickAddLoading(false);
   }
@@ -217,11 +232,10 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
 
   async function handleSaveContact(teamId: number) {
     setContactSaving(true);
-    setMessage(null);
     try {
       const result = await updateTeamContact(slug, teamId, editEmail || null, editPhone || null);
       if (result.success) {
-        setMessage({ type: "success", text: "Contact info updated." });
+        notify.success("Contact info updated.");
         setEditingContactId(null);
         const [teamsData, allTeamsData] = await Promise.all([
           getTeams(leagueId),
@@ -229,117 +243,112 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
         ]);
         onTeamsChanged(teamsData, allTeamsData);
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleSaveContact error:", error);
-      setMessage({ type: "error", text: "Failed to update contact info." });
+      notify.error("Failed to update contact info.");
     }
     setContactSaving(false);
   }
 
   return (
     <div className="space-y-6">
-      <ConfirmDialog
+      <AlertDialog
         open={confirmState.open}
-        title={confirmState.action === "reject" ? "Reject Team" : "Delete Team"}
-        message={
-          confirmState.action === "reject"
-            ? "Are you sure you want to reject this team?"
-            : `Are you sure you want to delete team "${confirmState.teamName}"? This cannot be undone.`
-        }
-        confirmLabel={confirmState.action === "reject" ? "Reject" : "Delete"}
-        variant="danger"
-        onConfirm={executeConfirmedAction}
-        onCancel={() => setConfirmState((prev) => ({ ...prev, open: false }))}
-      />
+        onOpenChange={(open) => {
+          if (!open) setConfirmState((prev) => ({ ...prev, open: false }));
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmState.action === "reject" ? "Reject Team" : "Delete Team"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmState.action === "reject"
+                ? "Are you sure you want to reject this team?"
+                : `Are you sure you want to delete team "${confirmState.teamName}"? This cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={executeConfirmedAction}>
+              {confirmState.action === "reject" ? "Reject" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Schedule Integration Dialog */}
-      {scheduleDialog.open && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-scorecard-paper rounded-xl shadow-lg max-w-lg w-full p-6 border border-border">
-            <h3 className="text-lg font-display font-semibold uppercase tracking-wider text-text-primary mb-2">
+      <Dialog
+        open={scheduleDialog.open}
+        onOpenChange={(open) => {
+          if (!open) handleSkipScheduleIntegration();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display font-semibold uppercase tracking-wider text-text-primary">
               Add &ldquo;{scheduleDialog.teamName}&rdquo; to Schedule
-            </h3>
-            <p className="text-sm font-sans text-text-secondary mb-4">
+            </DialogTitle>
+            <DialogDescription className="font-sans text-text-secondary">
               A schedule exists for this season. How should this team be integrated?
-            </p>
+            </DialogDescription>
+          </DialogHeader>
 
-            <div className="space-y-3 mb-6">
-              {(["start_from_here", "fill_byes", "pro_rate", "catch_up"] as AddTeamStrategy[]).map((strategy) => {
-                const disabled = strategy === "fill_byes" && !scheduleDialog.fillByesAvailable;
-                return (
-                  <label
-                    key={strategy}
-                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                      disabled
-                        ? "opacity-50 cursor-not-allowed bg-surface border-border-light"
-                        : selectedStrategy === strategy
-                        ? "border-fairway bg-fairway/10"
-                        : "border-border-light hover:border-border"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="strategy"
-                      value={strategy}
-                      checked={selectedStrategy === strategy}
-                      disabled={disabled}
-                      onChange={() => setSelectedStrategy(strategy)}
-                      className="mt-0.5 accent-fairway"
-                    />
-                    <div>
-                      <span className="font-display font-medium text-text-primary uppercase tracking-wider">
-                        {STRATEGY_LABELS[strategy]}
-                        {strategy === midSeasonAddDefault && (
-                          <span className="ml-2 text-xs font-display text-fairway bg-fairway/10 px-1.5 py-0.5 rounded">
-                            League Default
-                          </span>
-                        )}
-                      </span>
-                      <p className="text-sm font-sans text-text-muted mt-0.5">{STRATEGY_DESCRIPTIONS[strategy]}</p>
-                      {strategy === "fill_byes" && !scheduleDialog.fillByesAvailable && (
-                        <p className="text-xs font-sans text-warning-text mt-1">
-                          Only available when team count goes from odd to even.
-                        </p>
+          <div className="space-y-3">
+            {(["start_from_here", "fill_byes", "pro_rate", "catch_up"] as AddTeamStrategy[]).map((strategy) => {
+              const disabled = strategy === "fill_byes" && !scheduleDialog.fillByesAvailable;
+              return (
+                <label
+                  key={strategy}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    disabled
+                      ? "opacity-50 cursor-not-allowed bg-surface border-border-light"
+                      : selectedStrategy === strategy
+                      ? "border-primary bg-primary/10"
+                      : "border-border-light hover:border-border"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="strategy"
+                    value={strategy}
+                    checked={selectedStrategy === strategy}
+                    disabled={disabled}
+                    onChange={() => setSelectedStrategy(strategy)}
+                    className="mt-0.5 accent-primary"
+                  />
+                  <div>
+                    <span className="font-display font-medium text-text-primary uppercase tracking-wider">
+                      {STRATEGY_LABELS[strategy]}
+                      {strategy === midSeasonAddDefault && (
+                        <span className="ml-2 text-xs font-display text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                          League Default
+                        </span>
                       )}
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={handleSkipScheduleIntegration}
-                disabled={scheduleLoading}
-                className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider text-text-secondary bg-surface rounded-lg hover:bg-bunker/20 disabled:opacity-50"
-              >
-                Skip (Don&apos;t Update Schedule)
-              </button>
-              <button
-                onClick={handleScheduleIntegration}
-                disabled={scheduleLoading}
-                className="px-4 py-2 text-sm font-display font-semibold uppercase tracking-wider text-white bg-fairway rounded-lg hover:bg-rough disabled:opacity-50"
-              >
-                {scheduleLoading ? "Adding to Schedule..." : "Confirm & Add to Schedule"}
-              </button>
-            </div>
+                    </span>
+                    <p className="text-sm font-sans text-text-muted mt-0.5">{STRATEGY_DESCRIPTIONS[strategy]}</p>
+                    {strategy === "fill_byes" && !scheduleDialog.fillByesAvailable && (
+                      <p className="text-xs font-sans text-warning-text mt-1">
+                        Only available when team count goes from odd to even.
+                      </p>
+                    )}
+                  </div>
+                </label>
+              );
+            })}
           </div>
-        </div>
-      )}
 
-      {message && (
-        <div
-          className={`p-4 rounded-lg font-sans ${
-            message.type === "success"
-              ? "bg-fairway/10 border border-fairway/30 text-fairway"
-              : "bg-error-bg border border-error-border text-error-text"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={handleSkipScheduleIntegration} disabled={scheduleLoading}>
+              Skip (Don&apos;t Update Schedule)
+            </Button>
+            <SubmitButton type="button" pending={scheduleLoading} onClick={handleScheduleIntegration}>
+              Confirm &amp; Add to Schedule
+            </SubmitButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Quick Add Team */}
       <div className="bg-scorecard-paper rounded-lg shadow-lg p-6 border border-border">
@@ -400,13 +409,9 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
               maxLength={20}
             />
           </div>
-          <button
-            type="submit"
-            disabled={quickAddLoading || !quickAddName.trim()}
-            className="px-5 py-2 bg-fairway text-white text-sm font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-rough disabled:opacity-50 transition-colors"
-          >
-            {quickAddLoading ? "Adding..." : "Add Team"}
-          </button>
+          <SubmitButton pending={quickAddLoading} disabled={!quickAddName.trim()}>
+            Add Team
+          </SubmitButton>
         </form>
       </div>
 
@@ -426,20 +431,12 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
                     {team.phone && <p className="text-sm font-sans text-text-muted">{team.phone}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => handleApproveTeam(team.id)}
-                      disabled={loading}
-                      className="px-4 py-2 bg-fairway text-white text-sm font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-rough disabled:opacity-50"
-                    >
+                    <Button onClick={() => handleApproveTeam(team.id)} disabled={loading}>
                       Approve
-                    </button>
-                    <button
-                      onClick={() => handleRejectTeam(team.id)}
-                      disabled={loading}
-                      className="px-4 py-2 bg-board-red text-white text-sm font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-board-red/90 disabled:opacity-50"
-                    >
+                    </Button>
+                    <Button variant="destructive" onClick={() => handleRejectTeam(team.id)} disabled={loading}>
                       Reject
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -464,19 +461,23 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
                     {team.captainName && <span className="ml-2 text-sm font-sans text-text-muted">({team.captainName})</span>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="text-text-muted"
                       onClick={() => editingContactId === team.id ? setEditingContactId(null) : handleStartEditContact(team)}
-                      className="text-text-muted hover:text-fairway text-xs font-display font-semibold uppercase tracking-wider transition-colors"
                     >
                       {editingContactId === team.id ? "Cancel" : "Edit Contact"}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="text-destructive hover:text-destructive"
                       onClick={() => handleDeleteTeam(team.id, team.name)}
                       disabled={loading}
-                      className="text-board-red hover:text-board-red/90 text-sm font-display font-semibold uppercase tracking-wider disabled:opacity-50"
                     >
                       Delete
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {/* Contact info display */}
@@ -515,13 +516,9 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
                         maxLength={20}
                       />
                     </div>
-                    <button
-                      onClick={() => handleSaveContact(team.id)}
-                      disabled={contactSaving}
-                      className="px-3 py-2 text-xs font-display font-semibold uppercase tracking-wider bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 transition-colors"
-                    >
-                      {contactSaving ? "Saving..." : "Save"}
-                    </button>
+                    <SubmitButton type="button" size="sm" pending={contactSaving} onClick={() => handleSaveContact(team.id)}>
+                      Save
+                    </SubmitButton>
                   </div>
                 )}
               </div>
@@ -539,13 +536,15 @@ export default function TeamsTab({ slug, leagueId, maxTeams, allTeams, midSeason
             {rejectedTeams.map((team) => (
               <div key={team.id} className="flex justify-between items-center p-3 bg-error-bg rounded-lg">
                 <span className="font-sans text-text-secondary">{team.name}</span>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
                   onClick={() => handleDeleteTeam(team.id, team.name)}
                   disabled={loading}
-                  className="text-board-red hover:text-board-red/90 text-sm font-display font-semibold uppercase tracking-wider disabled:opacity-50"
                 >
                   Delete
-                </button>
+                </Button>
               </div>
             ))}
           </div>

@@ -12,7 +12,20 @@ import {
   type WeeklyScoreRecord,
 } from "@/lib/actions/weekly-scores";
 import { formatPosition } from "@/lib/format-utils";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/composite";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { AdminTeam } from "@/lib/types/admin";
 
 interface WeeklyScoresTabProps {
@@ -54,7 +67,6 @@ export default function WeeklyScoresTab({
   const [pointOverrides, setPointOverrides] = useState<Map<number, number>>(new Map());
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; weekNumber: number }>({ open: false, weekNumber: 0 });
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(new Set());
 
@@ -87,13 +99,13 @@ export default function WeeklyScoresTab({
     // Validate: all non-DNP teams need a gross score
     const playing = entries.filter((e) => !e.isDnp);
     if (playing.length === 0) {
-      setMessage({ type: "error", text: "At least one team must be playing (not DNP)." });
+      notify.error("At least one team must be playing (not DNP).");
       return;
     }
     for (const e of playing) {
       if (e.grossScore === "" || e.grossScore < 0) {
         const team = teams.find((t) => t.id === e.teamId);
-        setMessage({ type: "error", text: `Please enter a valid gross score for ${team?.name || "all teams"}.` });
+        notify.error(`Please enter a valid gross score for ${team?.name || "all teams"}.`);
         return;
       }
     }
@@ -101,13 +113,12 @@ export default function WeeklyScoresTab({
     for (const e of playing) {
       if ((isWeekOne || e.isSub) && e.manualHandicap === "") {
         const team = teams.find((t) => t.id === e.teamId);
-        setMessage({ type: "error", text: `${isWeekOne ? "Week 1" : "Substitute"} requires manual handicap for ${team?.name || "team"}.` });
+        notify.error(`${isWeekOne ? "Week 1" : "Substitute"} requires manual handicap for ${team?.name || "team"}.`);
         return;
       }
     }
 
     setLoading(true);
-    setMessage(null);
     try {
       const inputs = entries.map((e) => ({
         teamId: e.teamId,
@@ -126,11 +137,11 @@ export default function WeeklyScoresTab({
         }
         setPointOverrides(overrides);
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handlePreview error:", error);
-      setMessage({ type: "error", text: "Failed to generate preview." });
+      notify.error("Failed to generate preview.");
     }
     setLoading(false);
   }
@@ -166,7 +177,7 @@ export default function WeeklyScoresTab({
 
       const result = await submitWeeklyScores(slug, weekNumber, scores);
       if (result.success) {
-        setMessage({ type: "success", text: `Week ${weekNumber} scores submitted!` });
+        notify.success(`Week ${weekNumber} scores submitted!`);
         setPreview(null);
         // Reset entries
         setEntries(
@@ -185,11 +196,11 @@ export default function WeeklyScoresTab({
         setWeekNumber(currentWeek);
         onDataRefresh({ weekNumber: currentWeek, weeklyScores: history });
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleSubmit error:", error);
-      setMessage({ type: "error", text: "Failed to submit scores." });
+      notify.error("Failed to submit scores.");
     }
     setLoading(false);
   }
@@ -201,7 +212,7 @@ export default function WeeklyScoresTab({
     try {
       const result = await deleteWeeklyScores(slug, wk);
       if (result.success) {
-        setMessage({ type: "success", text: `Week ${wk} scores deleted.` });
+        notify.success(`Week ${wk} scores deleted.`);
         const [currentWeek, history] = await Promise.all([
           getCurrentStrokePlayWeek(leagueId),
           getWeeklyScoreHistory(leagueId),
@@ -209,11 +220,11 @@ export default function WeeklyScoresTab({
         setWeekNumber(currentWeek);
         onDataRefresh({ weekNumber: currentWeek, weeklyScores: history });
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("executeDeleteWeek error:", error);
-      setMessage({ type: "error", text: "Failed to delete scores." });
+      notify.error("Failed to delete scores.");
     }
     setLoading(false);
   }
@@ -235,27 +246,29 @@ export default function WeeklyScoresTab({
 
   return (
     <>
-      <ConfirmDialog
+      <AlertDialog
         open={deleteConfirm.open}
-        title="Delete Week Scores"
-        message={`Are you sure you want to delete all scores for Week ${deleteConfirm.weekNumber}? Team points will be reversed.`}
-        confirmLabel="Delete"
-        variant="danger"
-        onConfirm={executeDeleteWeek}
-        onCancel={() => setDeleteConfirm({ open: false, weekNumber: 0 })}
-      />
-
-      {message && (
-        <div
-          className={`mb-6 p-4 rounded-lg font-sans text-sm ${
-            message.type === "success"
-              ? "bg-fairway/10 border border-fairway/30 text-fairway"
-              : "bg-error-bg border border-error-border text-error-text"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirm({ open: false, weekNumber: 0 });
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Week Scores</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`Are you sure you want to delete all scores for Week ${deleteConfirm.weekNumber}? Team points will be reversed.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirm({ open: false, weekNumber: 0 })}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={executeDeleteWeek}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {!preview ? (
         <div className="bg-scorecard-paper rounded-lg shadow-lg p-6 border border-scorecard-line/50">
@@ -304,7 +317,7 @@ export default function WeeklyScoresTab({
                           value={entry.grossScore}
                           onChange={(e) => updateEntry(entry.teamId, "grossScore", e.target.value ? parseInt(e.target.value) : "")}
                           disabled={entry.isDnp}
-                          className="w-20 px-2 py-1 border-b border-scorecard-line rounded-none text-center font-mono tabular-nums bg-transparent focus:outline-none focus:border-fairway disabled:bg-surface disabled:text-text-muted"
+                          className="h-9 w-20 rounded-md border border-input bg-card px-2 text-sm text-foreground text-center font-mono tabular-nums disabled:bg-muted disabled:text-muted-foreground"
                           min={0}
                         />
                       </td>
@@ -316,7 +329,7 @@ export default function WeeklyScoresTab({
                               value={entry.manualHandicap}
                               onChange={(e) => updateEntry(entry.teamId, "manualHandicap", e.target.value ? parseFloat(e.target.value) : "")}
                               disabled={entry.isDnp}
-                              className="w-20 px-2 py-1 border-b border-scorecard-line rounded-none text-center font-mono tabular-nums bg-transparent focus:outline-none focus:border-fairway disabled:bg-surface disabled:text-text-muted"
+                              className="h-9 w-20 rounded-md border border-input bg-card px-2 text-sm text-foreground text-center font-mono tabular-nums disabled:bg-muted disabled:text-muted-foreground"
                             />
                           ) : (
                             <span className="text-text-light text-sm font-sans">Auto</span>
@@ -355,13 +368,16 @@ export default function WeeklyScoresTab({
           </div>
 
           <div className="mt-6">
-            <button
+            <SubmitButton
+              type="button"
+              pending={loading}
               onClick={handlePreview}
               disabled={loading || teams.length === 0}
-              className="w-full py-3 bg-fairway text-white font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-rough disabled:opacity-50 transition-colors"
+              size="lg"
+              className="w-full"
             >
               {loading ? "Calculating..." : "Preview Results"}
-            </button>
+            </SubmitButton>
           </div>
         </div>
       ) : (
@@ -427,7 +443,7 @@ export default function WeeklyScoresTab({
                             const val = e.target.value ? parseFloat(e.target.value) : 0;
                             setPointOverrides((prev) => new Map(prev).set(score.teamId, val));
                           }}
-                          className="w-20 px-2 py-1 border-b border-scorecard-line rounded-none text-center font-mono tabular-nums bg-transparent focus:outline-none focus:border-fairway"
+                          className="h-9 w-20 rounded-md border border-input bg-card px-2 text-sm text-foreground text-center font-mono tabular-nums"
                         />
                       </td>
                     </tr>
@@ -445,22 +461,28 @@ export default function WeeklyScoresTab({
           </div>
 
           <div className="mt-6 flex gap-4">
-            <button
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="flex-1"
               onClick={() => {
                 setPreview(null);
-                setMessage(null);
               }}
-              className="flex-1 py-3 bg-surface-white text-text-secondary border border-border font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-surface transition-colors"
             >
               Back to Edit
-            </button>
-            <button
+            </Button>
+            <SubmitButton
+              type="button"
+              variant="accent"
+              size="lg"
+              className="flex-1"
+              pending={loading}
               onClick={handleSubmit}
               disabled={loading}
-              className="flex-1 py-3 bg-board-yellow text-scorecard-pencil font-display font-semibold uppercase tracking-wider rounded-lg hover:bg-board-yellow/80 disabled:opacity-50 transition-colors"
             >
               {loading ? "Submitting..." : `Submit Week ${preview.weekNumber} Scores`}
-            </button>
+            </SubmitButton>
           </div>
         </div>
       )}
@@ -488,7 +510,11 @@ export default function WeeklyScoresTab({
                     className="w-full px-4 py-3 bg-surface text-left font-display font-medium uppercase tracking-wider text-scorecard-pencil flex justify-between items-center hover:bg-surface-warm transition-colors"
                   >
                     <span>Week {wk} <span className="font-sans normal-case tracking-normal text-text-muted text-sm">({scores.filter((s) => !s.isDnp).length} played)</span></span>
-                    <span className="text-text-light">{isExpanded ? "\u2212" : "+"}</span>
+                    {isExpanded ? (
+                      <ChevronDown className="size-4 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+                    ) : (
+                      <ChevronRight className="size-4 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+                    )}
                   </button>
                   {isExpanded && (
                     <div className="p-4 border-t border-scorecard-line/50">
@@ -514,19 +540,22 @@ export default function WeeklyScoresTab({
                               <td className="py-2 px-3 text-center font-mono tabular-nums">{s.isDnp ? "-" : s.grossScore}</td>
                               <td className="py-2 px-3 text-center font-mono tabular-nums">{s.isDnp ? "-" : s.handicap}</td>
                               <td className="py-2 px-3 text-center font-mono tabular-nums">{s.isDnp ? "-" : s.netScore.toFixed(1)}</td>
-                              <td className="py-2 px-3 text-center font-mono tabular-nums font-semibold text-fairway">{s.points.toFixed(1)}</td>
+                              <td className="py-2 px-3 text-center font-mono tabular-nums font-semibold text-primary">{s.points.toFixed(1)}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                       <div className="mt-3 text-right">
-                        <button
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
                           onClick={() => setDeleteConfirm({ open: true, weekNumber: wk })}
                           disabled={loading}
-                          className="text-board-red hover:text-board-red/90 text-sm font-display font-medium uppercase tracking-wider disabled:opacity-50 transition-colors"
                         >
                           Delete Week {wk}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}

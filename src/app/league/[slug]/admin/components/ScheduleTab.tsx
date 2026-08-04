@@ -19,7 +19,19 @@ import {
   type ScheduleStatus,
   type PreviewResult,
 } from "@/lib/actions/schedule";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/composite";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import type { AdminTeam } from "@/lib/types/admin";
 
@@ -41,7 +53,6 @@ export default function ScheduleTab({
   onDataRefresh,
 }: ScheduleTabProps) {
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Schedule data
   const [schedule, setSchedule] = useState<ScheduleWeek[]>([]);
@@ -134,37 +145,35 @@ export default function ScheduleTab({
 
   async function handlePreview() {
     setLoading(true);
-    setMessage(null);
     try {
       const result = await previewSchedule(slug, leagueId, { type: scheduleType, totalWeeks, startWeek });
       if (result.success) {
         setPreviewData(result.data);
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handlePreview error:", error);
-      setMessage({ type: "error", text: "Failed to preview schedule." });
+      notify.error("Failed to preview schedule.");
     }
     setLoading(false);
   }
 
   async function handleGenerate() {
     setLoading(true);
-    setMessage(null);
     try {
       const result = await generateSchedule(slug, { type: scheduleType, totalWeeks, startWeek });
       if (result.success) {
-        setMessage({ type: "success", text: `Schedule generated: ${result.data.weeksGenerated} weeks.` });
+        notify.success(`Schedule generated: ${result.data.weeksGenerated} weeks.`);
         setPreviewData(null);
         await loadScheduleData();
         onDataRefresh();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleGenerate error:", error);
-      setMessage({ type: "error", text: "Failed to generate schedule." });
+      notify.error("Failed to generate schedule.");
     }
     setLoading(false);
   }
@@ -180,15 +189,15 @@ export default function ScheduleTab({
         try {
           const result = await clearSchedule(slug);
           if (result.success) {
-            setMessage({ type: "success", text: "Schedule cleared." });
+            notify.success("Schedule cleared.");
             await loadScheduleData();
             onDataRefresh();
           } else {
-            setMessage({ type: "error", text: result.error });
+            notify.error(result.error);
           }
         } catch (error) {
           console.error("handleClearSchedule error:", error);
-          setMessage({ type: "error", text: "Failed to clear schedule." });
+          notify.error("Failed to clear schedule.");
         }
         setLoading(false);
       },
@@ -206,14 +215,14 @@ export default function ScheduleTab({
         try {
           const result = await cancelScheduledMatchup(slug, id);
           if (result.success) {
-            setMessage({ type: "success", text: "Matchup cancelled." });
+            notify.success("Matchup cancelled.");
             await loadScheduleData();
           } else {
-            setMessage({ type: "error", text: result.error });
+            notify.error(result.error);
           }
         } catch (error) {
           console.error("handleCancelMatchup error:", error);
-          setMessage({ type: "error", text: "Failed to cancel matchup." });
+          notify.error("Failed to cancel matchup.");
         }
         setLoading(false);
       },
@@ -231,15 +240,15 @@ export default function ScheduleTab({
         editingMatchup.teamBId === "" || editingMatchup.teamBId === null ? null : (editingMatchup.teamBId as number)
       );
       if (result.success) {
-        setMessage({ type: "success", text: "Teams swapped." });
+        notify.success("Teams swapped.");
         setEditingMatchup(null);
         await loadScheduleData();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleSwapSave error:", error);
-      setMessage({ type: "error", text: "Failed to swap teams." });
+      notify.error("Failed to swap teams.");
     }
     setLoading(false);
   }
@@ -250,15 +259,15 @@ export default function ScheduleTab({
     try {
       const result = await rescheduleMatchup(slug, editingMatchup.id, editingMatchup.weekNumber);
       if (result.success) {
-        setMessage({ type: "success", text: "Matchup moved." });
+        notify.success("Matchup moved.");
         setEditingMatchup(null);
         await loadScheduleData();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleMoveSave error:", error);
-      setMessage({ type: "error", text: "Failed to move matchup." });
+      notify.error("Failed to move matchup.");
     }
     setLoading(false);
   }
@@ -274,17 +283,17 @@ export default function ScheduleTab({
         addTeamBId === "" || addTeamBId === "bye" ? null : (addTeamBId as number)
       );
       if (result.success) {
-        setMessage({ type: "success", text: "Matchup added." });
+        notify.success("Matchup added.");
         setAddMatchupWeek(null);
         setAddTeamAId("");
         setAddTeamBId("");
         await loadScheduleData();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleAddMatchup error:", error);
-      setMessage({ type: "error", text: "Failed to add matchup." });
+      notify.error("Failed to add matchup.");
     }
     setLoading(false);
   }
@@ -294,7 +303,7 @@ export default function ScheduleTab({
     try {
       const hole = value === "" ? null : parseInt(value);
       if (hole !== null && isNaN(hole)) {
-        setMessage({ type: "error", text: "Invalid hole number." });
+        notify.error("Invalid hole number.");
         setLoading(false);
         return;
       }
@@ -303,11 +312,11 @@ export default function ScheduleTab({
         setEditingStartingHole(null);
         await loadScheduleData();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleSaveStartingHole error:", error);
-      setMessage({ type: "error", text: "Failed to update starting hole." });
+      notify.error("Failed to update starting hole.");
     }
     setLoading(false);
   }
@@ -318,14 +327,14 @@ export default function ScheduleTab({
       const result = await updateWeekCourseSide(slug, weekNumber, side);
       if (result.success) {
         setOverrideSideWeek(null);
-        setMessage({ type: "success", text: `Week ${weekNumber} course side updated.` });
+        notify.success(`Week ${weekNumber} course side updated.`);
         await loadScheduleData();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleOverrideSide error:", error);
-      setMessage({ type: "error", text: "Failed to override course side." });
+      notify.error("Failed to override course side.");
     }
     setLoading(false);
   }
@@ -336,7 +345,7 @@ export default function ScheduleTab({
 
     const scheduledMatches = weekMatches.filter((m) => m.status === "scheduled" && m.teamB);
     if (scheduledMatches.length === 0) {
-      setMessage({ type: "error", text: "No scheduled matchups to assign." });
+      notify.error("No scheduled matchups to assign.");
       return;
     }
 
@@ -353,14 +362,14 @@ export default function ScheduleTab({
     try {
       const result = await assignShotgunStartingHoles(slug, assignments);
       if (result.success) {
-        setMessage({ type: "success", text: `Shotgun start assigned for Week ${weekNumber}.` });
+        notify.success(`Shotgun start assigned for Week ${weekNumber}.`);
         await loadScheduleData();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleShotgunAssign error:", error);
-      setMessage({ type: "error", text: "Failed to assign shotgun starting holes." });
+      notify.error("Failed to assign shotgun starting holes.");
     }
     setLoading(false);
   }
@@ -368,19 +377,18 @@ export default function ScheduleTab({
   async function handleAddWeeks() {
     if (addWeeksCount < 1) return;
     setLoading(true);
-    setMessage(null);
     try {
       const result = await addWeeksToSchedule(slug, addWeeksCount);
       if (result.success) {
-        setMessage({ type: "success", text: `Added ${result.data.weeksGenerated} week(s) starting at Week ${result.data.startWeek}.` });
+        notify.success(`Added ${result.data.weeksGenerated} week(s) starting at Week ${result.data.startWeek}.`);
         await loadScheduleData();
         onDataRefresh();
       } else {
-        setMessage({ type: "error", text: result.error });
+        notify.error(result.error);
       }
     } catch (error) {
       console.error("handleAddWeeks error:", error);
-      setMessage({ type: "error", text: "Failed to add weeks." });
+      notify.error("Failed to add weeks.");
     }
     setLoading(false);
   }
@@ -395,27 +403,25 @@ export default function ScheduleTab({
 
   return (
     <>
-      <ConfirmDialog
+      <AlertDialog
         open={confirmDialog.open}
-        title={confirmDialog.title}
-        message={confirmDialog.message}
-        confirmLabel="Confirm"
-        variant="danger"
-        onConfirm={confirmDialog.onConfirm}
-        onCancel={() => setConfirmDialog((d) => ({ ...d, open: false }))}
-      />
-
-      {message && (
-        <div
-          className={`mb-6 p-4 rounded-lg font-sans text-sm ${
-            message.type === "success"
-              ? "bg-fairway/10 border border-fairway/30 text-fairway"
-              : "bg-error-bg border border-error-border text-error-text"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDialog((d) => ({ ...d, open: false }));
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDialog.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={confirmDialog.onConfirm}>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Generation Form (when no schedule or regenerating) */}
       {!hasSchedule && (
@@ -449,7 +455,7 @@ export default function ScheduleTab({
                       onClick={() => updateScheduleType("single_round_robin")}
                       className={`px-4 py-2 rounded-lg border-2 transition-colors ${
                         scheduleType === "single_round_robin"
-                          ? "border-fairway bg-fairway/10 text-fairway"
+                          ? "border-primary bg-primary/10 text-primary"
                           : "border-border hover:border-scorecard-line"
                       }`}
                     >
@@ -461,7 +467,7 @@ export default function ScheduleTab({
                       onClick={() => updateScheduleType("double_round_robin")}
                       className={`px-4 py-2 rounded-lg border-2 transition-colors ${
                         scheduleType === "double_round_robin"
-                          ? "border-fairway bg-fairway/10 text-fairway"
+                          ? "border-primary bg-primary/10 text-primary"
                           : "border-border hover:border-scorecard-line"
                       }`}
                     >
@@ -495,20 +501,12 @@ export default function ScheduleTab({
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={handlePreview}
-                    disabled={loading}
-                    className="px-6 py-2 bg-surface-white text-text-secondary border border-border rounded-lg hover:bg-surface font-display font-medium uppercase tracking-wider disabled:opacity-50 transition-colors"
-                  >
-                    {loading ? "Loading..." : "Preview Schedule"}
-                  </button>
-                  <button
-                    onClick={handleGenerate}
-                    disabled={loading}
-                    className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough font-display font-semibold uppercase tracking-wider disabled:opacity-50 transition-colors"
-                  >
-                    {loading ? "Generating..." : "Generate & Save"}
-                  </button>
+                  <SubmitButton type="button" variant="outline" pending={loading} onClick={handlePreview}>
+                    Preview Schedule
+                  </SubmitButton>
+                  <SubmitButton type="button" pending={loading} onClick={handleGenerate}>
+                    Generate &amp; Save
+                  </SubmitButton>
                 </div>
               </div>
 
@@ -561,7 +559,7 @@ export default function ScheduleTab({
                 <p className="text-sm text-text-secondary mt-1 font-sans">
                   {status.scheduleType === "double_round_robin" ? "Double" : "Single"} Round-Robin
                   {" · "}<span className="font-mono tabular-nums">{status.totalWeeks}</span> weeks{" · "}<span className="font-mono tabular-nums">{status.teamCount}</span> teams
-                  {" · "}<span className="text-fairway font-mono tabular-nums">{status.completedWeeks} completed</span>
+                  {" · "}<span className="text-primary font-mono tabular-nums">{status.completedWeeks} completed</span>
                   {" · "}<span className="text-warning-text font-mono tabular-nums">{status.remainingWeeks} remaining</span>
                 </p>
               </div>
@@ -573,17 +571,14 @@ export default function ScheduleTab({
                     onChange={(e) => setAddWeeksCount(Math.max(1, parseInt(e.target.value) || 1))}
                     min={1}
                     max={52}
-                    className="w-16 text-sm px-2 py-2 border border-border rounded-lg bg-surface-white text-center font-mono tabular-nums focus:outline-none focus:border-fairway"
+                    className="h-9 w-16 rounded-md border border-input bg-card px-2 text-sm text-foreground text-center font-mono tabular-nums"
                   />
-                  <button
-                    onClick={handleAddWeeks}
-                    disabled={loading || addWeeksCount < 1}
-                    className="px-4 py-2 bg-fairway text-white rounded-lg hover:bg-rough text-sm font-display font-semibold uppercase tracking-wider disabled:opacity-50 transition-colors"
-                  >
-                    {loading ? "Adding..." : "Add Weeks"}
-                  </button>
+                  <SubmitButton type="button" pending={loading} disabled={addWeeksCount < 1} onClick={handleAddWeeks}>
+                    Add Weeks
+                  </SubmitButton>
                 </div>
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => {
                     setConfirmDialog({
                       open: true,
@@ -596,17 +591,12 @@ export default function ScheduleTab({
                     });
                   }}
                   disabled={loading}
-                  className="px-4 py-2 bg-warning-bg text-warning-text rounded-lg hover:bg-board-yellow/30 text-sm font-display font-medium uppercase tracking-wider disabled:opacity-50 transition-colors"
                 >
                   Regenerate
-                </button>
-                <button
-                  onClick={handleClearSchedule}
-                  disabled={loading}
-                  className="px-4 py-2 bg-error-bg text-error-text rounded-lg hover:bg-error-bg/80 text-sm font-display font-medium uppercase tracking-wider disabled:opacity-50 transition-colors"
-                >
+                </Button>
+                <Button variant="destructive" onClick={handleClearSchedule} disabled={loading}>
                   Clear Schedule
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -629,7 +619,7 @@ export default function ScheduleTab({
                     });
                   }}
                   className={`w-full px-6 py-4 text-left font-display font-medium uppercase tracking-wider flex justify-between items-center hover:bg-surface-warm transition-colors ${
-                    allCompleted ? "bg-fairway/10" : hasCompleted ? "bg-warning-bg" : "bg-scorecard-paper"
+                    allCompleted ? "bg-primary/10" : hasCompleted ? "bg-warning-bg" : "bg-scorecard-paper"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -647,10 +637,10 @@ export default function ScheduleTab({
                       </span>
                     )}
                     {allCompleted && (
-                      <span className="px-2 py-0.5 bg-fairway/20 text-fairway rounded text-xs font-display font-medium uppercase tracking-wider">Complete</span>
+                      <span className="px-2 py-0.5 bg-primary/20 text-primary rounded text-xs font-display font-medium uppercase tracking-wider">Complete</span>
                     )}
                   </div>
-                  <span className="text-text-light">{isExpanded ? "\u2212" : "+"}</span>
+                  <span className="text-text-light">{isExpanded ? "−" : "+"}</span>
                 </button>
 
                 {isExpanded && (
@@ -661,36 +651,37 @@ export default function ScheduleTab({
                         <div className="flex items-center gap-1">
                           <span className="text-xs font-display uppercase tracking-wider text-text-secondary">Side:</span>
                           {(["front", "back", null] as const).map((side) => (
-                            <button
+                            <Button
                               key={side ?? "none"}
+                              size="xs"
+                              variant={week.matches[0]?.courseSide === side ? "default" : "outline"}
                               onClick={() => handleOverrideSide(week.weekNumber, side)}
                               disabled={loading}
-                              className={`text-xs px-2 py-1 rounded border transition-colors font-display uppercase tracking-wider ${
-                                week.matches[0]?.courseSide === side
-                                  ? "bg-fairway text-white border-fairway"
-                                  : "bg-scorecard-paper text-text-secondary border-scorecard-line/50 hover:border-fairway"
-                              }`}
                             >
                               {side === "front" ? "Front 9" : side === "back" ? "Back 9" : "Full 18"}
-                            </button>
+                            </Button>
                           ))}
-                          <button onClick={() => setOverrideSideWeek(null)} className="text-xs text-text-muted hover:underline font-display uppercase tracking-wider">Cancel</button>
+                          <Button variant="ghost" size="xs" className="text-text-muted" onClick={() => setOverrideSideWeek(null)}>Cancel</Button>
                         </div>
                       ) : (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="text-water"
                           onClick={() => setOverrideSideWeek(week.weekNumber)}
-                          className="text-xs text-water hover:underline font-display uppercase tracking-wider"
                         >
                           Override Side
-                        </button>
+                        </Button>
                       )}
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-warning-text"
                         onClick={() => handleShotgunAssign(week.weekNumber)}
                         disabled={loading}
-                        className="text-xs text-warning-text hover:underline font-display uppercase tracking-wider disabled:opacity-50"
                       >
                         Shotgun Assign
-                      </button>
+                      </Button>
                     </div>
                     <table className="w-full text-sm">
                       <tbody className="divide-y divide-scorecard-line/40">
@@ -720,7 +711,7 @@ export default function ScheduleTab({
                             </td>
                             <td className="py-3 text-center w-24">
                               {match.status === "completed" && match.matchup && (
-                                <span className="text-fairway font-mono tabular-nums font-semibold">
+                                <span className="text-primary font-mono tabular-nums font-semibold">
                                   {match.matchup.teamAPoints} - {match.matchup.teamBPoints}
                                 </span>
                               )}
@@ -743,7 +734,7 @@ export default function ScheduleTab({
                                             prev ? { ...prev, teamAId: parseInt(e.target.value) || "" } : null
                                           )
                                         }
-                                        className="text-xs px-1 py-1 border-b border-scorecard-line rounded-none bg-transparent focus:outline-none focus:border-fairway font-sans"
+                                        className="h-9 w-auto rounded-md border border-input bg-card px-2 text-sm text-foreground"
                                       >
                                         {teams.map((t) => (
                                           <option key={t.id} value={t.id}>{t.name}</option>
@@ -759,15 +750,15 @@ export default function ScheduleTab({
                                               : null
                                           )
                                         }
-                                        className="text-xs px-1 py-1 border-b border-scorecard-line rounded-none bg-transparent focus:outline-none focus:border-fairway font-sans"
+                                        className="h-9 w-auto rounded-md border border-input bg-card px-2 text-sm text-foreground"
                                       >
                                         <option value="">BYE</option>
                                         {teams.map((t) => (
                                           <option key={t.id} value={t.id}>{t.name}</option>
                                         ))}
                                       </select>
-                                      <button onClick={handleSwapSave} className="text-xs text-fairway hover:underline font-display uppercase tracking-wider">Save</button>
-                                      <button onClick={() => setEditingMatchup(null)} className="text-xs text-text-muted hover:underline font-display uppercase tracking-wider">Cancel</button>
+                                      <Button variant="ghost" size="xs" className="text-primary" onClick={handleSwapSave}>Save</Button>
+                                      <Button variant="ghost" size="xs" className="text-text-muted" onClick={() => setEditingMatchup(null)}>Cancel</Button>
                                     </div>
                                   ) : editingMatchup?.id === match.id && editingMatchup.type === "move" ? (
                                     <div className="flex items-center gap-1">
@@ -781,10 +772,10 @@ export default function ScheduleTab({
                                           )
                                         }
                                         min={1}
-                                        className="w-16 text-xs px-1 py-1 border-b border-scorecard-line rounded-none bg-transparent text-center font-mono tabular-nums focus:outline-none focus:border-fairway"
+                                        className="h-9 w-16 rounded-md border border-input bg-card px-2 text-sm text-foreground text-center font-mono tabular-nums"
                                       />
-                                      <button onClick={handleMoveSave} className="text-xs text-fairway hover:underline font-display uppercase tracking-wider">Save</button>
-                                      <button onClick={() => setEditingMatchup(null)} className="text-xs text-text-muted hover:underline font-display uppercase tracking-wider">Cancel</button>
+                                      <Button variant="ghost" size="xs" className="text-primary" onClick={handleMoveSave}>Save</Button>
+                                      <Button variant="ghost" size="xs" className="text-text-muted" onClick={() => setEditingMatchup(null)}>Cancel</Button>
                                     </div>
                                   ) : (
                                     <>
@@ -796,21 +787,26 @@ export default function ScheduleTab({
                                             onChange={(e) => setEditingStartingHole({ matchupId: match.id, value: e.target.value })}
                                             min={1}
                                             max={18}
-                                            className="w-12 text-xs px-1 py-1 border-b border-scorecard-line rounded-none bg-transparent text-center font-mono tabular-nums focus:outline-none focus:border-fairway"
+                                            className="h-9 w-12 rounded-md border border-input bg-card px-2 text-sm text-foreground text-center font-mono tabular-nums"
                                             placeholder="#"
                                           />
-                                          <button onClick={() => handleSaveStartingHole(match.id, editingStartingHole.value)} className="text-xs text-fairway hover:underline font-display uppercase tracking-wider">Save</button>
-                                          <button onClick={() => setEditingStartingHole(null)} className="text-xs text-text-muted hover:underline font-display uppercase tracking-wider">X</button>
+                                          <Button variant="ghost" size="xs" className="text-primary" onClick={() => handleSaveStartingHole(match.id, editingStartingHole.value)}>Save</Button>
+                                          <Button variant="ghost" size="xs" className="text-text-muted" onClick={() => setEditingStartingHole(null)}>X</Button>
                                         </div>
                                       ) : (
-                                        <button
+                                        <Button
+                                          variant="ghost"
+                                          size="xs"
+                                          className="text-putting"
                                           onClick={() => setEditingStartingHole({ matchupId: match.id, value: match.startingHole?.toString() ?? "" })}
-                                          className="text-xs text-putting hover:underline font-display uppercase tracking-wider"
                                         >
                                           Hole
-                                        </button>
+                                        </Button>
                                       )}
-                                      <button
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        className="text-water"
                                         onClick={() =>
                                           setEditingMatchup({
                                             id: match.id,
@@ -820,11 +816,13 @@ export default function ScheduleTab({
                                             teamBId: match.teamB?.id ?? null,
                                           })
                                         }
-                                        className="text-xs text-water hover:underline font-display uppercase tracking-wider"
                                       >
                                         Swap
-                                      </button>
-                                      <button
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        className="text-warning-text"
                                         onClick={() =>
                                           setEditingMatchup({
                                             id: match.id,
@@ -834,16 +832,17 @@ export default function ScheduleTab({
                                             teamBId: match.teamB?.id ?? null,
                                           })
                                         }
-                                        className="text-xs text-warning-text hover:underline font-display uppercase tracking-wider"
                                       >
                                         Move
-                                      </button>
-                                      <button
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        className="text-destructive hover:text-destructive"
                                         onClick={() => handleCancelMatchup(match.id)}
-                                        className="text-xs text-board-red hover:underline font-display uppercase tracking-wider"
                                       >
                                         Cancel
-                                      </button>
+                                      </Button>
                                     </>
                                   )}
                                 </div>
@@ -860,7 +859,7 @@ export default function ScheduleTab({
                         <select
                           value={addTeamAId}
                           onChange={(e) => setAddTeamAId(e.target.value ? parseInt(e.target.value) : "")}
-                          className="text-sm px-2 py-1 border-b border-scorecard-line rounded-none bg-transparent focus:outline-none focus:border-fairway font-sans"
+                          className="h-9 w-auto rounded-md border border-input bg-card px-2 text-sm text-foreground"
                         >
                           <option value="">Team A</option>
                           {teams.map((t) => (
@@ -871,7 +870,7 @@ export default function ScheduleTab({
                         <select
                           value={addTeamBId}
                           onChange={(e) => setAddTeamBId(e.target.value === "bye" ? "bye" : e.target.value ? parseInt(e.target.value) : "")}
-                          className="text-sm px-2 py-1 border-b border-scorecard-line rounded-none bg-transparent focus:outline-none focus:border-fairway font-sans"
+                          className="h-9 w-auto rounded-md border border-input bg-card px-2 text-sm text-foreground"
                         >
                           <option value="">Team B</option>
                           <option value="bye">BYE</option>
@@ -879,20 +878,22 @@ export default function ScheduleTab({
                             <option key={t.id} value={t.id}>{t.name}</option>
                           ))}
                         </select>
-                        <button onClick={handleAddMatchup} disabled={loading || addTeamAId === ""} className="text-sm text-fairway hover:underline font-display uppercase tracking-wider disabled:opacity-50">
+                        <Button variant="ghost" size="sm" className="text-primary" onClick={handleAddMatchup} disabled={loading || addTeamAId === ""}>
                           Add
-                        </button>
-                        <button onClick={() => { setAddMatchupWeek(null); setAddTeamAId(""); setAddTeamBId(""); }} className="text-sm text-text-muted hover:underline font-display uppercase tracking-wider">
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-text-muted" onClick={() => { setAddMatchupWeek(null); setAddTeamAId(""); setAddTeamBId(""); }}>
                           Cancel
-                        </button>
+                        </Button>
                       </div>
                     ) : (
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-3 text-primary"
                         onClick={() => setAddMatchupWeek(week.weekNumber)}
-                        className="mt-3 text-sm text-fairway hover:underline font-display uppercase tracking-wider"
                       >
                         + Add matchup
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )}

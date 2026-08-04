@@ -156,18 +156,6 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
 
   return (
     <div>
-      {message && (
-        <div
-          className={`mb-6 p-4 rounded-lg font-sans ${
-            message.type === "success"
-              ? "bg-fairway/10 border border-fairway/30 text-fairway"
-              : "bg-error-bg border border-error-border text-error-text"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
       <h2 className="text-xl font-display font-semibold mb-6 text-scorecard-pencil uppercase tracking-wider">
         {existingCourse ? "Edit Course" : "Set Up Course"}
       </h2>
@@ -222,31 +210,21 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
             return (
               <>
                 <div className="flex gap-2">
-                  <button
+                  <Button
                     type="button"
+                    variant={numberOfHoles === 9 ? "default" : "secondary"}
                     onClick={() => !requires18 && handleHoleCountChange(9)}
                     disabled={requires18}
-                    className={`px-4 py-2 rounded-lg font-display font-semibold uppercase tracking-wider text-sm transition-colors ${
-                      numberOfHoles === 9
-                        ? "bg-fairway text-white"
-                        : requires18
-                        ? "bg-bunker/10 text-text-light cursor-not-allowed"
-                        : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
-                    }`}
                   >
                     9 Holes
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant={numberOfHoles === 18 ? "default" : "secondary"}
                     onClick={() => handleHoleCountChange(18)}
-                    className={`px-4 py-2 rounded-lg font-display font-semibold uppercase tracking-wider text-sm transition-colors ${
-                      numberOfHoles === 18
-                        ? "bg-fairway text-white"
-                        : "bg-bunker/20 text-text-secondary hover:bg-bunker/30"
-                    }`}
                   >
                     18 Holes
-                  </button>
+                  </Button>
                 </div>
                 {requires18 && numberOfHoles < 18 && (
                   <p className="text-xs font-sans text-board-red mt-1">
@@ -303,14 +281,15 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
           </label>
           <div className="flex flex-wrap gap-2">
             {PAR_PRESETS.map((preset) => (
-              <button
+              <Button
                 key={preset.label}
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => applyParPreset(preset.pars)}
-                className="px-3 py-1.5 text-xs font-display font-semibold uppercase tracking-wider rounded-lg bg-bunker/20 text-text-secondary hover:bg-bunker/30 transition-colors"
               >
                 {preset.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -338,7 +317,7 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
                     value={hole.par}
                     onChange={(e) => updateHole(index, "par", parseInt(e.target.value))}
                     aria-label={`Hole ${hole.holeNumber} par`}
-                    className="w-16 px-2 py-1 border border-scorecard-line/50 rounded text-center font-mono tabular-nums bg-scorecard-paper focus:outline-none focus:border-fairway"
+                    className="h-9 w-16 rounded-md border border-input bg-card px-2 text-sm text-foreground text-center font-mono tabular-nums"
                   >
                     <option value={3}>3</option>
                     <option value={4}>4</option>
@@ -353,7 +332,7 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
                     min={1}
                     max={numberOfHoles}
                     aria-label={`Hole ${hole.holeNumber} handicap index`}
-                    className="w-16 px-2 py-1 border border-scorecard-line/50 rounded text-center font-mono tabular-nums bg-scorecard-paper focus:outline-none focus:border-fairway"
+                    className="h-9 w-16 rounded-md border border-input bg-card px-2 text-sm text-foreground text-center font-mono tabular-nums"
                   />
                 </td>
                 <td className="py-2 px-3 text-center">
@@ -363,7 +342,7 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
                     onChange={(e) => updateHole(index, "yardage", e.target.value ? parseInt(e.target.value) : null)}
                     placeholder="-"
                     aria-label={`Hole ${hole.holeNumber} yardage`}
-                    className="w-20 px-2 py-1 border border-scorecard-line/50 rounded text-center font-mono tabular-nums bg-scorecard-paper focus:outline-none focus:border-fairway"
+                    className="h-9 w-20 rounded-md border border-input bg-card px-2 text-sm text-foreground text-center font-mono tabular-nums"
                   />
                 </td>
               </tr>
@@ -374,7 +353,7 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
               <td className="py-3 px-3 font-display font-semibold uppercase tracking-wider text-sm text-scorecard-pencil">
                 Total
               </td>
-              <td className="py-3 px-3 text-center font-mono tabular-nums font-bold text-fairway">
+              <td className="py-3 px-3 text-center font-mono tabular-nums font-bold text-primary">
                 {totalPar}
               </td>
               <td className="py-3 px-3"></td>
@@ -386,13 +365,14 @@ export default function CourseTab({ slug, leagueId, playMode }: CourseTabProps) 
         </table>
       </div>
 
-      <button
+      <SubmitButton
+        type="button"
+        pending={saving}
         onClick={handleSave}
         disabled={saving || !name.trim()}
-        className="px-6 py-2 bg-fairway text-white rounded-lg hover:bg-rough disabled:opacity-50 font-display font-semibold uppercase tracking-wider transition-colors"
       >
         {saving ? "Saving..." : existingCourse ? "Update Course" : "Create Course"}
-      </button>
+      </SubmitButton>
     </div>
   );
 }
