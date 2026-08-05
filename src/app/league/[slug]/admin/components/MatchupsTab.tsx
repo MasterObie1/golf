@@ -70,6 +70,8 @@ export default function MatchupsTab({
   const [isForfeitMode, setIsForfeitMode] = useState(false);
   const [winningTeamId, setWinningTeamId] = useState<number | "">("");
   const [forfeitingTeamId, setForfeitingTeamId] = useState<number | "">("");
+  const [forfeitWinnerPoints, setForfeitWinnerPoints] = useState<number | "">(20);
+  const [forfeitLoserPoints, setForfeitLoserPoints] = useState<number | "">(0);
 
   // Week number (local)
   const [weekNumber, setWeekNumber] = useState(initialWeekNumber);
@@ -107,6 +109,8 @@ export default function MatchupsTab({
     setIsForfeitMode(false);
     setWinningTeamId("");
     setForfeitingTeamId("");
+    setForfeitWinnerPoints(20);
+    setForfeitLoserPoints(0);
   }
 
   // Load schedule for current week
@@ -242,11 +246,11 @@ export default function MatchupsTab({
         weekNumber,
         teamAId as number,
         teamAGross as number,
-        (isWeekOne || teamAIsSub) ? (teamAHandicapManual as number) : null,
+        teamAHandicapManual === "" ? null : (teamAHandicapManual as number),
         teamAIsSub,
         teamBId as number,
         teamBGross as number,
-        (isWeekOne || teamBIsSub) ? (teamBHandicapManual as number) : null,
+        teamBHandicapManual === "" ? null : (teamBHandicapManual as number),
         teamBIsSub
       );
       if (result.success) {
@@ -354,10 +358,21 @@ export default function MatchupsTab({
       notify.error("Please select two different teams.");
       return;
     }
+    if (forfeitWinnerPoints === "" || forfeitLoserPoints === "" || Number(forfeitWinnerPoints) <= Number(forfeitLoserPoints)) {
+      notify.error("Winning team points must be greater than forfeiting team points.");
+      return;
+    }
 
     setLoading(true);
     try {
-      const result = await submitForfeit(slug, weekNumber, winningTeamId as number, forfeitingTeamId as number);
+      const result = await submitForfeit(
+        slug,
+        weekNumber,
+        winningTeamId as number,
+        forfeitingTeamId as number,
+        forfeitWinnerPoints as number,
+        forfeitLoserPoints as number
+      );
       if (result.success) {
         notify.success("Forfeit recorded successfully!");
         setWinningTeamId("");
@@ -534,41 +549,73 @@ export default function MatchupsTab({
             <div className="space-y-6">
               <div className="bg-error-bg border border-error-border rounded-lg p-4">
                 <p className="text-sm font-sans text-error-text">
-                  A forfeit awards 20 points to the winning team and 0 points to the forfeiting team.
+                  A forfeit awards the points below to the winning team and forfeiting team. Adjust them to match your league&apos;s forfeit rule.
                 </p>
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
-                <div className="p-4 bg-success-bg rounded-lg border border-success-border">
-                  <label className="block font-display font-medium text-primary uppercase tracking-wider text-sm mb-2">
-                    Winning Team (receives 20 pts)
-                  </label>
-                  <select
-                    value={winningTeamId}
-                    onChange={(e) => setWinningTeamId(e.target.value ? parseInt(e.target.value) : "")}
-                    className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
-                  >
-                    <option value="">-- Select Team --</option>
-                    {teams.map((team) => (
-                      <option key={team.id} value={team.id}>{team.name}</option>
-                    ))}
-                  </select>
+                <div className="p-4 bg-success-bg rounded-lg border border-success-border space-y-3">
+                  <div>
+                    <label className="block font-display font-medium text-primary uppercase tracking-wider text-sm mb-2">
+                      Winning Team
+                    </label>
+                    <select
+                      value={winningTeamId}
+                      onChange={(e) => setWinningTeamId(e.target.value ? parseInt(e.target.value) : "")}
+                      className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
+                    >
+                      <option value="">-- Select Team --</option>
+                      {teams.map((team) => (
+                        <option key={team.id} value={team.id}>{team.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-display font-medium text-primary uppercase tracking-wider text-sm mb-1">
+                      Points Awarded
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="20"
+                      value={forfeitWinnerPoints}
+                      onChange={(e) => setForfeitWinnerPoints(e.target.value ? parseFloat(e.target.value) : "")}
+                      className="w-full pencil-input"
+                    />
+                  </div>
                 </div>
 
-                <div className="p-4 bg-error-bg rounded-lg border border-error-border">
-                  <label className="block font-display font-medium text-board-red uppercase tracking-wider text-sm mb-2">
-                    Forfeiting Team (receives 0 pts)
-                  </label>
-                  <select
-                    value={forfeitingTeamId}
-                    onChange={(e) => setForfeitingTeamId(e.target.value ? parseInt(e.target.value) : "")}
-                    className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
-                  >
-                    <option value="">-- Select Team --</option>
-                    {teams.map((team) => (
-                      <option key={team.id} value={team.id}>{team.name}</option>
-                    ))}
-                  </select>
+                <div className="p-4 bg-error-bg rounded-lg border border-error-border space-y-3">
+                  <div>
+                    <label className="block font-display font-medium text-board-red uppercase tracking-wider text-sm mb-2">
+                      Forfeiting Team
+                    </label>
+                    <select
+                      value={forfeitingTeamId}
+                      onChange={(e) => setForfeitingTeamId(e.target.value ? parseInt(e.target.value) : "")}
+                      className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm text-foreground"
+                    >
+                      <option value="">-- Select Team --</option>
+                      {teams.map((team) => (
+                        <option key={team.id} value={team.id}>{team.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-display font-medium text-board-red uppercase tracking-wider text-sm mb-1">
+                      Points Awarded
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="20"
+                      value={forfeitLoserPoints}
+                      onChange={(e) => setForfeitLoserPoints(e.target.value ? parseFloat(e.target.value) : "")}
+                      className="w-full pencil-input"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -635,19 +682,18 @@ export default function MatchupsTab({
                       );
                     })()}
                   </div>
-                  {(isWeekOne || teamAIsSub) && (
-                    <div>
-                      <label className="block font-display font-medium text-text-secondary uppercase tracking-wider text-sm mb-1">
-                        Handicap (Manual)
-                      </label>
-                      <input
-                        type="number"
-                        value={teamAHandicapManual}
-                        onChange={(e) => setTeamAHandicapManual(e.target.value ? parseFloat(e.target.value) : "")}
-                        className="w-full pencil-input"
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <label className="block font-display font-medium text-text-secondary uppercase tracking-wider text-sm mb-1">
+                      {(isWeekOne || teamAIsSub) ? "Handicap (Manual)" : "Handicap Override (Optional)"}
+                    </label>
+                    <input
+                      type="number"
+                      value={teamAHandicapManual}
+                      onChange={(e) => setTeamAHandicapManual(e.target.value ? parseFloat(e.target.value) : "")}
+                      placeholder={(isWeekOne || teamAIsSub) ? "" : "Blank = auto-calculated"}
+                      className="w-full pencil-input"
+                    />
+                  </div>
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -711,19 +757,18 @@ export default function MatchupsTab({
                       );
                     })()}
                   </div>
-                  {(isWeekOne || teamBIsSub) && (
-                    <div>
-                      <label className="block font-display font-medium text-text-secondary uppercase tracking-wider text-sm mb-1">
-                        Handicap (Manual)
-                      </label>
-                      <input
-                        type="number"
-                        value={teamBHandicapManual}
-                        onChange={(e) => setTeamBHandicapManual(e.target.value ? parseFloat(e.target.value) : "")}
-                        className="w-full pencil-input"
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <label className="block font-display font-medium text-text-secondary uppercase tracking-wider text-sm mb-1">
+                      {(isWeekOne || teamBIsSub) ? "Handicap (Manual)" : "Handicap Override (Optional)"}
+                    </label>
+                    <input
+                      type="number"
+                      value={teamBHandicapManual}
+                      onChange={(e) => setTeamBHandicapManual(e.target.value ? parseFloat(e.target.value) : "")}
+                      placeholder={(isWeekOne || teamBIsSub) ? "" : "Blank = auto-calculated"}
+                      className="w-full pencil-input"
+                    />
+                  </div>
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"

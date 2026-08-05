@@ -139,8 +139,10 @@ export async function previewMatchup(
       league.scoringType === "hybrid"
         ? getTeamPreviousScoreEntriesForScoring(leagueId, teamId, league.scoringType, weekNumber)
         : getTeamPreviousScoreEntries(leagueId, teamId, weekNumber);
-    const teamAManual = teamAIsSub && teamAHandicapManual !== null ? teamAHandicapManual : null;
-    const teamBManual = teamBIsSub && teamBHandicapManual !== null ? teamBHandicapManual : null;
+    // A provided manual handicap always wins (admin override, e.g. official league
+    // handicaps or sub day-of handicaps); null falls through to the engine.
+    const teamAManual = teamAHandicapManual;
+    const teamBManual = teamBHandicapManual;
     const [teamAScores, teamBScores] = await Promise.all([
       teamAManual !== null ? Promise.resolve(null) : fetchEntries(teamAId),
       teamBManual !== null ? Promise.resolve(null) : fetchEntries(teamBId),
@@ -639,18 +641,24 @@ const submitForfeitSchema = z.object({
   weekNumber: z.number().int().min(1, "Week number must be at least 1"),
   winningTeamId: z.number().int().positive(),
   forfeitingTeamId: z.number().int().positive(),
+  winnerPoints: z.number().min(0, "Points cannot be negative").max(20, "Points cannot exceed 20").default(20),
+  loserPoints: z.number().min(0, "Points cannot be negative").max(20, "Points cannot exceed 20").default(0),
 }).refine(d => d.winningTeamId !== d.forfeitingTeamId, {
   message: "Winning team and forfeiting team must be different",
+}).refine(d => d.winnerPoints > d.loserPoints, {
+  message: "Winning team must receive more points than the forfeiting team",
 });
 
 export async function submitForfeit(
   leagueSlug: string,
   weekNumber: number,
   winningTeamId: number,
-  forfeitingTeamId: number
+  forfeitingTeamId: number,
+  winnerPoints: number = 20,
+  loserPoints: number = 0
 ): Promise<ActionResult> {
   try {
-    const validated = submitForfeitSchema.parse({ weekNumber, winningTeamId, forfeitingTeamId });
+    const validated = submitForfeitSchema.parse({ weekNumber, winningTeamId, forfeitingTeamId, winnerPoints, loserPoints });
     const session = await requireLeagueAdmin(leagueSlug);
     await requireActiveLeague(session.leagueId);
 
@@ -707,13 +715,13 @@ export async function submitForfeit(
           teamAGross: 0,
           teamAHandicap: 0,
           teamANet: 0,
-          teamAPoints: 20,
+          teamAPoints: validated.winnerPoints,
           teamAIsSub: false,
           teamBId: validated.forfeitingTeamId,
           teamBGross: 0,
           teamBHandicap: 0,
           teamBNet: 0,
-          teamBPoints: 0,
+          teamBPoints: validated.loserPoints,
           teamBIsSub: false,
           isForfeit: true,
           forfeitTeamId: validated.forfeitingTeamId,
@@ -723,7 +731,7 @@ export async function submitForfeit(
       await tx.team.update({
         where: { id: validated.winningTeamId },
         data: {
-          totalPoints: { increment: 20 },
+          totalPoints: { increment: validated.winnerPoints },
           wins: { increment: 1 },
         },
       });
@@ -731,6 +739,7 @@ export async function submitForfeit(
       await tx.team.update({
         where: { id: validated.forfeitingTeamId },
         data: {
+          totalPoints: { increment: validated.loserPoints },
           losses: { increment: 1 },
         },
       });

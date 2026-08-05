@@ -279,6 +279,36 @@ describe("previewMatchup", () => {
     expect(preview.teamAHandicap).toBe(7);
   });
 
+  it("uses manual handicap override for non-sub teams after week 1", async () => {
+    const ctx = await setupLeagueWithTeams("Preview Override League");
+
+    // Week 1 history so week 2 would normally auto-calculate
+    await submitMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 42, 0, 42, 10, false,
+      ctx.teamBId, 42, 0, 42, 10, false
+    );
+
+    // Auto-calc would give 6 for both ((42-35)*0.9 floored); override team A to 3
+    const result = await previewMatchup(
+      ctx.leagueSlug,
+      2,
+      ctx.teamAId,
+      40,
+      3,             // manual override, not a sub
+      false,
+      ctx.teamBId,
+      44,
+      null,
+      false
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.teamAHandicap).toBe(3);
+    expect(result.data.teamBHandicap).toBe(6);
+  });
+
   it("calculates handicap from previous scores for week 2+", async () => {
     const ctx = await setupLeagueWithTeams("Preview Handicap Calc League");
 
@@ -630,6 +660,38 @@ describe("submitForfeit", () => {
     const forfeiter = await testPrisma.team.findUnique({ where: { id: ctx.teamBId } });
     expect(forfeiter!.losses).toBe(1);
     expect(forfeiter!.totalPoints).toBe(0);
+  });
+
+  it("supports custom forfeit points (e.g. 11-0)", async () => {
+    const ctx = await setupLeagueWithTeams("Custom Forfeit League");
+
+    const result = await submitForfeit(ctx.leagueSlug, 1, ctx.teamAId, ctx.teamBId, 11, 0);
+    expect(result.success).toBe(true);
+
+    const matchup = await testPrisma.matchup.findFirst({
+      where: { leagueId: ctx.leagueId, weekNumber: 1 },
+    });
+    expect(matchup!.isForfeit).toBe(true);
+    expect(matchup!.teamAPoints).toBe(11);
+    expect(matchup!.teamBPoints).toBe(0);
+
+    const winner = await testPrisma.team.findUnique({ where: { id: ctx.teamAId } });
+    expect(winner!.totalPoints).toBe(11);
+    expect(winner!.wins).toBe(1);
+
+    const forfeiter = await testPrisma.team.findUnique({ where: { id: ctx.teamBId } });
+    expect(forfeiter!.losses).toBe(1);
+    expect(forfeiter!.totalPoints).toBe(0);
+  });
+
+  it("rejects forfeit points where the winner does not out-score the forfeiter", async () => {
+    const ctx = await setupLeagueWithTeams("Bad Forfeit Points League");
+
+    const result = await submitForfeit(ctx.leagueSlug, 1, ctx.teamAId, ctx.teamBId, 5, 10);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("more points");
+    }
   });
 
   it("rejects forfeit when winning and forfeiting team are the same", async () => {
