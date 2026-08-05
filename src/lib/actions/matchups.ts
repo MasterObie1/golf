@@ -6,6 +6,7 @@ import {
   calculateHandicapFromEntries,
   calculateNetScore,
   suggestPoints,
+  type WeeklyGrossEntry,
 } from "../handicap";
 import { requireLeagueAdmin } from "../auth";
 import { logger } from "../logger";
@@ -115,9 +116,6 @@ export async function previewMatchup(
 
   const isWeekOne = weekNumber === 1;
 
-  let teamAHandicap: number;
-  let teamBHandicap: number;
-
   // Helper to clamp manual handicap entries within league min/max caps
   function capManualHandicap(value: number): number {
     let result = value;
@@ -130,32 +128,53 @@ export async function previewMatchup(
     return result;
   }
 
-  if (isWeekOne) {
-    teamAHandicap = capManualHandicap(teamAHandicapManual ?? handicapSettings.defaultHandicap);
-    teamBHandicap = capManualHandicap(teamBHandicapManual ?? handicapSettings.defaultHandicap);
-  } else {
-    // Only use scores from weeks before the current week; fetch both teams concurrently
-    const fetchEntries = (teamId: number) =>
-      league.scoringType === "hybrid"
-        ? getTeamPreviousScoreEntriesForScoring(leagueId, teamId, league.scoringType, weekNumber)
-        : getTeamPreviousScoreEntries(leagueId, teamId, weekNumber);
-    // A provided manual handicap always wins (admin override, e.g. official league
-    // handicaps or sub day-of handicaps); null falls through to the engine.
-    const teamAManual = teamAHandicapManual;
-    const teamBManual = teamBHandicapManual;
-    const [teamAScores, teamBScores] = await Promise.all([
-      teamAManual !== null ? Promise.resolve(null) : fetchEntries(teamAId),
-      teamBManual !== null ? Promise.resolve(null) : fetchEntries(teamBId),
-    ]);
+  // Substitute day-of handicap: a manual entry always wins; otherwise, if the
+  // league has a sub multiplier configured, compute trunc(mult × (gross − base))
+  // from today's gross (toward zero, uncapped — TRUNC semantics). A sub's
+  // handicap never comes from the team's score history. Returns null when it
+  // cannot be determined (no manual value, no multiplier, or no gross).
+  const subHandicap = (gross: number, manual: number | null): number | null => {
+    if (manual !== null) return capManualHandicap(manual);
+    if (handicapSettings.subHandicapMultiplier !== null && gross > 0) {
+      return Math.trunc(handicapSettings.subHandicapMultiplier * (gross - handicapSettings.baseScore));
+    }
+    return null;
+  };
 
-    teamAHandicap = teamAManual !== null || teamAScores === null
-      ? capManualHandicap(teamAManual ?? handicapSettings.defaultHandicap)
-      : calculateHandicapFromEntries(teamAScores, handicapSettings, weekNumber);
+  // Only use scores from weeks before the current week; fetch both teams concurrently
+  const fetchEntries = (teamId: number) =>
+    league.scoringType === "hybrid"
+      ? getTeamPreviousScoreEntriesForScoring(leagueId, teamId, league.scoringType, weekNumber)
+      : getTeamPreviousScoreEntries(leagueId, teamId, weekNumber);
 
-    teamBHandicap = teamBManual !== null || teamBScores === null
-      ? capManualHandicap(teamBManual ?? handicapSettings.defaultHandicap)
-      : calculateHandicapFromEntries(teamBScores, handicapSettings, weekNumber);
+  // A provided manual handicap always wins (admin override, e.g. official league
+  // handicaps); null falls through to sub day-of calc or the engine.
+  const needsFetchA = !teamAIsSub && !isWeekOne && teamAHandicapManual === null;
+  const needsFetchB = !teamBIsSub && !isWeekOne && teamBHandicapManual === null;
+  const [teamAScores, teamBScores] = await Promise.all([
+    needsFetchA ? fetchEntries(teamAId) : Promise.resolve(null),
+    needsFetchB ? fetchEntries(teamBId) : Promise.resolve(null),
+  ]);
+
+  const resolveHandicap = (
+    isSub: boolean,
+    gross: number,
+    manual: number | null,
+    scores: WeeklyGrossEntry[] | null
+  ): number | null => {
+    if (isSub) return subHandicap(gross, manual);
+    if (manual !== null) return capManualHandicap(manual);
+    if (isWeekOne || scores === null) return capManualHandicap(handicapSettings.defaultHandicap);
+    return calculateHandicapFromEntries(scores, handicapSettings, weekNumber);
+  };
+
+  const resolvedA = resolveHandicap(teamAIsSub, teamAGross, teamAHandicapManual, teamAScores);
+  const resolvedB = resolveHandicap(teamBIsSub, teamBGross, teamBHandicapManual, teamBScores);
+  if (resolvedA === null || resolvedB === null) {
+    return { success: false, error: "Substitute players require manual handicap entry." };
   }
+  const teamAHandicap = resolvedA;
+  const teamBHandicap = resolvedB;
 
   const teamANet = calculateNetScore(teamAGross, teamAHandicap);
   const teamBNet = calculateNetScore(teamBGross, teamBHandicap);

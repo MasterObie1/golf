@@ -230,14 +230,9 @@ export default function MatchupsTab({
       notify.error("Week 1 requires manual handicap entry.");
       return;
     }
-    if (teamAIsSub && teamAHandicapManual === "") {
-      notify.error("Substitute players require manual handicap entry.");
-      return;
-    }
-    if (teamBIsSub && teamBHandicapManual === "") {
-      notify.error("Substitute players require manual handicap entry.");
-      return;
-    }
+    // Subs without a manual handicap are allowed through: the server computes the
+    // day-of handicap when the league has a sub multiplier configured, and returns
+    // a clear error when it doesn't.
 
     setLoading(true);
     try {

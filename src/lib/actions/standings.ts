@@ -16,6 +16,7 @@ const matchupRankingSelect = {
   teamAIsSub: true,
   teamBIsSub: true,
   weekNumber: true,
+  isForfeit: true,
 } as const;
 
 // Safe select clause for team queries in public-facing standings/leaderboard responses.
@@ -55,6 +56,8 @@ type MatchupForRanking = {
   teamBHandicap: number;
   teamAIsSub: boolean;
   teamBIsSub: boolean;
+  weekNumber: number;
+  isForfeit: boolean;
 };
 
 type WeeklyScoreForRanking = {
@@ -71,10 +74,16 @@ type WeeklyScoreForRanking = {
 
 // --- Helpers ---
 
-function averageHandicap(handicapValues: number[], fallback: number): number {
-  return handicapValues.length > 0
-    ? Math.floor(handicapValues.reduce((sum, h) => sum + h, 0) / handicapValues.length)
-    : fallback;
+// Handicap "in effect": the handicap a team carried in its most recent counted
+// (non-sub, non-forfeit) round — what a commissioner's weekly handout shows —
+// rather than a season-long average, which lags a team whose game has changed.
+function handicapInEffect(entries: { week: number; handicap: number }[], fallback: number): number {
+  if (entries.length === 0) return fallback;
+  let latest = entries[0];
+  for (const e of entries) {
+    if (e.week >= latest.week) latest = e;
+  }
+  return latest.handicap;
 }
 
 function buildHeadToHead(
@@ -141,16 +150,17 @@ function resolveHeadToHeadTies<T extends { id: number }>(
 function rankTeams<T extends TeamWithStats>(teams: T[], matchups: MatchupForRanking[]) {
   const handicaps: Record<number, number> = {};
   for (const team of teams) {
-    const teamHandicaps: number[] = [];
+    const teamHandicaps: { week: number; handicap: number }[] = [];
     for (const m of matchups) {
+      if (m.isForfeit) continue; // forfeits store handicap 0, not a real round
       if (m.teamAId === team.id && !m.teamAIsSub) {
-        teamHandicaps.push(m.teamAHandicap);
+        teamHandicaps.push({ week: m.weekNumber, handicap: m.teamAHandicap });
       } else if (m.teamBId === team.id && !m.teamBIsSub) {
-        teamHandicaps.push(m.teamBHandicap);
+        teamHandicaps.push({ week: m.weekNumber, handicap: m.teamBHandicap });
       }
     }
 
-    handicaps[team.id] = averageHandicap(teamHandicaps, 0);
+    handicaps[team.id] = handicapInEffect(teamHandicaps, 0);
   }
 
   const netDifferential: Record<number, number> = {};
@@ -215,18 +225,18 @@ function buildStrokePlayStats(
     const positionCounts = new Map<number, number>();
     let totalNetScore = 0;
     let bestFinish = Infinity;
-    const handicaps: number[] = [];
+    const handicaps: { week: number; handicap: number }[] = [];
 
     for (const s of playedScores) {
       positionCounts.set(s.position, (positionCounts.get(s.position) || 0) + 1);
       totalNetScore += s.netScore;
       if (s.position < bestFinish) bestFinish = s.position;
-      if (!s.isSub) handicaps.push(s.handicap);
+      if (!s.isSub) handicaps.push({ week: s.weekNumber, handicap: s.handicap });
     }
 
     const roundsPlayed = playedScores.length;
     const avgNet = roundsPlayed > 0 ? totalNetScore / roundsPlayed : 0;
-    const avgHandicap = averageHandicap(handicaps, 0);
+    const avgHandicap = handicapInEffect(handicaps, 0);
 
     // Sum points from individual weekly scores
     const rawPoints = teamScores.reduce((sum, s) => sum + s.points, 0);
@@ -323,12 +333,13 @@ function rankTeamsHybrid<T extends TeamWithStats>(
   const clampedWeight = Math.max(0, Math.min(1, fieldWeight));
 
   // Get match play ranking data
-  const matchHandicaps: Record<number, number[]> = {};
+  const matchHandicaps: Record<number, { week: number; handicap: number }[]> = {};
   for (const team of teams) {
     matchHandicaps[team.id] = [];
     for (const m of matchups) {
-      if (m.teamAId === team.id && !m.teamAIsSub) matchHandicaps[team.id].push(m.teamAHandicap);
-      else if (m.teamBId === team.id && !m.teamBIsSub) matchHandicaps[team.id].push(m.teamBHandicap);
+      if (m.isForfeit) continue; // forfeits store handicap 0, not a real round
+      if (m.teamAId === team.id && !m.teamAIsSub) matchHandicaps[team.id].push({ week: m.weekNumber, handicap: m.teamAHandicap });
+      else if (m.teamBId === team.id && !m.teamBIsSub) matchHandicaps[team.id].push({ week: m.weekNumber, handicap: m.teamBHandicap });
     }
   }
 
@@ -390,7 +401,7 @@ function rankTeamsHybrid<T extends TeamWithStats>(
     const fieldPoints = stroke.totalPoints === -Infinity ? 0 : stroke.totalPoints;
     const matchPoints = matchPointsMap[team.id] ?? 0;
     const handicapValues = matchHandicaps[team.id];
-    const avgHandicap = averageHandicap(handicapValues, stroke.handicap);
+    const avgHandicap = handicapInEffect(handicapValues, stroke.handicap);
 
     return {
       ...team,
@@ -415,7 +426,7 @@ function calculateStandingsAtWeek(
   const filteredMatchups = matchups.filter((m) => m.weekNumber <= upToWeek);
 
   const stats: Record<number, { points: number; wins: number; losses: number; ties: number }> = {};
-  const handicaps: Record<number, number[]> = {};
+  const handicaps: Record<number, { week: number; handicap: number }[]> = {};
   const netDifferential: Record<number, number> = {};
 
   for (const team of teams) {
@@ -439,8 +450,8 @@ function calculateStandingsAtWeek(
       if (stats[m.teamBId]) stats[m.teamBId].ties += 1;
     }
 
-    if (!m.teamAIsSub && handicaps[m.teamAId]) handicaps[m.teamAId].push(m.teamAHandicap);
-    if (!m.teamBIsSub && handicaps[m.teamBId]) handicaps[m.teamBId].push(m.teamBHandicap);
+    if (!m.isForfeit && !m.teamAIsSub && handicaps[m.teamAId]) handicaps[m.teamAId].push({ week: m.weekNumber, handicap: m.teamAHandicap });
+    if (!m.isForfeit && !m.teamBIsSub && handicaps[m.teamBId]) handicaps[m.teamBId].push({ week: m.weekNumber, handicap: m.teamBHandicap });
 
     if (netDifferential[m.teamAId] !== undefined) netDifferential[m.teamAId] += m.teamBNet - m.teamANet;
     if (netDifferential[m.teamBId] !== undefined) netDifferential[m.teamBId] += m.teamANet - m.teamBNet;
@@ -451,7 +462,7 @@ function calculateStandingsAtWeek(
   const avgHandicaps: Record<number, number> = {};
   for (const team of teams) {
     const hcps = handicaps[team.id];
-    avgHandicaps[team.id] = averageHandicap(hcps, 0);
+    avgHandicaps[team.id] = handicapInEffect(hcps, 0);
   }
 
   // Sort by points and wins, then resolve H2H ties transitively

@@ -25,6 +25,7 @@ export interface HandicapSettings {
   defaultHandicap: number;              // When no scores available (default: 0)
   maxHandicap: number | null;           // Maximum handicap cap (9 = default, null = no limit)
   minHandicap: number | null;           // Minimum handicap cap (null = no limit)
+  perRoundHandicap: boolean;            // Round+cap each round's handicap, then average that (default: false)
 
   // Score Selection
   scoreSelection: ScoreSelectionMethod; // Which scores to use (default: all)
@@ -52,6 +53,8 @@ export interface HandicapSettings {
 
   // Administrative — checked in action layer, not in calculation engine
   requireApproval: boolean;             // Require approval for changes (default: false)
+  subHandicapMultiplier: number | null; // Day-of sub handicap: trunc(mult × (gross − base)); null = manual entry required
+  preserveRecordedHandicaps: boolean;   // Recalculation keeps stored per-match handicaps (default: false)
 }
 
 /**
@@ -67,6 +70,7 @@ export const DEFAULT_HANDICAP_SETTINGS: HandicapSettings = {
   defaultHandicap: 0,
   maxHandicap: 9,                    // Maximum handicap cap (9 = default, null = no limit)
   minHandicap: null,
+  perRoundHandicap: false,
 
   // Score Selection
   scoreSelection: "all",
@@ -94,6 +98,8 @@ export const DEFAULT_HANDICAP_SETTINGS: HandicapSettings = {
 
   // Administrative — checked in action layer, not in calculation engine
   requireApproval: false,
+  subHandicapMultiplier: null,
+  preserveRecordedHandicaps: false,
 };
 
 // ============================================
@@ -476,6 +482,24 @@ export function calculateHandicap(
     return settings.defaultHandicap;
   }
 
+  // Per-round mode: convert each counted score to a round handicap first
+  // (multiply, round, cap per round), then average the round handicaps and
+  // round/cap the result. This is the "average of round handicaps" method
+  // (e.g. round = floor(0.9 × (gross − 35)) capped at 9; handicap =
+  // floor(average of rounds) capped at 9). Under-par split, trend, and
+  // provisional adjustments do not apply in this mode — the per-round
+  // transform IS the formula.
+  if (settings.perRoundHandicap) {
+    const roundHandicaps = processedScores.map((g) => {
+      const r = applyRounding((g - settings.baseScore) * settings.multiplier, settings.rounding);
+      return applyCaps(r, settings);
+    });
+    const avg = calculateWeightedAverage(roundHandicaps, settings);
+    const handicap = applyCaps(applyRounding(avg, settings.rounding), settings);
+    if (!isFinite(handicap)) return settings.defaultHandicap;
+    return handicap;
+  }
+
   // Step 3: Calculate average (weighted or simple)
   const average = calculateWeightedAverage(processedScores, settings);
 
@@ -795,6 +819,9 @@ export function leagueToHandicapSettings(league: {
   handicapUseTrend?: boolean;
   handicapTrendWeight?: number;
   handicapRequireApproval?: boolean;
+  handicapPerRound?: boolean;
+  handicapSubMultiplier?: number | null;
+  handicapPreserveRecorded?: boolean;
 }): HandicapSettings {
   // Validate required fields — on failure, return safe defaults
   const parsed = leagueHandicapSchema.safeParse(league);
@@ -818,6 +845,7 @@ export function leagueToHandicapSettings(league: {
     defaultHandicap: league.handicapDefault,
     maxHandicap: league.handicapMax,
     minHandicap: league.handicapMin ?? null,
+    perRoundHandicap: league.handicapPerRound ?? false,
 
     // Score Selection
     scoreSelection: league.handicapScoreSelection && validScoreSelection.includes(league.handicapScoreSelection)
@@ -847,6 +875,8 @@ export function leagueToHandicapSettings(league: {
 
     // Administrative
     requireApproval: league.handicapRequireApproval ?? false,
+    subHandicapMultiplier: league.handicapSubMultiplier ?? null,
+    preserveRecordedHandicaps: league.handicapPreserveRecorded ?? false,
   };
 }
 
@@ -914,6 +944,19 @@ export function describeCalculation(
   }
   if (settings.dropLowest > 0) {
     steps.push(`Dropped ${settings.dropLowest} lowest score(s)`);
+  }
+
+  // Per-round mode — mirror calculateHandicap's per-round branch and stop there
+  if (settings.perRoundHandicap) {
+    const roundHandicaps = selectedScores.map((g) => {
+      const r = applyRounding((g - settings.baseScore) * settings.multiplier, settings.rounding);
+      return applyCaps(r, settings);
+    });
+    steps.push(`Per-round handicaps (${settings.rounding}(${settings.multiplier} × (score − ${settings.baseScore})), capped): [${roundHandicaps.join(", ")}]`);
+    const perRoundAvg = calculateWeightedAverage(roundHandicaps, settings);
+    steps.push(`Average of round handicaps: ${perRoundAvg.toFixed(2)}`);
+    steps.push(`Final handicap (rounded and capped): ${finalHandicap}`);
+    return steps;
   }
 
   // Average calculation

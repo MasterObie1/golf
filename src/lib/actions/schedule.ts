@@ -63,11 +63,13 @@ export interface PreviewResult {
 
 export async function previewSchedule(
   leagueSlug: string,
-  leagueId: number,
+  _leagueId: number,
   options: ScheduleGenerationOptions
 ): Promise<ActionResult<PreviewResult>> {
   try {
-    await requireLeagueAdmin(leagueSlug);
+    // leagueId always comes from the verified session, never the client
+    const session = await requireLeagueAdmin(leagueSlug);
+    const leagueId = session.leagueId;
 
     // Get approved teams for the active season
     const activeSeason = await prisma.season.findFirst({

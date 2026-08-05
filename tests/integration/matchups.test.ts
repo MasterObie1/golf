@@ -873,3 +873,65 @@ describe("getMatchupHistoryForSeason", () => {
     expect(hasMore).toBe(true);
   });
 });
+
+// ==========================================
+// Sub day-of handicap auto-compute
+// ==========================================
+
+describe("sub day-of handicap auto-compute", () => {
+  it("computes trunc(mult × (gross − base)) for a sub when the league has a sub multiplier", async () => {
+    const ctx = await setupLeagueWithTeams("Sub Auto League");
+    await testPrisma.league.update({ where: { id: ctx.leagueId }, data: { handicapSubMultiplier: 0.8 } });
+
+    const result = await previewMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 37, null, true,   // sub, no manual handicap: trunc(0.8 × 2) = 1
+      ctx.teamBId, 40, 2, false
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.teamAHandicap).toBe(1);
+    expect(result.data.teamANet).toBe(36);
+  });
+
+  it("truncates toward zero for under-par sub rounds", async () => {
+    const ctx = await setupLeagueWithTeams("Sub Auto Trunc League");
+    await testPrisma.league.update({ where: { id: ctx.leagueId }, data: { handicapSubMultiplier: 0.8 } });
+
+    // gross 33: 0.8 × (33 − 35) = −1.6 → trunc = −1 (floor would give −2)
+    const result = await previewMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 33, null, true,
+      ctx.teamBId, 40, 2, false
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.teamAHandicap).toBe(-1);
+  });
+
+  it("prefers a manual handicap over the auto-computed value", async () => {
+    const ctx = await setupLeagueWithTeams("Sub Manual Wins League");
+    await testPrisma.league.update({ where: { id: ctx.leagueId }, data: { handicapSubMultiplier: 0.8 } });
+
+    const result = await previewMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 37, 5, true,      // manual 5 beats trunc(0.8 × 2) = 1
+      ctx.teamBId, 40, 2, false
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.teamAHandicap).toBe(5);
+  });
+
+  it("errors for a sub with no manual handicap when no sub multiplier is configured", async () => {
+    const ctx = await setupLeagueWithTeams("Sub No Config League");
+
+    const result = await previewMatchup(
+      ctx.leagueSlug, 1,
+      ctx.teamAId, 37, null, true,
+      ctx.teamBId, 40, 2, false
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatch(/manual handicap/i);
+  });
+});

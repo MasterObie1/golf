@@ -38,6 +38,9 @@ export async function getHandicapSettings(leagueId: number): Promise<HandicapSet
       handicapUseTrend: true,
       handicapTrendWeight: true,
       handicapRequireApproval: true,
+      handicapPerRound: true,
+      handicapSubMultiplier: true,
+      handicapPreserveRecorded: true,
     },
   });
 

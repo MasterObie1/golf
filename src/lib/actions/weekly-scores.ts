@@ -82,12 +82,14 @@ const submitWeeklyScoresSchema = z.object({
 
 export async function previewWeeklyScores(
   leagueSlug: string,
-  leagueId: number,
+  _leagueId: number,
   weekNumber: number,
   inputs: WeeklyScoreInput[]
 ): Promise<ActionResult<WeeklyScorePreview>> {
   try {
-    await requireLeagueAdmin(leagueSlug);
+    // leagueId always comes from the verified session, never the client
+    const session = await requireLeagueAdmin(leagueSlug);
+    const leagueId = session.leagueId;
     await requireActiveLeague(leagueId);
 
     // Load league config
@@ -121,7 +123,7 @@ export async function previewWeeklyScores(
     // Get team names
     const teamIds = inputs.map((i) => i.teamId);
     const teams = await prisma.team.findMany({
-      where: { id: { in: teamIds } },
+      where: { id: { in: teamIds }, leagueId },
       select: { id: true, name: true },
     });
     const teamMap = new Map(teams.map((t) => [t.id, t.name]));

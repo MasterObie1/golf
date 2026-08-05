@@ -87,6 +87,9 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
 
   // Administrative
   const [handicapRequireApproval, setHandicapRequireApproval] = useState(league.handicapRequireApproval ?? false);
+  const [handicapPerRound, setHandicapPerRound] = useState(league.handicapPerRound ?? false);
+  const [handicapSubMultiplier, setHandicapSubMultiplier] = useState<number | "">(league.handicapSubMultiplier ?? "");
+  const [handicapPreserveRecorded, setHandicapPreserveRecorded] = useState(league.handicapPreserveRecorded ?? false);
 
   // Scoring config
   const [scoringType, setScoringType] = useState(league.scoringType);
@@ -180,6 +183,9 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
     setHandicapUseTrend(league.handicapUseTrend ?? false);
     setHandicapTrendWeight(league.handicapTrendWeight ?? 0.1);
     setHandicapRequireApproval(league.handicapRequireApproval ?? false);
+    setHandicapPerRound(league.handicapPerRound ?? false);
+    setHandicapSubMultiplier(league.handicapSubMultiplier ?? "");
+    setHandicapPreserveRecorded(league.handicapPreserveRecorded ?? false);
   }
 
   function calculatePreviewHandicap(avg: number): number {
@@ -237,6 +243,9 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
     setHandicapUseTrend(merged.useTrend);
     setHandicapTrendWeight(merged.trendWeight);
     setHandicapRequireApproval(merged.requireApproval);
+    setHandicapPerRound(merged.perRoundHandicap);
+    setHandicapSubMultiplier(merged.subHandicapMultiplier ?? "");
+    setHandicapPreserveRecorded(merged.preserveRecordedHandicaps);
   }
 
   const handicapHasErrors =
@@ -306,6 +315,9 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
         useTrend: handicapUseTrend,
         trendWeight: handicapTrendWeight,
         requireApproval: handicapRequireApproval,
+        perRoundHandicap: handicapPerRound,
+        subHandicapMultiplier: handicapSubMultiplier === "" ? null : handicapSubMultiplier,
+        preserveRecordedHandicaps: handicapPreserveRecorded,
       });
       if (!result.success) {
         notify.error(result.error);
@@ -1026,6 +1038,22 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                   <p className="text-xs font-sans text-text-muted mt-1">Max handicap when avg &le; par (e.g. -1)</p>
                 </div>
               </div>
+              <div className="mt-4 pt-4 border-t border-scorecard-line/40">
+                <label htmlFor="hc-per-round" className="flex items-center gap-2 cursor-pointer">
+                  <input id="hc-per-round" type="checkbox" checked={handicapPerRound} onChange={(e) => { setHandicapPerRound(e.target.checked); setSelectedPreset("custom"); }} className={checkboxClass} />
+                  <span className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">Per-Round Calculation</span>
+                </label>
+                <p className="text-xs font-sans text-text-muted mt-1 ml-6">
+                  Round and cap each round&apos;s handicap first, then average the round handicaps
+                  (e.g. round = floor(0.9 &times; (gross &minus; 35)) capped at max; handicap = floor(average)).
+                  Under-par and trend settings do not apply in this mode.
+                </p>
+                <div className="mt-4">
+                  <label htmlFor="hc-sub-multiplier" className="block text-sm font-display font-medium text-text-secondary uppercase tracking-wider mb-1">Substitute Day-Of Multiplier</label>
+                  <input id="hc-sub-multiplier" type="number" value={handicapSubMultiplier} onChange={(e) => { setHandicapSubMultiplier(e.target.value ? parseFloat(e.target.value) : ""); setSelectedPreset("custom"); }} step="0.05" min="0" placeholder="Manual entry" className="pencil-input w-32 font-mono tabular-nums" />
+                  <p className="text-xs font-sans text-text-muted mt-1">Auto-compute a sub&apos;s handicap as trunc(multiplier &times; (gross &minus; base)) from that day&apos;s score. Blank = subs require manual entry. A manual entry always wins.</p>
+                </div>
+              </div>
             </AccordionContent>
           </AccordionItem>
 
@@ -1184,6 +1212,16 @@ export default function SettingsTab({ slug, league, approvedTeamsCount, hasSeaso
                   <span className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">Require Admin Approval for Handicap Changes</span>
                 </label>
                 <p className="text-xs font-sans text-text-muted mt-1 ml-6">Manual review before handicap adjustments take effect</p>
+              </div>
+              <div className="mt-4 pt-4 border-t border-scorecard-line/40">
+                <label htmlFor="hc-preserve-recorded" className="flex items-center gap-2 cursor-pointer">
+                  <input id="hc-preserve-recorded" type="checkbox" checked={handicapPreserveRecorded} onChange={(e) => { setHandicapPreserveRecorded(e.target.checked); setSelectedPreset("custom"); }} className={checkboxClass} />
+                  <span className="text-sm font-display font-medium text-text-secondary uppercase tracking-wider">Preserve Recorded Handicaps on Recalculation</span>
+                </label>
+                <p className="text-xs font-sans text-text-muted mt-1 ml-6">
+                  Recalculation keeps each match&apos;s stored handicap instead of recomputing it — for leagues
+                  where the entered handicap is the official record. Formula changes then only affect future weeks.
+                </p>
               </div>
             </AccordionContent>
           </AccordionItem>

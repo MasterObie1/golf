@@ -259,6 +259,9 @@ export async function getLeagueBySlug(slug: string) {
       handicapUseTrend: true,
       handicapTrendWeight: true,
       handicapRequireApproval: true,
+      handicapPerRound: true,
+      handicapSubMultiplier: true,
+      handicapPreserveRecorded: true,
       // Scoring config
       scoringType: true,
       strokePlayPointPreset: true,

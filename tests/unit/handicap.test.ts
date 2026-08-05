@@ -1154,3 +1154,39 @@ describe("Fix 3.3: USGA-Inspired preset renamed", () => {
     expect(preset!.description).not.toContain("official");
   });
 });
+
+describe("per-round handicap mode", () => {
+  const perRound = (over: Partial<HandicapSettings> = {}) =>
+    settings({ perRoundHandicap: true, ...over });
+
+  it("rounds and caps each round before averaging", () => {
+    // [51, 36]: rounds [min(9, floor(0.9×16))=9, floor(0.9×1)=0] → avg 4.5 → floor 4
+    expect(calculateHandicap([51, 36], perRound())).toBe(4);
+    // Contrast with default mode: avg 43.5 → floor(0.9×8.5)=7
+    expect(calculateHandicap([51, 36], settings())).toBe(7);
+  });
+
+  it("floors per round, then floors the average of rounds", () => {
+    // [36, 37]: rounds [0, 1] → avg 0.5 → floor 0 (default mode gives 1)
+    expect(calculateHandicap([36, 37], perRound())).toBe(0);
+    expect(calculateHandicap([36, 37], settings())).toBe(1);
+  });
+
+  it("reproduces the commissioner-sheet example", () => {
+    // Rounds: floor(0.9×(g−35)) → [-6,-6,1,-2,-6,-3,-4,0,-3], avg −3.22 → floor −4
+    expect(calculateHandicap([29, 29, 37, 33, 29, 32, 31, 35, 32], perRound())).toBe(-4);
+  });
+
+  it("caps the final result at maxHandicap", () => {
+    expect(calculateHandicap([46, 47, 51], perRound())).toBe(9);
+  });
+
+  it("leaves negative handicaps uncapped when minHandicap is null", () => {
+    // floor(0.9×(29−35)) = floor(−5.4) = −6
+    expect(calculateHandicap([29], perRound())).toBe(-6);
+  });
+
+  it("returns default when no scores", () => {
+    expect(calculateHandicap([], perRound({ defaultHandicap: 3 }))).toBe(3);
+  });
+});

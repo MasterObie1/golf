@@ -115,6 +115,9 @@ export interface HandicapSettingsInput {
 
   // Administrative
   requireApproval: boolean;
+  perRoundHandicap?: boolean;
+  subHandicapMultiplier?: number | null;
+  preserveRecordedHandicaps?: boolean;
 }
 
 const updateHandicapSettingsSchema = z.object({
@@ -144,6 +147,10 @@ const updateHandicapSettingsSchema = z.object({
   useTrend: z.boolean(),
   trendWeight: z.number().min(0).max(1),
   requireApproval: z.boolean(),
+  // Optional-with-default so older clients/tests keep working
+  perRoundHandicap: z.boolean().default(false),
+  subHandicapMultiplier: z.number().gt(0).max(5).nullable().default(null),
+  preserveRecordedHandicaps: z.boolean().default(false),
 }).refine(
   (data) => (data.dropHighest ?? 0) + (data.dropLowest ?? 0) <= 20,
   { message: "Combined drop count cannot exceed 20" }
@@ -230,6 +237,9 @@ export async function updateHandicapSettings(
 
         // Administrative
         handicapRequireApproval: validated.requireApproval,
+        handicapPerRound: validated.perRoundHandicap,
+        handicapSubMultiplier: validated.subHandicapMultiplier,
+        handicapPreserveRecorded: validated.preserveRecordedHandicaps,
       },
       select: { id: true },
     });
@@ -303,6 +313,9 @@ async function recalculateLeagueStats(leagueId: number) {
         handicapUseTrend: true,
         handicapTrendWeight: true,
         handicapRequireApproval: true,
+        handicapPerRound: true,
+        handicapSubMultiplier: true,
+        handicapPreserveRecorded: true,
         byePointsMode: true,
         byePointsFlat: true,
         scoringType: true,
@@ -359,7 +372,8 @@ async function recalculateLeagueStats(leagueId: number) {
         const history = weeklyEntriesByTeam[row.teamId] ?? [];
         // Subs keep their manually entered handicap; a team's first entry has no
         // history to calculate from, so its (manual) handicap is preserved too.
-        const handicap = row.isSub || history.length === 0
+        // Leagues that treat recorded handicaps as the official record keep them all.
+        const handicap = row.isSub || history.length === 0 || handicapSettings.preserveRecordedHandicaps
           ? row.handicap
           : calculateHandicapFromEntries(history, handicapSettings, week);
 
@@ -507,20 +521,28 @@ async function recalculateLeagueStats(leagueId: number) {
       const teamAPrior = priorEntriesFor(matchup.teamAId, matchup.weekNumber);
       const teamBPrior = priorEntriesFor(matchup.teamBId, matchup.weekNumber);
 
-      if (teamAPrior.length === 0 && !matchup.teamAIsSub) {
+      // Leagues that treat recorded handicaps as the official record (e.g. the
+      // admin enters each week's official handicap via the override field) keep
+      // every stored value — history is frozen, like a paper scorebook.
+      if (handicapSettings.preserveRecordedHandicaps) {
         teamAHandicap = matchup.teamAHandicap;
-      } else {
-        teamAHandicap = matchup.teamAIsSub
-          ? matchup.teamAHandicap
-          : calculateHandicapFromEntries(teamAPrior, handicapSettings, matchup.weekNumber);
-      }
-
-      if (teamBPrior.length === 0 && !matchup.teamBIsSub) {
         teamBHandicap = matchup.teamBHandicap;
       } else {
-        teamBHandicap = matchup.teamBIsSub
-          ? matchup.teamBHandicap
-          : calculateHandicapFromEntries(teamBPrior, handicapSettings, matchup.weekNumber);
+        if (teamAPrior.length === 0 && !matchup.teamAIsSub) {
+          teamAHandicap = matchup.teamAHandicap;
+        } else {
+          teamAHandicap = matchup.teamAIsSub
+            ? matchup.teamAHandicap
+            : calculateHandicapFromEntries(teamAPrior, handicapSettings, matchup.weekNumber);
+        }
+
+        if (teamBPrior.length === 0 && !matchup.teamBIsSub) {
+          teamBHandicap = matchup.teamBHandicap;
+        } else {
+          teamBHandicap = matchup.teamBIsSub
+            ? matchup.teamBHandicap
+            : calculateHandicapFromEntries(teamBPrior, handicapSettings, matchup.weekNumber);
+        }
       }
 
       if (!isFinite(teamAHandicap) || !isFinite(teamBHandicap)) {

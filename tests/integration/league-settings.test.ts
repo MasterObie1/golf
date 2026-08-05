@@ -68,6 +68,7 @@ import { createLeague } from "@/lib/actions/leagues";
 import { createSeason } from "@/lib/actions/seasons";
 import { createTeam, approveTeam } from "@/lib/actions/teams";
 import { submitWeeklyScores } from "@/lib/actions/weekly-scores";
+import { submitMatchup } from "@/lib/actions/matchups";
 import { requireAdmin, requireLeagueAdmin } from "@/lib/auth";
 
 const mockedRequireAdmin = vi.mocked(requireAdmin);
@@ -364,5 +365,65 @@ describe("recalculation rewrites weekly scores (stroke play)", () => {
     const teamB = await testPrisma.team.findUnique({ where: { id: teamBId } });
     expect(teamA!.totalPoints).toBe(4);
     expect(teamB!.totalPoints).toBe(2);
+  });
+});
+
+// ==========================================
+// Preserve recorded handicaps (match play)
+// ==========================================
+
+describe("recalculation with preserveRecordedHandicaps", () => {
+  async function setupWithTwoWeeks() {
+    const league = unwrap(await createLeague("Preserve Hcp League", "securepass123"));
+    setAuthContext(league.id, league.slug, league.adminUsername);
+    unwrap(await createSeason(league.slug, "Season 1", 2026));
+    const t1 = unwrap(await createTeam(league.id, "Team One"));
+    const t2 = unwrap(await createTeam(league.id, "Team Two"));
+    await approveTeam(league.slug, t1.id);
+    await approveTeam(league.slug, t2.id);
+    // Week 1: manual (first-entry) handicaps
+    unwrap(await submitMatchup(league.slug, 1, t1.id, 40, 5, 35, 12, false, t2.id, 40, 2, 38, 8, false));
+    // Week 2: official handicaps 0 and 9 — deliberately different from what the
+    // engine would compute (floor(0.9×(40−35)) = 4 for both teams)
+    unwrap(await submitMatchup(league.slug, 2, t1.id, 41, 0, 41, 9, false, t2.id, 39, 9, 30, 11, false));
+    return { league, t1, t2 };
+  }
+
+  it("keeps stored matchup handicaps and nets when enabled", async () => {
+    const { league } = await setupWithTwoWeeks();
+
+    const result = await updateHandicapSettings(league.slug, {
+      ...DEFAULT_HANDICAP_INPUT,
+      multiplier: 1.2, // a change that would rewrite every handicap without preserve
+      preserveRecordedHandicaps: true,
+    });
+    expect(result.success).toBe(true);
+
+    const matchups = await testPrisma.matchup.findMany({
+      where: { leagueId: league.id },
+      orderBy: { weekNumber: "asc" },
+    });
+    expect(matchups[1].teamAHandicap).toBe(0);
+    expect(matchups[1].teamBHandicap).toBe(9);
+    expect(matchups[1].teamANet).toBe(41);
+    expect(matchups[1].teamBNet).toBe(30);
+  });
+
+  it("recomputes non-first-week handicaps when disabled (default)", async () => {
+    const { league } = await setupWithTwoWeeks();
+
+    const result = await updateHandicapSettings(league.slug, {
+      ...DEFAULT_HANDICAP_INPUT,
+      preserveRecordedHandicaps: false,
+    });
+    expect(result.success).toBe(true);
+
+    const matchups = await testPrisma.matchup.findMany({
+      where: { leagueId: league.id },
+      orderBy: { weekNumber: "asc" },
+    });
+    // Engine from week-1 gross 40: floor(0.9 × (40 − 35)) = 4
+    expect(matchups[1].teamAHandicap).toBe(4);
+    expect(matchups[1].teamBHandicap).toBe(4);
   });
 });

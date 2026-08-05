@@ -85,6 +85,9 @@ model League {
 
   // --- Administrative ---
   handicapRequireApproval  Boolean   @default(false)   // Require admin approval for handicap changes
+  handicapPerRound         Boolean   @default(false)   // Round+cap each round's handicap first, then average (avg-of-round-handicaps method)
+  handicapSubMultiplier    Float?                      // Day-of sub handicap: trunc(mult × (gross − base)); null = subs require manual entry
+  handicapPreserveRecorded Boolean   @default(false)   // Recalculation keeps stored per-match handicaps (official-record leagues)
 
   // ============================================
   // SCORING CONFIGURATION
